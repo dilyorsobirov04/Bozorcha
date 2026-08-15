@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bozorcha - Premium Hypermarket & Fast Delivery</title>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app" class="app-viewport">
+
+        <!-- ================= 1. SPLASH & ONBOARDING SCREEN ================= -->
+        <section id="screen-onboarding" class="screen active">
+            <div class="onboarding-container">
+                <div class="onboarding-visual">
+                    <img src="assets/onboarding_hero.png" alt="Luxury Grocery Basket" class="hero-3d-img">
+                    <div class="glow-orb"></div>
+                </div>
+                <div class="onboarding-card">
+                    <div class="brand-pill">
+                        <span>✨ PREMIUM HYPERMARKET</span>
+                    </div>
+                    <h1 class="onboarding-title">Yangi va sifatli mahsulotlar 15 daqiqada</h1>
+                    <p class="onboarding-desc">Tanlangan organik mevalar, yangi go'sht va nonvoyxona taomlari uyingizgacha yetkaziladi.</p>
+                    
+                    <div class="onboarding-dots">
+                        <span class="dot active"></span>
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                    </div>
+
+                    <button class="cta-btn primary-glow-btn" onclick="navigateTo('home')">
+                        <span>Xaridni boshlash</span>
+                        <span class="btn-arrow">➔</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 2. MAIN DASHBOARD / HOME SCREEN ================= -->
+        <section id="screen-home" class="screen">
+            <!-- App Bar / Location & Admin -->
+            <header class="home-header">
+                <div class="location-picker" onclick="showAddressPicker()">
+                    <div class="loc-icon-circle">📍</div>
+                    <div class="loc-text">
+                        <span class="loc-label">Yetkazib berish manzili:</span>
+                        <div class="loc-address">
+                            <span>Toshkent, Chilonzor 9</span>
+                            <span class="loc-dropdown">▾</span>
+                        </div>
+                    </div>
+                </div>
+                <button id="admin-mode-toggle" class="admin-chip-btn" onclick="toggleAdminMode()">
+                    ⚙️ Admin
+                </button>
+            </header>
+
+            <!-- Search Bar -->
+            <div class="search-section">
+                <div class="search-bar">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="home-search" placeholder="Mahsulot yoki brend qidiring..." oninput="handleSearch()">
+                </div>
+            </div>
+
+            <!-- Featured Promo Banner -->
+            <div class="promo-slider">
+                <div class="promo-card-hero">
+                    <div class="promo-badge-tag">🔥 SUPER CHEGIRMA</div>
+                    <h2>Har kungi yangi hosil 25% gacha arzon</h2>
+                    <p>Yashil sabzavotlar va mevalarga maxsus narxlar!</p>
+                    <button class="banner-action-btn" onclick="filterByPromo()">Ko'rish</button>
+                </div>
+            </div>
+
+            <!-- 3D Category Pills (Horizontal Scroll) -->
+            <div class="categories-bar">
+                <div class="cat-pill active" data-cat="all" onclick="selectCategory('all')">
+                    <span class="cat-icon">🛍️</span>
+                    <span class="cat-name">Barchasi</span>
+                </div>
+                <div class="cat-pill" data-cat="1" onclick="selectCategory('1')">
+                    <span class="cat-icon">🥑</span>
+                    <span class="cat-name">Meva & Sabzavot</span>
+                </div>
+                <div class="cat-pill" data-cat="2" onclick="selectCategory('2')">
+                    <span class="cat-icon">🥛</span>
+                    <span class="cat-name">Sut & Tuxum</span>
+                </div>
+                <div class="cat-pill" data-cat="3" onclick="selectCategory('3')">
+                    <span class="cat-icon">🥩</span>
+                    <span class="cat-name">Go'sht & Steyk</span>
+                </div>
+                <div class="cat-pill" data-cat="4" onclick="selectCategory('4')">
+                    <span class="cat-icon">🥐</span>
+                    <span class="cat-name">Nonvoyxona</span>
+                </div>
+                <div class="cat-pill" data-cat="5" onclick="selectCategory('5')">
+                    <span class="cat-icon">🥤</span>
+                    <span class="cat-name">Ichimliklar</span>
+                </div>
+            </div>
+
+            <!-- Popular / Discounted Product Grid -->
+            <div class="section-heading">
+                <h3>Ommabop mahsulotlar</h3>
+                <span class="view-all-link" onclick="selectCategory('all')">Hammasi ➔</span>
+            </div>
+
+            <div id="home-products-grid" class="products-grid">
+                <!-- Dynamically loaded product cards -->
+            </div>
+        </section>
+
+        <!-- ================= 3. PRODUCT DETAILS MODAL SCREEN ================= -->
+        <div id="modal-product-detail" class="modal-backdrop hidden" onclick="closeProductModal(event)">
+            <div class="modal-bottom-sheet" onclick="event.stopPropagation()">
+                <button class="modal-close-bar" onclick="closeProductModal()"></button>
+                
+                <div class="modal-product-visual">
+                    <img id="detail-product-img" src="assets/organic_avocado.png" alt="Product Image">
+                    <div id="detail-discount-badge" class="discount-pill">-20%</div>
+                </div>
+
+                <div class="modal-product-info">
+                    <div class="detail-header-row">
+                        <div>
+                            <h2 id="detail-product-title">Organik Avokado Hass</h2>
+                            <div class="rating-stock-row">
+                                <span class="star-rating">⭐ 4.9 (128 ta baho)</span>
+                                <span id="detail-stock-badge" class="stock-tag">📊 Qoldiq: 42 kg</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Weight / Quantity Selector -->
+                    <div class="weight-selector-section">
+                        <span class="section-sub-label">Hajm / Vaznni tanlang:</span>
+                        <div class="weight-pills">
+                            <button class="weight-btn active" data-weight="0.5" onclick="selectWeight(0.5)">500 g</button>
+                            <button class="weight-btn" data-weight="1.0" onclick="selectWeight(1.0)">1 kg</button>
+                            <button class="weight-btn" data-weight="2.0" onclick="selectWeight(2.0)">2 kg</button>
+                        </div>
+                    </div>
+
+                    <!-- Nutrition Info Cards -->
+                    <div class="nutrition-grid">
+                        <div class="nutri-item">
+                            <span class="nutri-val" id="nutri-cal">160 kcal</span>
+                            <span class="nutri-label">Energiya</span>
+                        </div>
+                        <div class="nutri-item">
+                            <span class="nutri-val" id="nutri-protein">2.0 g</span>
+                            <span class="nutri-label">Protein</span>
+                        </div>
+                        <div class="nutri-item">
+                            <span class="nutri-val" id="nutri-fat">15.0 g</span>
+                            <span class="nutri-label">Yog'</span>
+                        </div>
+                    </div>
+
+                    <p id="detail-product-desc" class="detail-description">
+                        Yangi uzilgan, yog'li va nozik ta'mga ega premium darajadagi organik avokado.
+                    </p>
+
+                    <!-- Price & Add To Cart CTA -->
+                    <div class="modal-action-bar">
+                        <div class="detail-price-box">
+                            <span id="detail-old-price" class="old-price">~~85,000 so'm~~</span>
+                            <div id="detail-current-price" class="modal-current-price">68,000 so'm</div>
+                        </div>
+                        <button class="cta-btn add-to-cart-cta" onclick="addCurrentProductToCart()">
+                            <span>🛒 Savatchaga qo'shish</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 4. SHOPPING CART & CHECKOUT SCREEN ================= -->
+        <section id="screen-checkout" class="screen">
+            <header class="sub-screen-header">
+                <button class="back-circle-btn" onclick="navigateTo('home')">←</button>
+                <h2>Savatcha va Buyurtma</h2>
+                <div style="width: 36px;"></div>
+            </header>
+
+            <div class="checkout-scroll-body">
+                <!-- Cart Items List -->
+                <div id="checkout-items-list" class="checkout-items-container">
+                    <!-- Rendered cart item cards with +/- controls -->
+                </div>
+
+                <!-- Delivery Address with Mini Map Preview -->
+                <div class="checkout-card glass-card">
+                    <div class="card-title-row">
+                        <span>📍 Yetkazib berish manzili</span>
+                        <span class="edit-text-btn" onclick="showAddressPicker()">O'zgartirish</span>
+                    </div>
+                    <div class="mini-map-preview">
+                        <img src="assets/courier_tracking.png" alt="Map Preview" class="mini-map-img">
+                        <div class="map-overlay-badge">
+                            <span>Chilonzor 9-kvartal, 14-uy</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delivery Time Slot Selector -->
+                <div class="checkout-card glass-card">
+                    <span class="card-title">⏰ Yetkazish vaqti</span>
+                    <div class="time-slot-pills">
+                        <div class="slot-pill active" onclick="selectTimeSlot(this)">
+                            <span class="slot-title">⚡️ Tezkor</span>
+                            <span class="slot-time">15 - 25 daqiqa</span>
+                        </div>
+                        <div class="slot-pill" onclick="selectTimeSlot(this)">
+                            <span class="slot-title">🌅 Bugun kechki</span>
+                            <span class="slot-time">18:00 - 20:00</span>
+                        </div>
+                        <div class="slot-pill" onclick="selectTimeSlot(this)">
+                            <span class="slot-title">📅 Ertaga</span>
+                            <span class="slot-time">09:00 - 11:00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Summary -->
+                <div class="checkout-card glass-card">
+                    <span class="card-title">🧾 To'lov hisoboti</span>
+                    <div class="bill-row">
+                        <span>Tovarlar qiymati:</span>
+                        <span id="bill-subtotal">0 so'm</span>
+                    </div>
+                    <div class="bill-row">
+                        <span>Tezkor yetkazish:</span>
+                        <span class="text-green">Bepul (0 so'm)</span>
+                    </div>
+                    <div class="bill-row">
+                        <span>Chegirma tejamkorligi:</span>
+                        <span id="bill-discount" class="text-green">-0 so'm</span>
+                    </div>
+                    <div class="bill-divider"></div>
+                    <div class="bill-row total-row">
+                        <span>Jami to'lov:</span>
+                        <span id="bill-total" class="total-amount">0 so'm</span>
+                    </div>
+                </div>
+
+                <!-- Interactive "Slide to Pay" Component -->
+                <div class="slide-to-pay-wrapper">
+                    <div id="slide-track" class="slide-track">
+                        <div id="slide-fill" class="slide-fill"></div>
+                        <span class="slide-label">To'lov uchun suring ➔</span>
+                        <div id="slide-thumb" class="slide-thumb">
+                            <span class="thumb-icon">💳</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 5. LIVE ORDER TRACKING SCREEN ================= -->
+        <section id="screen-tracking" class="screen">
+            <header class="tracking-top-bar">
+                <button class="back-circle-btn" onclick="navigateTo('home')">←</button>
+                <div class="order-id-badge">Buyurtma #84091</div>
+                <button class="help-btn" onclick="callSupport()">Yordam</button>
+            </header>
+
+            <!-- 3D Live Map View -->
+            <div class="live-map-container">
+                <img src="assets/courier_tracking.png" alt="Live Courier Route Map" class="tracking-map-img">
+                <div class="courier-pulse-marker">
+                    <div class="pulse-ring"></div>
+                    <span class="scooter-emoji">🛵</span>
+                </div>
+            </div>
+
+            <!-- Floating Bottom Tracking Sheet -->
+            <div class="tracking-bottom-card glass-card">
+                <div class="eta-header">
+                    <div>
+                        <span class="eta-label">Taxminiy yetib kelish vaqti:</span>
+                        <h2 id="eta-countdown" class="eta-time">14 daqiqa</h2>
+                    </div>
+                    <div class="status-live-chip">
+                        <span class="live-dot"></span> Yo'lda
+                    </div>
+                </div>
+
+                <!-- Progress Steps -->
+                <div class="order-progress-bar">
+                    <div class="progress-step done">
+                        <div class="step-dot">✓</div>
+                        <span>Qabul qilindi</span>
+                    </div>
+                    <div class="progress-step done">
+                        <div class="step-dot">✓</div>
+                        <span>Yig'ildi</span>
+                    </div>
+                    <div class="progress-step active">
+                        <div class="step-dot">🛵</div>
+                        <span>Kuryerda</span>
+                    </div>
+                    <div class="progress-step">
+                        <div class="step-dot">🏠</div>
+                        <span>Yetkazildi</span>
+                    </div>
+                </div>
+
+                <!-- Courier Profile Card -->
+                <div class="courier-profile-box">
+                    <div class="courier-avatar">🚴‍♂️</div>
+                    <div class="courier-meta">
+                        <h4>Jasur Rahimov</h4>
+                        <div class="courier-rating">⭐ 4.95 • 1,420+ yetkazish</div>
+                    </div>
+                    <div class="courier-actions">
+                        <button class="action-circle-btn phone-btn" onclick="callCourier()">📞</button>
+                        <button class="action-circle-btn chat-btn" onclick="chatCourier()">💬</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= ADMIN NO-PHOTO PANEL SCREEN ================= -->
+        <section id="screen-admin" class="screen">
+            <header class="sub-screen-header">
+                <button class="back-circle-btn" onclick="toggleAdminMode()">←</button>
+                <h2>⚙️ Admin: Rasmsiz Mahsulotlar</h2>
+                <div style="width: 36px;"></div>
+            </header>
+
+            <div class="admin-content-scroll">
+                <div class="admin-banner-card">
+                    <p>Mahsulotga bir zumda rasm biriktiring yoki bitta tugma bilan qoldiqni 0 ga tushiring. (Sahifa qayta yuklanmasdan silliq o'chadi).</p>
+                </div>
+
+                <div id="admin-nopic-grid" class="admin-grid">
+                    <!-- Admin cards -->
+                </div>
+            </div>
+
+            <input type="file" id="file-picker" accept="image/*" style="display: none" onchange="handleFilePicked(event)">
+        </section>
+
+        <!-- ================= BOTTOM NAVIGATION BAR ================= -->
+        <nav id="bottom-nav-bar" class="bottom-nav">
+            <div class="nav-item active" onclick="navigateTo('home')">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Asosiy</span>
+            </div>
+            <div class="nav-item" onclick="navigateTo('home'); focusSearch();">
+                <span class="nav-icon">🔍</span>
+                <span class="nav-label">Qidiruv</span>
+            </div>
+            <div class="nav-item cart-nav-item" onclick="navigateTo('checkout')">
+                <div class="nav-cart-badge-wrap">
+                    <span class="nav-icon">🛒</span>
+                    <span id="nav-cart-count" class="cart-pill-count">0</span>
+                </div>
+                <span class="nav-label">Savatcha</span>
+            </div>
+            <div class="nav-item" onclick="navigateTo('tracking')">
+                <span class="nav-icon">🛵</span>
+                <span class="nav-label">Kuzatuv</span>
+            </div>
+        </nav>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

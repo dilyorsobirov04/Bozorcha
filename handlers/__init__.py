@@ -1,0 +1,5 @@
+from .start import router as start_router
+from .admin import router as admin_router
+from .common import router as common_router
+
+__all__ = ["start_router", "admin_router", "common_router"]
