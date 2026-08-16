@@ -25,6 +25,16 @@ document.addEventListener('DOMContentLoaded', () => {
     loadProducts();
     initSlideToPay();
     setupNavigationListeners();
+
+    // Check if returning user has already seen welcome onboarding
+    try {
+        const hasSeenWelcome = localStorage.getItem('hasSeenWelcome');
+        if (hasSeenWelcome === 'true') {
+            navigateTo('home', true);
+        }
+    } catch (e) {
+        console.warn('localStorage not accessible', e);
+    }
 });
 
 function initTelegramApp() {
@@ -63,6 +73,13 @@ function startShopping(targetUrl = null) {
         tg.HapticFeedback.impactOccurred('medium');
     }
 
+    // Persist that user has completed/seen welcome
+    try {
+        localStorage.setItem('hasSeenWelcome', 'true');
+    } catch (e) {
+        console.warn('localStorage not accessible', e);
+    }
+
     if (targetUrl) {
         if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
             if (tg?.openLink) {
@@ -91,6 +108,7 @@ function startShopping(targetUrl = null) {
 
 function scrollToProducts() {
     const target = document.getElementById('products-section') || 
+                   document.getElementById('shop-main') ||
                    document.getElementById('shop') || 
                    document.getElementById('home-products-grid') ||
                    document.getElementById('home-categories-bar');
