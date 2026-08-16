@@ -58,11 +58,26 @@ function setupNavigationListeners() {
     });
 }
 
-function startShopping() {
+function startShopping(targetUrl = null) {
     if (tg?.HapticFeedback) {
         tg.HapticFeedback.impactOccurred('medium');
     }
 
+    if (targetUrl) {
+        if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+            if (tg?.openLink) {
+                tg.openLink(targetUrl);
+            } else {
+                window.open(targetUrl, '_blank');
+            }
+            return;
+        } else {
+            window.location.href = targetUrl;
+            return;
+        }
+    }
+
+    // Direct in-app navigation to products catalog & smooth scroll
     if (currentScreen !== 'home') {
         navigateTo('home', false);
         // Delay slightly for screen transition and layout rendering
