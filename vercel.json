@@ -16,6 +16,28 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "/static/(.*)",
+      "dest": "/webapp/$1"
+    },
+    {
+      "src": "/styles.css",
+      "dest": "/webapp/styles.css",
+      "headers": {
+        "content-type": "text/css"
+      }
+    },
+    {
+      "src": "/app.js",
+      "dest": "/webapp/app.js",
+      "headers": {
+        "content-type": "application/javascript"
+      }
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/webapp/assets/$1"
+    },
+    {
       "src": "/webapp/(.*)",
       "dest": "/webapp/$1"
     },

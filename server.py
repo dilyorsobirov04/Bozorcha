@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 
 from db import (
     get_all_products,
@@ -33,6 +33,8 @@ def create_webapp_server() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    webapp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webapp")
 
     @app.get("/api/health")
     async def health_check():
@@ -97,14 +99,43 @@ def create_webapp_server() -> FastAPI:
             "product": updated_product
         }
 
+    # Direct static file routes for root-level asset requests
+    @app.get("/styles.css")
+    async def get_root_styles():
+        css_file = os.path.join(webapp_path, "styles.css")
+        if os.path.exists(css_file):
+            return FileResponse(css_file, media_type="text/css")
+        raise HTTPException(status_code=404, detail="CSS not found")
+
+    @app.get("/app.js")
+    async def get_root_app_js():
+        js_file = os.path.join(webapp_path, "app.js")
+        if os.path.exists(js_file):
+            return FileResponse(js_file, media_type="application/javascript")
+        raise HTTPException(status_code=404, detail="JS not found")
+
+    @app.get("/assets/{asset_name:path}")
+    async def get_root_asset(asset_name: str):
+        asset_file = os.path.join(webapp_path, "assets", asset_name)
+        if os.path.exists(asset_file):
+            return FileResponse(asset_file)
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    @app.get("/")
+    async def handle_root():
+        index_file = os.path.join(webapp_path, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file, media_type="text/html")
+        return RedirectResponse(url="/webapp/index.html")
+
     @app.get("/webapp")
     async def handle_webapp_redirect():
         return RedirectResponse(url="/webapp/index.html")
 
-    # Static files mounting for local development / fallback
-    webapp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webapp")
+    # Static files mounting for /webapp and /static
     if os.path.isdir(webapp_path):
         app.mount("/webapp", StaticFiles(directory=webapp_path, html=True), name="webapp")
+        app.mount("/static", StaticFiles(directory=webapp_path, html=True), name="static")
 
     return app
 
