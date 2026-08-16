@@ -1,3 +1,5 @@
+import os
+import urllib.parse
 from datetime import datetime
 
 CATEGORIES_DB = {
@@ -271,9 +273,17 @@ STATISTICS_DB = {
 }
 
 
-def get_all_products(page: int = 1, limit: int = 100, category_id: int | str | None = None) -> dict:
+def get_all_products(
+    page: int = 1,
+    limit: int = 100,
+    category_id: int | str | None = None,
+    search: str | None = None,
+    sort: str | None = None,
+    discount_only: bool = False
+) -> dict:
     all_prods = list(PRODUCTS_DB.values())
 
+    # Category filter
     if category_id is not None and str(category_id).strip() != "" and str(category_id) != "all":
         try:
             cid = int(category_id)
@@ -282,6 +292,39 @@ def get_all_products(page: int = 1, limit: int = 100, category_id: int | str | N
             all_prods = [p for p in all_prods if p.get("category_id") in target_ids]
         except (ValueError, TypeError):
             pass
+
+    # Search filter (case-insensitive search in title, description, recommendation)
+    if search and str(search).strip():
+        q = str(search).strip().lower()
+        all_prods = [
+            p for p in all_prods
+            if q in (p.get("name") or "").lower()
+            or q in (p.get("description") or "").lower()
+            or q in (p.get("recommendation") or "").lower()
+        ]
+
+    # Discount only filter
+    if discount_only:
+        all_prods = [
+            p for p in all_prods
+            if (p.get("discount_percent", 0) > 0)
+            or (p.get("old_price") is not None and p.get("old_price", 0) > p.get("price", 0))
+            or p.get("is_promo")
+        ]
+
+    # Sort options: price_asc, price_desc, name_asc, name_desc, discount_desc
+    if sort:
+        s = str(sort).lower().strip()
+        if s in ["price_asc", "price_low", "arzonroq", "cheap"]:
+            all_prods.sort(key=lambda p: p.get("price", 0))
+        elif s in ["price_desc", "price_high", "qimmatroq", "expensive"]:
+            all_prods.sort(key=lambda p: p.get("price", 0), reverse=True)
+        elif s in ["name_asc", "name"]:
+            all_prods.sort(key=lambda p: (p.get("name") or "").lower())
+        elif s in ["name_desc"]:
+            all_prods.sort(key=lambda p: (p.get("name") or "").lower(), reverse=True)
+        elif s in ["discount_desc", "discount", "chegirma"]:
+            all_prods.sort(key=lambda p: p.get("discount_percent", 0), reverse=True)
 
     start = (page - 1) * limit
     end = start + limit
@@ -499,10 +542,104 @@ def add_manual_order(amount: int) -> dict:
     }
 
 
+ORDERS_DB = {}
+
+CLICK_SERVICE_ID = os.getenv("CLICK_SERVICE_ID", "32514")
+CLICK_MERCHANT_ID = os.getenv("CLICK_MERCHANT_ID", "21458")
+CLICK_MERCHANT_USER_ID = os.getenv("CLICK_MERCHANT_USER_ID", "15420")
+
+
+def generate_click_url(order_id: str | int, amount: int | float, return_url: str = "") -> str:
+    base_url = "https://my.click.uz/services/pay"
+    params = {
+        "service_id": CLICK_SERVICE_ID,
+        "merchant_id": CLICK_MERCHANT_ID,
+        "amount": f"{int(amount)}",
+        "transaction_param": str(order_id),
+    }
+    if return_url:
+        params["return_url"] = return_url
+    return f"{base_url}?{urllib.parse.urlencode(params)}"
+
+
+def create_order(
+    cart: dict,
+    total_amount: int | float,
+    payment_type: str = "cash",
+    address: str = "Chilonzor 9-kvartal, 14-uy",
+    delivery_time: str = "15 - 25 daqiqa",
+    user_info: dict | None = None
+) -> dict:
+    order_num = 84000 + len(ORDERS_DB) + 1
+    order_id = str(order_num)
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    clean_payment_type = "click" if str(payment_type).lower() == "click" else "cash"
+
+    if clean_payment_type == "click":
+        status = "To'langan (Click)"
+        status_code = "paid_click"
+        click_url = generate_click_url(order_id, total_amount)
+    else:
+        status = "Kutilmoqda (Naqd)"
+        status_code = "pending_cash"
+        click_url = None
+
+    order_record = {
+        "id": order_id,
+        "order_id": order_id,
+        "cart": cart,
+        "total_amount": int(total_amount),
+        "payment_type": clean_payment_type,
+        "payment_method_name": "Click" if clean_payment_type == "click" else "Naqd pul",
+        "status": status,
+        "status_code": status_code,
+        "address": address,
+        "delivery_time": delivery_time,
+        "user_info": user_info or {},
+        "click_url": click_url,
+        "created_at": now_str
+    }
+
+    ORDERS_DB[order_id] = order_record
+
+    # Update statistics
+    STATISTICS_DB["total_sales"] += int(total_amount)
+    STATISTICS_DB["monthly_sales"] += int(total_amount)
+    STATISTICS_DB["manual_orders"].append({
+        "id": order_num,
+        "amount": int(total_amount),
+        "created_at": now_str,
+        "payment_type": clean_payment_type,
+        "status": status
+    })
+
+    return order_record
+
+
+def get_orders(limit: int = 50) -> list[dict]:
+    return list(ORDERS_DB.values())[-limit:]
+
+
+def get_order(order_id: str | int) -> dict | None:
+    return ORDERS_DB.get(str(order_id))
+
+
+def update_order_status(order_id: str | int, status: str, status_code: str | None = None) -> dict | None:
+    oid = str(order_id)
+    if oid in ORDERS_DB:
+        ORDERS_DB[oid]["status"] = status
+        if status_code:
+            ORDERS_DB[oid]["status_code"] = status_code
+        return ORDERS_DB[oid]
+    return None
+
+
 def get_statistics() -> dict:
     return {
         "total_sales": STATISTICS_DB["total_sales"],
         "monthly_sales": STATISTICS_DB["monthly_sales"],
         "manual_orders_count": len(STATISTICS_DB["manual_orders"]),
-        "recent_orders": STATISTICS_DB["manual_orders"][-5:]
+        "recent_orders": STATISTICS_DB["manual_orders"][-5:],
+        "app_orders_count": len(ORDERS_DB)
     }

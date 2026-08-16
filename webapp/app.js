@@ -7,6 +7,10 @@ let currentScreen = 'onboarding';
 let products = [];
 let categories = [];
 let currentCategory = 'all';
+let currentSubcategory = 'all';
+let currentSort = 'default'; // 'default', 'price_asc', 'price_desc', 'discount_only'
+let selectedPaymentMethod = 'cash'; // 'cash' or 'click'
+let activeOrder = null;
 let cart = {}; // { productId: { item: product, weight: 1.0, qty: 1 } }
 let selectedDetailProduct = null;
 let currentSelectedWeight = 1.0;
@@ -20,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadCategories();
     loadProducts();
     initSlideToPay();
+    setupNavigationListeners();
 });
 
 function initTelegramApp() {
@@ -42,15 +47,54 @@ function initTelegramApp() {
     }
 }
 
+// ----------------- NAVIGATION LISTENERS & SHOPPING HANDLER -----------------
+function setupNavigationListeners() {
+    const startBtns = document.querySelectorAll('#start-shopping-btn, .start-shopping-btn, [data-action="start-shopping"]');
+    startBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            startShopping();
+        });
+    });
+}
+
+function startShopping() {
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('medium');
+    }
+
+    if (currentScreen !== 'home') {
+        navigateTo('home', false);
+        // Delay slightly for screen transition and layout rendering
+        setTimeout(() => {
+            scrollToProducts();
+        }, 80);
+    } else {
+        scrollToProducts();
+    }
+}
+
+function scrollToProducts() {
+    const target = document.getElementById('products-section') || 
+                   document.getElementById('shop') || 
+                   document.getElementById('home-products-grid') ||
+                   document.getElementById('home-categories-bar');
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
 // ----------------- SCREEN NAVIGATION -----------------
-function navigateTo(screenId) {
+function navigateTo(screenId, shouldScrollToTop = true) {
     currentScreen = screenId;
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
 
     const targetScreen = document.getElementById(`screen-${screenId}`);
     if (targetScreen) {
         targetScreen.classList.add('active');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (shouldScrollToTop) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     }
 
     // Bottom Navigation Bar update
@@ -217,9 +261,88 @@ function selectSubcategory(subcatId) {
 
 function filterByPromo() {
     selectCategory('all');
+    setSort('discount_only');
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('light');
+    }
+    scrollToProducts();
 }
 
 function handleSearch() {
+    const searchInput = document.getElementById('home-search');
+    const clearBtn = document.getElementById('search-clear-btn');
+    const query = (searchInput?.value || '').trim();
+
+    if (clearBtn) {
+        if (query.length > 0) {
+            clearBtn.classList.remove('hidden');
+        } else {
+            clearBtn.classList.add('hidden');
+        }
+    }
+
+    renderHomeProducts();
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('home-search');
+    const clearBtn = document.getElementById('search-clear-btn');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+    }
+    if (clearBtn) {
+        clearBtn.classList.add('hidden');
+    }
+    renderHomeProducts();
+}
+
+function setSort(sortType) {
+    currentSort = sortType;
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.selectionChanged();
+    }
+
+    document.querySelectorAll('#sort-filter-bar .sort-chip').forEach(chip => {
+        if (chip.getAttribute('data-sort') === sortType) {
+            chip.classList.add('active');
+        } else {
+            chip.classList.remove('active');
+        }
+    });
+
+    renderHomeProducts();
+}
+
+function resetAllFilters() {
+    currentCategory = 'all';
+    currentSubcategory = 'all';
+    currentSort = 'default';
+
+    const searchInput = document.getElementById('home-search');
+    if (searchInput) searchInput.value = '';
+    const clearBtn = document.getElementById('search-clear-btn');
+    if (clearBtn) clearBtn.classList.add('hidden');
+
+    document.querySelectorAll('#home-categories-bar .cat-pill').forEach(pill => {
+        if (pill.getAttribute('data-cat') === 'all') {
+            pill.classList.add('active');
+        } else {
+            pill.classList.remove('active');
+        }
+    });
+
+    document.querySelectorAll('#sort-filter-bar .sort-chip').forEach(chip => {
+        if (chip.getAttribute('data-sort') === 'default') {
+            chip.classList.add('active');
+        } else {
+            chip.classList.remove('active');
+        }
+    });
+
+    const subcatBar = document.getElementById('home-subcategories-bar');
+    if (subcatBar) subcatBar.classList.add('hidden');
+
     renderHomeProducts();
 }
 
@@ -232,9 +355,11 @@ function renderHomeProducts() {
     const grid = document.getElementById('home-products-grid');
     if (!grid) return;
     const query = (document.getElementById('home-search')?.value || '').toLowerCase().trim();
+    const headingText = document.getElementById('products-heading-text');
 
-    let filtered = products;
+    let filtered = [...products];
 
+    // Category filter
     if (currentCategory !== 'all') {
         if (currentSubcategory !== 'all') {
             filtered = filtered.filter(p => String(p.category_id) === String(currentSubcategory));
@@ -247,15 +372,48 @@ function renderHomeProducts() {
         }
     }
 
+    // Real-time search filter (title, description, recommendation)
     if (query) {
-        filtered = filtered.filter(p => (p.name || '').toLowerCase().includes(query));
+        filtered = filtered.filter(p => {
+            const nameMatch = (p.name || '').toLowerCase().includes(query);
+            const descMatch = (p.description || '').toLowerCase().includes(query);
+            const recMatch = (p.recommendation || '').toLowerCase().includes(query);
+            return nameMatch || descMatch || recMatch;
+        });
+        if (headingText) {
+            headingText.innerText = `Qidiruv natijalari (${filtered.length})`;
+        }
+    } else {
+        if (headingText) {
+            if (currentSort === 'discount_only') {
+                headingText.innerText = 'Chegirmali mahsulotlar';
+            } else if (currentSort === 'price_asc') {
+                headingText.innerText = 'Arzonroq mahsulotlar';
+            } else if (currentSort === 'price_desc') {
+                headingText.innerText = 'Qimmatroq mahsulotlar';
+            } else {
+                headingText.innerText = 'Ommabop mahsulotlar';
+            }
+        }
+    }
+
+    // Sort & Discount filtering
+    if (currentSort === 'discount_only') {
+        filtered = filtered.filter(p => (p.discount_percent && p.discount_percent > 0) || (p.old_price && p.old_price > p.price) || p.is_promo);
+        filtered.sort((a, b) => (b.discount_percent || 0) - (a.discount_percent || 0));
+    } else if (currentSort === 'price_asc') {
+        filtered.sort((a, b) => (a.price || 0) - (b.price || 0));
+    } else if (currentSort === 'price_desc') {
+        filtered.sort((a, b) => (b.price || 0) - (a.price || 0));
     }
 
     if (filtered.length === 0) {
         grid.innerHTML = `
             <div style="grid-column: 1 / -1; text-align: center; padding: 40px 10px; color: var(--text-muted);">
-                <div style="font-size: 32px; margin-bottom: 8px;">🔍</div>
-                <p style="font-size: 14px; font-weight: 600;">Bu bo'limda hozircha mahsulotlar mavjud emas</p>
+                <div style="font-size: 36px; margin-bottom: 8px;">🔍</div>
+                <p style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Hech narsa topilmadi</p>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">Boshqa so'z bilan qidirib ko'ring yoki filtrlarni tozalang</p>
+                <button class="banner-action-btn" onclick="resetAllFilters()" style="margin: 0 auto; display: inline-block;">Filtrlarni tozalash</button>
             </div>
         `;
         return;
@@ -548,25 +706,169 @@ function initSlideToPay() {
     window.addEventListener('mouseup', onEnd);
 }
 
-function triggerPaymentSuccess() {
+function selectPaymentMethod(method) {
+    selectedPaymentMethod = method;
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.selectionChanged();
+    }
+
+    const cashCard = document.getElementById('payment-method-cash');
+    const clickCard = document.getElementById('payment-method-click');
+    const labelEl = document.getElementById('selected-payment-label');
+    const slideLabel = document.getElementById('slide-pay-label');
+    const thumbIcon = document.getElementById('slide-thumb-icon');
+
+    if (method === 'click') {
+        cashCard?.classList.remove('active');
+        clickCard?.classList.add('active');
+        if (labelEl) {
+            labelEl.innerText = '⚡️ Click';
+            labelEl.className = 'payment-active-pill click-badge';
+        }
+        if (slideLabel) slideLabel.innerText = 'Click orqali to\'lash ➔';
+        if (thumbIcon) thumbIcon.innerText = '⚡️';
+    } else {
+        clickCard?.classList.remove('active');
+        cashCard?.classList.add('active');
+        if (labelEl) {
+            labelEl.innerText = '💵 Naqd pul';
+            labelEl.className = 'payment-active-pill cash-badge';
+        }
+        if (slideLabel) slideLabel.innerText = 'Naqd to\'lov uchun suring ➔';
+        if (thumbIcon) thumbIcon.innerText = '💵';
+    }
+}
+
+async function triggerPaymentSuccess() {
     if (tg?.HapticFeedback) {
         tg.HapticFeedback.notificationOccurred('success');
     }
 
-    const orderData = {
+    // Calculate total amount
+    let subtotal = 0;
+    Object.values(cart).forEach(entry => {
+        const itemPrice = Math.round(entry.item.price * entry.weight);
+        subtotal += itemPrice * entry.qty;
+    });
+
+    const activeSlot = document.querySelector('.slot-pill.active .slot-title')?.innerText || '15 - 25 daqiqa';
+    const user = tg?.initDataUnsafe?.user;
+
+    const orderPayload = {
         cart: cart,
-        order_id: "84091",
-        timestamp: new Date().toISOString()
+        total_amount: subtotal,
+        payment_type: selectedPaymentMethod,
+        address: "Chilonzor 9-kvartal, 14-uy",
+        delivery_time: activeSlot,
+        user_info: user ? { id: user.id, first_name: user.first_name, username: user.username } : {}
     };
 
+    let createdOrder = null;
+
+    try {
+        const res = await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderPayload)
+        });
+        if (res.ok) {
+            const data = await res.json();
+            createdOrder = data.order || data;
+        }
+    } catch (e) {
+        console.warn('Could not post order to API, using client fallback', e);
+    }
+
+    if (!createdOrder) {
+        const fallbackId = "84" + Math.floor(100 + Math.random() * 900);
+        createdOrder = {
+            id: fallbackId,
+            order_id: fallbackId,
+            cart: cart,
+            total_amount: subtotal,
+            payment_type: selectedPaymentMethod,
+            payment_method_name: selectedPaymentMethod === 'click' ? 'Click' : 'Naqd pul',
+            status: selectedPaymentMethod === 'click' ? "To'langan (Click)" : "Kutilmoqda (Naqd)",
+            click_url: `https://my.click.uz/services/pay?service_id=32514&merchant_id=21458&amount=${subtotal}&transaction_param=${fallbackId}`
+        };
+    }
+
+    activeOrder = createdOrder;
+
+    // Send data to Telegram Bot if WebApp context exists
     if (tg) {
-        tg.sendData(JSON.stringify(orderData));
+        try {
+            tg.sendData(JSON.stringify({
+                order_id: createdOrder.id,
+                total: subtotal,
+                payment_type: selectedPaymentMethod,
+                payment_method_name: selectedPaymentMethod === 'click' ? 'Click' : 'Naqd pul',
+                status: createdOrder.status,
+                cart: cart
+            }));
+        } catch (err) {
+            console.log('tg.sendData not available in this view');
+        }
+    }
+
+    // Update Live Tracking Screen Elements
+    const trackingOrderId = document.getElementById('tracking-order-id');
+    if (trackingOrderId) {
+        trackingOrderId.innerText = `Buyurtma #${createdOrder.id}`;
+    }
+
+    const trackingPayBadge = document.getElementById('tracking-payment-badge');
+    if (trackingPayBadge) {
+        if (selectedPaymentMethod === 'click') {
+            trackingPayBadge.innerText = '⚡️ Click';
+            trackingPayBadge.className = 'status-live-chip payment-live-chip';
+        } else {
+            trackingPayBadge.innerText = '💵 Naqd pul';
+            trackingPayBadge.className = 'status-live-chip';
+        }
+    }
+
+    const trackingTotal = document.getElementById('tracking-order-total');
+    if (trackingTotal) {
+        trackingTotal.innerText = subtotal.toLocaleString('uz-UZ') + " so'm";
+    }
+
+    const trackingStatus = document.getElementById('tracking-order-status');
+    if (trackingStatus) {
+        const orderStatus = createdOrder.status || (selectedPaymentMethod === 'click' ? "To'langan (Click)" : "Kutilmoqda (Naqd)");
+        trackingStatus.innerText = orderStatus;
+        if (selectedPaymentMethod === 'click') {
+            trackingStatus.className = 'summary-status-badge status-paid';
+        } else {
+            trackingStatus.className = 'summary-status-badge status-pending';
+        }
+    }
+
+    const clickActionBox = document.getElementById('tracking-click-action');
+    if (clickActionBox) {
+        if (selectedPaymentMethod === 'click' && createdOrder.click_url) {
+            clickActionBox.classList.remove('hidden');
+        } else {
+            clickActionBox.classList.add('hidden');
+        }
     }
 
     // Reset Cart and Navigate to Live Tracking Screen
     cart = {};
     updateNavCartBadge();
     navigateTo('tracking');
+}
+
+function openClickPaymentUrl() {
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('medium');
+    }
+    const url = activeOrder?.click_url || "https://my.click.uz";
+    if (tg && tg.openLink) {
+        tg.openLink(url);
+    } else {
+        window.open(url, '_blank');
+    }
 }
 
 // ----------------- 5. LIVE ORDER TRACKING -----------------

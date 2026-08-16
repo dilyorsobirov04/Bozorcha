@@ -41,20 +41,33 @@ async def handle_web_app_data(message: Message):
         raw_data = message.web_app_data.data
         data = json.loads(raw_data)
         cart = data.get("cart", {})
+        order_id = data.get("order_id", "84091")
+        total = data.get("total", 0)
+        payment_type = data.get("payment_type", "cash")
+        status = data.get("status", "Kutilmoqda (Naqd)")
 
-        order_summary = "🛒 **MINI APP ORQALI QABUL QILINGAN BUYURTMA:**\n\n"
+        payment_icon = "⚡️ Click" if payment_type == "click" else "💵 Naqd pul"
+
+        order_summary = f"🛒 **MINI APP BUYURTMASI #{order_id}**\n\n"
         total_items = 0
 
         for key, entry in cart.items():
-            item_name = entry.get("item", {}).get("name", f"Mahsulot #{key}")
+            item = entry.get("item", {})
+            item_name = item.get("name", f"Mahsulot #{key}")
             qty = entry.get("qty", 1)
-            order_summary += f"📦 {item_name} — {qty} ta\n"
+            weight = entry.get("weight", 1.0)
+            weight_str = f" ({weight}x)" if weight != 1.0 else ""
+            order_summary += f"📦 {item_name}{weight_str} — {qty} ta\n"
             total_items += qty
 
-        order_summary += f"\n📊 **Jami tovarlar soni:** {total_items} ta\n"
-        order_summary += "✅ Buyurtmangiz rasmiylashtirildi va kuryerga yuborildi!"
+        order_summary += f"\n📊 **Tovarlar soni:** {total_items} ta\n"
+        if total > 0:
+            order_summary += f"💰 **Jami to'lov:** {total:,.0f} so'm\n".replace(",", " ")
+        order_summary += f"💳 **To'lov usuli:** {payment_icon}\n"
+        order_summary += f"📌 **Holat:** {status}\n\n"
+        order_summary += "✅ Buyurtmangiz qabul qilindi va kuryerga yuborildi!"
 
         await message.answer(text=order_summary, parse_mode="Markdown")
     except Exception as e:
         logging.exception("Error in web_app_data handler: %s", e)
-        await message.answer("✅ Mini App buyurtmasi qabul qilindi!")
+        await message.answer("✅ Mini App buyurtmasi muvaffaqiyatli qabul qilindi!")

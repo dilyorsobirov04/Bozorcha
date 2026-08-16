@@ -39,7 +39,7 @@
                         <span class="dot"></span>
                     </div>
 
-                    <button class="cta-btn primary-glow-btn" onclick="navigateTo('home')">
+                    <button id="start-shopping-btn" class="cta-btn primary-glow-btn" onclick="startShopping()">
                         <span>Xaridni boshlash</span>
                         <span class="btn-arrow">➔</span>
                     </button>
@@ -65,6 +65,7 @@
                 <div class="search-bar">
                     <span class="search-icon">🔍</span>
                     <input type="text" id="home-search" placeholder="Mahsulot yoki brend qidiring..." oninput="handleSearch()">
+                    <button id="search-clear-btn" class="search-clear-btn hidden" onclick="clearSearch()">✕</button>
                 </div>
             </div>
 
@@ -78,27 +79,46 @@
                 </div>
             </div>
 
-            <!-- 3D Category Pills (Horizontal Scroll) -->
-            <div id="home-categories-bar" class="categories-bar">
-                <div class="cat-pill active" data-cat="all" onclick="selectCategory('all')">
-                    <span class="cat-icon">🛍️</span>
-                    <span class="cat-name">Barchasi</span>
+            <!-- Products & Categories Section -->
+            <div id="products-section" class="products-section">
+                <!-- 3D Category Pills (Horizontal Scroll) -->
+                <div id="home-categories-bar" class="categories-bar">
+                    <div class="cat-pill active" data-cat="all" onclick="selectCategory('all')">
+                        <span class="cat-icon">🛍️</span>
+                        <span class="cat-name">Barchasi</span>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Dynamic Subcategories Pills Bar -->
-            <div id="home-subcategories-bar" class="subcategories-bar hidden">
-                <!-- Dynamically populated subcategory chips -->
-            </div>
+                <!-- Dynamic Subcategories Pills Bar -->
+                <div id="home-subcategories-bar" class="subcategories-bar hidden">
+                    <!-- Dynamically populated subcategory chips -->
+                </div>
 
-            <!-- Popular / Discounted Product Grid -->
-            <div class="section-heading">
-                <h3>Ommabop mahsulotlar</h3>
-                <span class="view-all-link" onclick="selectCategory('all')">Hammasi ➔</span>
-            </div>
+                <!-- Sorting & Filter Chips Bar -->
+                <div class="sort-filter-bar" id="sort-filter-bar">
+                    <button class="sort-chip active" data-sort="default" onclick="setSort('default')">
+                        <span>✨ Barchasi</span>
+                    </button>
+                    <button class="sort-chip" data-sort="price_asc" onclick="setSort('price_asc')">
+                        <span>📉 Arzonroq</span>
+                    </button>
+                    <button class="sort-chip" data-sort="price_desc" onclick="setSort('price_desc')">
+                        <span>📈 Qimmatroq</span>
+                    </button>
+                    <button class="sort-chip" data-sort="discount_only" onclick="setSort('discount_only')">
+                        <span>🔥 Chegirmalar</span>
+                    </button>
+                </div>
 
-            <div id="home-products-grid" class="products-grid">
-                <!-- Dynamically loaded product cards -->
+                <!-- Popular / Discounted Product Grid -->
+                <div class="section-heading">
+                    <h3 id="products-heading-text">Ommabop mahsulotlar</h3>
+                    <span class="view-all-link" onclick="resetAllFilters()">Hammasi ➔</span>
+                </div>
+
+                <div id="home-products-grid" class="products-grid">
+                    <!-- Dynamically loaded product cards -->
+                </div>
             </div>
         </section>
 
@@ -214,6 +234,43 @@
                     </div>
                 </div>
 
+                <!-- Payment Method Selector (Cash & Click) -->
+                <div class="checkout-card glass-card">
+                    <div class="card-title-row">
+                        <span class="card-title">💳 To'lov usuli</span>
+                        <span id="selected-payment-label" class="payment-active-pill">💵 Naqd pul</span>
+                    </div>
+                    <div class="payment-methods-grid">
+                        <div id="payment-method-cash" class="payment-method-card active" onclick="selectPaymentMethod('cash')">
+                            <div class="payment-method-header">
+                                <div class="payment-radio">
+                                    <div class="radio-dot"></div>
+                                </div>
+                                <span class="payment-icon">💵</span>
+                                <div class="payment-info">
+                                    <div class="payment-name">Naqd pul</div>
+                                    <div class="payment-desc">Kuryerga yetkazilganda to'lash</div>
+                                </div>
+                            </div>
+                            <span class="payment-badge cash-badge">Qulay</span>
+                        </div>
+
+                        <div id="payment-method-click" class="payment-method-card" onclick="selectPaymentMethod('click')">
+                            <div class="payment-method-header">
+                                <div class="payment-radio">
+                                    <div class="radio-dot"></div>
+                                </div>
+                                <span class="payment-icon">⚡️</span>
+                                <div class="payment-info">
+                                    <div class="payment-name">Click</div>
+                                    <div class="payment-desc">Click orqali to'lash</div>
+                                </div>
+                            </div>
+                            <span class="payment-badge click-badge">Onlayn</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Payment Summary -->
                 <div class="checkout-card glass-card">
                     <span class="card-title">🧾 To'lov hisoboti</span>
@@ -240,9 +297,9 @@
                 <div class="slide-to-pay-wrapper">
                     <div id="slide-track" class="slide-track">
                         <div id="slide-fill" class="slide-fill"></div>
-                        <span class="slide-label">To'lov uchun suring ➔</span>
+                        <span id="slide-pay-label" class="slide-label">To'lov uchun suring ➔</span>
                         <div id="slide-thumb" class="slide-thumb">
-                            <span class="thumb-icon">💳</span>
+                            <span class="thumb-icon" id="slide-thumb-icon">💳</span>
                         </div>
                     </div>
                 </div>
@@ -253,7 +310,7 @@
         <section id="screen-tracking" class="screen">
             <header class="tracking-top-bar">
                 <button class="back-circle-btn" onclick="navigateTo('home')">←</button>
-                <div class="order-id-badge">Buyurtma #84091</div>
+                <div id="tracking-order-id" class="order-id-badge">Buyurtma #84091</div>
                 <button class="help-btn" onclick="callSupport()">Yordam</button>
             </header>
 
@@ -273,8 +330,30 @@
                         <span class="eta-label">Taxminiy yetib kelish vaqti:</span>
                         <h2 id="eta-countdown" class="eta-time">14 daqiqa</h2>
                     </div>
-                    <div class="status-live-chip">
-                        <span class="live-dot"></span> Yo'lda
+                    <div class="tracking-chips-wrap">
+                        <div class="status-live-chip">
+                            <span class="live-dot"></span> Yo'lda
+                        </div>
+                        <div id="tracking-payment-badge" class="status-live-chip payment-live-chip">
+                            💵 Naqd pul
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Order Detail Summary Card -->
+                <div id="tracking-order-summary-box" class="tracking-summary-card">
+                    <div class="summary-row">
+                        <span class="summary-label">Buyurtma summasi:</span>
+                        <span id="tracking-order-total" class="summary-value">0 so'm</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">To'lov holati:</span>
+                        <span id="tracking-order-status" class="summary-status-badge status-pending">Kutilmoqda (Naqd)</span>
+                    </div>
+                    <div id="tracking-click-action" class="tracking-click-wrap hidden">
+                        <button class="click-pay-action-btn" onclick="openClickPaymentUrl()">
+                            ⚡️ Click orqali to'lash
+                        </button>
                     </div>
                 </div>
 

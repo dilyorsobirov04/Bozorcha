@@ -22,7 +22,12 @@ from db import (
     get_top_level_categories,
     get_category,
     add_category,
-    delete_category
+    delete_category,
+    create_order,
+    get_orders,
+    get_order,
+    update_order_status,
+    generate_click_url
 )
 
 logger = logging.getLogger(__name__)
@@ -177,9 +182,19 @@ def create_webapp_server() -> FastAPI:
     async def handle_get_products(
         page: int = Query(1, ge=1, description="Page number"),
         limit: int = Query(100, ge=1, le=500, description="Items per page"),
-        category_id: Optional[str] = Query(None, description="Category or subcategory ID filter")
+        category_id: Optional[str] = Query(None, description="Category or subcategory ID filter"),
+        search: Optional[str] = Query(None, description="Search query string"),
+        sort: Optional[str] = Query(None, description="Sorting parameter: price_asc, price_desc, name_asc, name_desc, discount_desc"),
+        discount_only: bool = Query(False, description="Filter only discounted/promo products")
     ):
-        data = get_all_products(page=page, limit=limit, category_id=category_id)
+        data = get_all_products(
+            page=page,
+            limit=limit,
+            category_id=category_id,
+            search=search,
+            sort=sort,
+            discount_only=discount_only
+        )
         return data
 
     @app.get("/api/discount-products")
@@ -290,6 +305,94 @@ def create_webapp_server() -> FastAPI:
             "success": True,
             "message": f"Mahsulot #{product_id} muvaffaqiyatli o'chirildi!",
             "product_id": product_id
+        }
+
+    # ----------------- ORDERS & PAYMENT ENDPOINTS -----------------
+    @app.post("/api/orders")
+    async def handle_create_order(request: Request):
+        try:
+            data = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+        cart = data.get("cart") or data.get("items") or {}
+        total_amount = data.get("total_amount") or data.get("total") or 0
+        payment_type = data.get("payment_type") or data.get("payment_method") or "cash"
+        address = data.get("address") or "Chilonzor 9-kvartal, 14-uy"
+        delivery_time = data.get("delivery_time") or "15 - 25 daqiqa"
+        user_info = data.get("user_info") or data.get("user") or {}
+
+        try:
+            total_val = int(total_amount)
+        except (ValueError, TypeError):
+            total_val = 0
+
+        # Auto-calculate total from cart if 0
+        if total_val <= 0 and isinstance(cart, dict):
+            for entry in cart.values():
+                item = entry.get("item", {})
+                price = item.get("price", 0)
+                weight = entry.get("weight", 1.0)
+                qty = entry.get("qty", 1)
+                total_val += int(round(price * weight * qty))
+
+        order = create_order(
+            cart=cart,
+            total_amount=total_val,
+            payment_type=payment_type,
+            address=address,
+            delivery_time=delivery_time,
+            user_info=user_info
+        )
+
+        return {
+            "success": True,
+            "order_id": order["id"],
+            "order": order,
+            "payment_type": order["payment_type"],
+            "status": order["status"],
+            "click_url": order.get("click_url"),
+            "message": "Buyurtma muvaffaqiyatli qabul qilindi!"
+        }
+
+    @app.get("/api/orders")
+    async def handle_get_orders(limit: int = Query(50, ge=1, le=200)):
+        orders = get_orders(limit=limit)
+        return {
+            "success": True,
+            "orders": orders,
+            "total": len(orders)
+        }
+
+    @app.get("/api/orders/{order_id}")
+    async def handle_get_order(order_id: str):
+        order = get_order(order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
+        return {
+            "success": True,
+            "order": order
+        }
+
+    @app.post("/api/orders/{order_id}/status")
+    async def handle_update_order_status(order_id: str, request: Request):
+        try:
+            data = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+        status = data.get("status")
+        status_code = data.get("status_code")
+        if not status:
+            raise HTTPException(status_code=400, detail="Status ko'rsatilishi shart")
+
+        updated = update_order_status(order_id, status=status, status_code=status_code)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
+
+        return {
+            "success": True,
+            "order": updated
         }
 
     # Direct static file routes for root-level asset requests
