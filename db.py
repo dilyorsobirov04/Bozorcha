@@ -194,6 +194,80 @@ def update_product_photo_and_stock(
         return None
 
 
+def add_product(
+    name: str,
+    price: int | float,
+    category_id: int | str = 1,
+    image_url: str | None = None,
+    description: str | None = "",
+    unit: str = "kg",
+    stock: int = 50,
+    old_price: int | float | None = None,
+    discount_percent: int = 0,
+    recommendation: str | None = None
+) -> dict:
+    new_id = (max(PRODUCTS_DB.keys()) + 1) if PRODUCTS_DB else 101
+    try:
+        cid = int(category_id)
+    except (ValueError, TypeError):
+        cid = 1
+
+    try:
+        pr = int(price)
+    except (ValueError, TypeError):
+        pr = 0
+
+    try:
+        st = int(stock) if stock is not None else 50
+    except (ValueError, TypeError):
+        st = 50
+
+    try:
+        dp = int(discount_percent) if discount_percent is not None else 0
+    except (ValueError, TypeError):
+        dp = 0
+
+    op = None
+    if old_price is not None and old_price != "":
+        try:
+            op = int(old_price)
+        except (ValueError, TypeError):
+            op = None
+
+    is_promo = (dp > 0) or (op is not None and op > pr)
+
+    product = {
+        "id": new_id,
+        "category_id": cid,
+        "name": name.strip() if name else f"Mahsulot #{new_id}",
+        "unit": unit.strip() if unit else "kg",
+        "price": pr,
+        "old_price": op,
+        "discount_percent": dp,
+        "stock": st,
+        "description": description.strip() if description else "",
+        "nutrition": {"cal": "120 kcal", "protein": "1.5g", "fat": "2g"},
+        "photo_file_id": None,
+        "image_url": image_url.strip() if image_url else "https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60",
+        "is_promo": is_promo,
+        "recommendation": recommendation.strip() if recommendation else None
+    }
+
+    PRODUCTS_DB[new_id] = product
+    return product
+
+
+def delete_product(product_id: int | str) -> bool:
+    try:
+        pid = int(product_id)
+        if pid in PRODUCTS_DB:
+            del PRODUCTS_DB[pid]
+            return True
+        return False
+    except (ValueError, TypeError):
+        return False
+
+
 def get_product(product_id: int | str) -> dict | None:
     try:
         pid = int(product_id)

@@ -559,31 +559,262 @@ function callSupport() {
     alert("Mijozlarni qo'llab-quvvatlash xizmati: +998 71 200 00 00");
 }
 
-// ----------------- ADMIN REJIM & RASMSIZ TOVARLAR -----------------
+// ----------------- ADMIN REJIM & MAHSULOTLAR BOSHQARUVI -----------------
+let currentAdminTab = 'add';
+let targetDeleteProductId = null;
+
+const CATEGORY_NAMES = {
+    1: "🍎 Meva & Sabzavotlar",
+    2: "🥛 Sut & Tuxum",
+    3: "🥩 Go'sht & Baliq",
+    4: "🥖 Non & Pishiriqlar",
+    5: "🥤 Ichimliklar"
+};
+
 function toggleAdminMode() {
     isAdminMode = !isAdminMode;
     if (isAdminMode) {
         navigateTo('admin');
+        switchAdminTab('add');
         loadAdminCards();
     } else {
         navigateTo('home');
     }
 }
 
-async function loadAdminCards() {
-    const grid = document.getElementById('admin-nopic-grid');
-    grid.innerHTML = products.map(p => `
-        <div id="admin-card-${p.id}" class="admin-card">
-            <div class="product-card-img-wrap">
-                <img src="${p.image_url}" alt="${p.name}">
+function switchAdminTab(tab) {
+    currentAdminTab = tab;
+    const btnAdd = document.getElementById('tab-btn-add');
+    const btnList = document.getElementById('tab-btn-list');
+    const viewAdd = document.getElementById('admin-view-add');
+    const viewList = document.getElementById('admin-view-list');
+
+    if (tab === 'add') {
+        if (btnAdd) btnAdd.classList.add('active');
+        if (btnList) btnList.classList.remove('active');
+        if (viewAdd) viewAdd.classList.remove('hidden');
+        if (viewList) viewList.classList.add('hidden');
+    } else {
+        if (btnAdd) btnAdd.classList.remove('active');
+        if (btnList) btnList.classList.add('active');
+        if (viewAdd) viewAdd.classList.add('hidden');
+        if (viewList) viewList.classList.remove('hidden');
+        loadAdminCards();
+    }
+}
+
+function updateAddImagePreview() {
+    const input = document.getElementById('add-prod-image');
+    const previewWrap = document.getElementById('add-image-preview-wrap');
+    const previewImg = document.getElementById('add-image-preview');
+    const url = (input?.value || '').trim();
+
+    if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('assets/'))) {
+        if (previewImg) previewImg.src = url;
+        if (previewWrap) previewWrap.classList.remove('hidden');
+    } else {
+        if (previewWrap) previewWrap.classList.add('hidden');
+    }
+}
+
+async function submitAddNewProduct() {
+    const nameInput = document.getElementById('add-prod-name');
+    const priceInput = document.getElementById('add-prod-price');
+    const unitInput = document.getElementById('add-prod-unit');
+    const catInput = document.getElementById('add-prod-category');
+    const stockInput = document.getElementById('add-prod-stock');
+    const imageInput = document.getElementById('add-prod-image');
+    const descInput = document.getElementById('add-prod-desc');
+    const submitBtn = document.getElementById('btn-submit-add-product');
+
+    const name = (nameInput?.value || '').trim();
+    const price = parseInt(priceInput?.value || '0', 10);
+    const unit = unitInput?.value || 'kg';
+    const category_id = parseInt(catInput?.value || '1', 10);
+    const stock = parseInt(stockInput?.value || '50', 10);
+    const image_url = (imageInput?.value || '').trim();
+    const description = (descInput?.value || '').trim();
+
+    if (!name) {
+        showToast("Iltimos, mahsulot nomini kiriting!", "error");
+        if (nameInput) nameInput.focus();
+        return;
+    }
+
+    if (!price || price <= 0) {
+        showToast("Iltimos, yaroqli narx kiriting!", "error");
+        if (priceInput) priceInput.focus();
+        return;
+    }
+
+    const payload = {
+        name,
+        price,
+        unit,
+        category_id,
+        stock,
+        image_url: image_url || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60",
+        description
+    };
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span>⏳ Saqlanmoqda...</span>`;
+    }
+
+    try {
+        const res = await fetch('/api/products', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            showToast(`'${name}' muvaffaqiyatli qo'shildi! 🎉`, "success");
+
+            // Formani tozalash
+            document.getElementById('form-add-product')?.reset();
+            const previewWrap = document.getElementById('add-image-preview-wrap');
+            if (previewWrap) previewWrap.classList.add('hidden');
+
+            // Ma'lumotlarni qayta yuklash
+            await loadProducts();
+            switchAdminTab('list');
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.detail || "Mahsulot qo'shishda xatolik yuz berdi!", "error");
+        }
+    } catch (e) {
+        showToast("Server bilan bog'lanishda xatolik!", "error");
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<span>➕ Mahsulotni Saqlash</span>`;
+        }
+    }
+}
+
+function loadAdminCards(filteredList = null) {
+    const grid = document.getElementById('admin-products-grid');
+    const countEl = document.getElementById('admin-prod-count');
+    const listToRender = filteredList !== null ? filteredList : products;
+
+    if (countEl) countEl.innerText = products.length;
+    if (!grid) return;
+
+    if (listToRender.length === 0) {
+        grid.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px 10px; color: var(--text-muted);">
+                <div style="font-size: 32px; margin-bottom: 8px;">📦</div>
+                <p style="font-size: 14px; font-weight: 600;">Mahsulotlar topilmadi</p>
             </div>
-            <h4 class="product-title">${p.name}</h4>
-            <div class="admin-card-actions">
-                <button class="admin-upload-btn" onclick="triggerAdminPhoto(${p.id})">🖼 Rasm almashtirish</button>
-                <button class="admin-clear-btn" onclick="adminZeroStock(${p.id})">🗑 Qoldiqni 0 qilish</button>
+        `;
+        return;
+    }
+
+    grid.innerHTML = listToRender.map(p => {
+        const catName = CATEGORY_NAMES[p.category_id] || "Boshqa";
+        const formattedPrice = (p.price || 0).toLocaleString('uz-UZ') + " so'm";
+        const unit = p.unit || "kg";
+        const safeName = (p.name || '').replace(/'/g, "\\'");
+
+        return `
+            <div id="admin-card-${p.id}" class="admin-card">
+                <div class="admin-card-img-wrap">
+                    <img src="${p.image_url}" alt="${p.name}" onerror="this.src='https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60'">
+                </div>
+                <div>
+                    <h4 class="admin-card-title" title="${p.name}">${p.name}</h4>
+                    <div class="admin-card-cat">${catName} • ${p.stock || 0} ${unit}</div>
+                    <div class="admin-card-price">${formattedPrice}</div>
+                </div>
+                <div class="admin-card-actions">
+                    <button class="admin-delete-btn" onclick="confirmDeleteProduct(${p.id}, '${safeName}')">
+                        🗑️ O'chirish
+                    </button>
+                    <button class="admin-upload-btn" onclick="triggerAdminPhoto(${p.id})">
+                        🖼️ Rasm yuklash
+                    </button>
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
+}
+
+function filterAdminProducts() {
+    const query = (document.getElementById('admin-search-input')?.value || '').toLowerCase().trim();
+    if (!query) {
+        loadAdminCards();
+        return;
+    }
+    const filtered = products.filter(p => (p.name || '').toLowerCase().includes(query));
+    loadAdminCards(filtered);
+}
+
+function confirmDeleteProduct(productId, productName) {
+    targetDeleteProductId = productId;
+    const modal = document.getElementById('modal-delete-confirm');
+    const desc = document.getElementById('delete-modal-desc');
+
+    if (desc) {
+        desc.innerHTML = `Haqiqatan ham <strong>"${productName}"</strong> mahsulotini tizimdan butunlay o'chirmoqchimisiz?`;
+    }
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeDeleteConfirmModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById('modal-delete-confirm');
+    if (modal) modal.classList.add('hidden');
+    targetDeleteProductId = null;
+}
+
+async function executeDeleteProduct() {
+    if (!targetDeleteProductId) return;
+
+    const btn = document.getElementById('btn-confirm-delete');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "O'chirilmoqda...";
+    }
+
+    const pid = targetDeleteProductId;
+
+    try {
+        const res = await fetch(`/api/products/${pid}`, {
+            method: 'DELETE'
+        });
+
+        if (res.ok) {
+            const card = document.getElementById(`admin-card-${pid}`);
+            if (card) {
+                card.classList.add('card-removing');
+                setTimeout(() => card.remove(), 350);
+            }
+
+            showToast("Mahsulot muvaffaqiyatli o'chirildi! 🗑️", "success");
+            closeDeleteConfirmModal();
+
+            // Lokal ma'lumotlarni yangilash
+            products = products.filter(p => p.id != pid);
+            renderHomeProducts();
+            const countEl = document.getElementById('admin-prod-count');
+            if (countEl) countEl.innerText = products.length;
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.detail || "O'chirishda xatolik yuz berdi!", "error");
+            closeDeleteConfirmModal();
+        }
+    } catch (e) {
+        showToast("Server bilan bog'lanishda xatolik!", "error");
+        closeDeleteConfirmModal();
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "Ha, o'chirish";
+        }
+    }
 }
 
 function triggerAdminPhoto(productId) {
@@ -596,18 +827,24 @@ async function handleFilePicked(event) {
     const file = event.target.files[0];
     if (!file || !targetAdminProductId) return;
 
-    const card = document.getElementById(`admin-card-${targetAdminProductId}`);
-    if (card) {
-        card.classList.add('card-removing');
-        setTimeout(() => card.remove(), 400);
-    }
+    showToast("Rasm muvaffaqiyatli tanlandi! 🖼️", "success");
     event.target.value = '';
 }
 
-async function adminZeroStock(productId) {
-    const card = document.getElementById(`admin-card-${productId}`);
-    if (card) {
-        card.classList.add('card-removing');
-        setTimeout(() => card.remove(), 400);
-    }
+function showToast(message, type = "success") {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast-message toast-${type}`;
+    const icon = type === 'success' ? '✅' : '⚠️';
+    toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }

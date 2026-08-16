@@ -328,26 +328,125 @@
             </div>
         </section>
 
-        <!-- ================= ADMIN NO-PHOTO PANEL SCREEN ================= -->
+        <!-- ================= ADMIN MANAGEMENT SCREEN ================= -->
         <section id="screen-admin" class="screen">
             <header class="sub-screen-header">
                 <button class="back-circle-btn" onclick="toggleAdminMode()">←</button>
-                <h2>⚙️ Admin: Rasmsiz Mahsulotlar</h2>
+                <h2>⚙️ Admin Boshqaruvi</h2>
                 <div style="width: 36px;"></div>
             </header>
 
             <div class="admin-content-scroll">
-                <div class="admin-banner-card">
-                    <p>Mahsulotga bir zumda rasm biriktiring yoki bitta tugma bilan qoldiqni 0 ga tushiring. (Sahifa qayta yuklanmasdan silliq o'chadi).</p>
+                <!-- Segmented Tab Bar -->
+                <div class="admin-tabs-bar">
+                    <button id="tab-btn-add" class="admin-tab-btn active" onclick="switchAdminTab('add')">
+                        <span>➕ Yangi mahsulot</span>
+                    </button>
+                    <button id="tab-btn-list" class="admin-tab-btn" onclick="switchAdminTab('list')">
+                        <span>📋 Mahsulotlar (<span id="admin-prod-count">0</span>)</span>
+                    </button>
                 </div>
 
-                <div id="admin-nopic-grid" class="admin-grid">
-                    <!-- Admin cards -->
+                <!-- TAB 1: ADD PRODUCT FORM -->
+                <div id="admin-view-add" class="admin-tab-pane">
+                    <div class="admin-card-glass">
+                        <div class="form-title-wrap">
+                            <span class="form-title-icon">📦</span>
+                            <div>
+                                <h3 class="form-title">Yangi Mahsulot Kiritish</h3>
+                                <p class="form-subtitle">Bozorcha katalogiga yangi mahsulot qo'shing</p>
+                            </div>
+                        </div>
+
+                        <form id="form-add-product" onsubmit="event.preventDefault(); submitAddNewProduct();">
+                            <div class="form-group">
+                                <label class="form-label" for="add-prod-name">Mahsulot nomi <span class="req-star">*</span></label>
+                                <input type="text" id="add-prod-name" class="form-input" placeholder="Masalan: Organik Banan Ekvador" required>
+                            </div>
+
+                            <div class="form-row-2">
+                                <div class="form-group">
+                                    <label class="form-label" for="add-prod-price">Narxi (so'm) <span class="req-star">*</span></label>
+                                    <input type="number" id="add-prod-price" class="form-input" placeholder="28000" min="0" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="add-prod-unit">Birligi</label>
+                                    <select id="add-prod-unit" class="form-select">
+                                        <option value="kg">kg (Kilogramm)</option>
+                                        <option value="dona">dona</option>
+                                        <option value="litr">litr</option>
+                                        <option value="qadoq">qadoq</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row-2">
+                                <div class="form-group">
+                                    <label class="form-label" for="add-prod-category">Kategoriya</label>
+                                    <select id="add-prod-category" class="form-select">
+                                        <option value="1">🍎 Meva & Sabzavotlar</option>
+                                        <option value="2">🥛 Sut & Tuxum</option>
+                                        <option value="3">🥩 Go'sht & Baliq</option>
+                                        <option value="4">🥖 Non & Pishiriqlar</option>
+                                        <option value="5">🥤 Ichimliklar</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="add-prod-stock">Qoldiq soni</label>
+                                    <input type="number" id="add-prod-stock" class="form-input" value="50" min="0" placeholder="50">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="add-prod-image">Rasm havolasi (URL)</label>
+                                <input type="url" id="add-prod-image" class="form-input" placeholder="https://images.unsplash.com/..." oninput="updateAddImagePreview()">
+                                <div id="add-image-preview-wrap" class="admin-preview-wrap hidden">
+                                    <img id="add-image-preview" src="" alt="Ko'rish" class="admin-preview-img">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="add-prod-desc">Tavsif (ixtiyoriy)</label>
+                                <textarea id="add-prod-desc" class="form-textarea" rows="2" placeholder="Yangi uzilgan, shirin va sifatli..."></textarea>
+                            </div>
+
+                            <button type="submit" id="btn-submit-add-product" class="admin-submit-btn">
+                                <span>➕ Mahsulotni Saqlash</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- TAB 2: PRODUCTS LIST -->
+                <div id="admin-view-list" class="admin-tab-pane hidden">
+                    <div class="admin-search-wrap">
+                        <input type="text" id="admin-search-input" class="admin-search-input" placeholder="Mahsulotlarni izlash..." oninput="filterAdminProducts()">
+                    </div>
+
+                    <div id="admin-products-grid" class="admin-grid">
+                        <!-- Dynamically populated admin cards -->
+                    </div>
                 </div>
             </div>
 
             <input type="file" id="file-picker" accept="image/*" style="display: none" onchange="handleFilePicked(event)">
         </section>
+
+        <!-- ================= DELETE CONFIRMATION MODAL ================= -->
+        <div id="modal-delete-confirm" class="modal-backdrop hidden" onclick="closeDeleteConfirmModal(event)">
+            <div class="modal-delete-sheet" onclick="event.stopPropagation()">
+                <div class="delete-warn-icon">🗑️</div>
+                <h3 class="delete-modal-title">Mahsulotni o'chirish</h3>
+                <p id="delete-modal-desc" class="delete-modal-desc">Haqiqatan ham bu mahsulotni o'chirishni istaysizmi?</p>
+                <div class="delete-modal-actions">
+                    <button type="button" class="modal-cancel-btn" onclick="closeDeleteConfirmModal()">Bekor qilish</button>
+                    <button type="button" id="btn-confirm-delete" class="modal-danger-btn" onclick="executeDeleteProduct()">Ha, o'chirish</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TOAST NOTIFICATION CONTAINER ================= -->
+        <div id="toast-container" class="toast-container"></div>
 
         <!-- ================= BOTTOM NAVIGATION BAR ================= -->
         <nav id="bottom-nav-bar" class="bottom-nav">

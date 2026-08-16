@@ -12,7 +12,9 @@ from db import (
     get_discount_products,
     get_discounted_products_api,
     get_no_photo_products_api,
-    update_product_photo_and_stock
+    update_product_photo_and_stock,
+    add_product,
+    delete_product
 )
 
 logger = logging.getLogger(__name__)
@@ -97,6 +99,65 @@ def create_webapp_server() -> FastAPI:
             "success": True,
             "message": f"Mahsulot #{product_id} muvaffaqiyatli yangilandi!",
             "product": updated_product
+        }
+
+    @app.post("/api/products")
+    async def handle_post_product(request: Request):
+        try:
+            data = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        name = data.get("name") or data.get("title")
+        if not name or not str(name).strip():
+            raise HTTPException(status_code=400, detail="Mahsulot nomi kiritilishi shart")
+
+        price = data.get("price")
+        if price is None:
+            raise HTTPException(status_code=400, detail="Mahsulot narxi kiritilishi shart")
+        try:
+            price_val = int(price)
+            if price_val < 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Mahsulot narxi musbat son bo'lishi kerak")
+
+        category_id = data.get("category_id", 1)
+        image_url = data.get("image_url")
+        description = data.get("description", "")
+        unit = data.get("unit", "kg")
+        stock = data.get("stock", 50)
+        old_price = data.get("old_price")
+        discount_percent = data.get("discount_percent", 0)
+
+        new_product = add_product(
+            name=str(name).strip(),
+            price=price_val,
+            category_id=category_id,
+            image_url=image_url,
+            description=description,
+            unit=unit,
+            stock=stock,
+            old_price=old_price,
+            discount_percent=discount_percent
+        )
+
+        return {
+            "success": True,
+            "message": f"'{new_product['name']}' mahsuloti muvaffaqiyatli qo'shildi!",
+            "product": new_product
+        }
+
+    @app.delete("/api/products/{product_id}")
+    async def handle_delete_product(product_id: int):
+        success = delete_product(product_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Mahsulot topilmadi yoki allaqachon o'chirilgan")
+
+        return {
+            "success": True,
+            "message": f"Mahsulot #{product_id} muvaffaqiyatli o'chirildi!",
+            "product_id": product_id
         }
 
     # Direct static file routes for root-level asset requests
