@@ -6,10 +6,6 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
-# BOT_TOKEN o'rnatilganini va yaroqliligini tekshirish
-if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-    raise ValueError("BOT_TOKEN .env faylida ko'rsatilmagan!")
-
 # Config sozlamalari
 ADMINS = [7351189083]
 CHANNEL_URL = "https://t.me/bozorchakanal"
