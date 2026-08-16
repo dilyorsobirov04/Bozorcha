@@ -5,6 +5,7 @@ const ADMIN_ID = 7351189083;
 // App State
 let currentScreen = 'onboarding';
 let products = [];
+let categories = [];
 let currentCategory = 'all';
 let cart = {}; // { productId: { item: product, weight: 1.0, qty: 1 } }
 let selectedDetailProduct = null;
@@ -16,6 +17,7 @@ let remainingMinutes = 14;
 
 document.addEventListener('DOMContentLoaded', () => {
     initTelegramApp();
+    loadCategories();
     loadProducts();
     initSlideToPay();
 });
@@ -559,24 +561,77 @@ function callSupport() {
     alert("Mijozlarni qo'llab-quvvatlash xizmati: +998 71 200 00 00");
 }
 
-// ----------------- ADMIN REJIM & MAHSULOTLAR BOSHQARUVI -----------------
-let currentAdminTab = 'add';
-let targetDeleteProductId = null;
+// ----------------- CATEGORIES FETCHING & RENDERING -----------------
+async function loadCategories() {
+    try {
+        const res = await fetch('/api/categories');
+        if (res.ok) {
+            categories = await res.json();
+        } else {
+            useFallbackCategories();
+        }
+    } catch (e) {
+        useFallbackCategories();
+    }
+    renderHomeCategoryPills();
+    renderCategoryDropdownOptions();
+    renderAdminCategoriesList();
+}
 
-const CATEGORY_NAMES = {
-    1: "🍎 Meva & Sabzavotlar",
-    2: "🥛 Sut & Tuxum",
-    3: "🥩 Go'sht & Baliq",
-    4: "🥖 Non & Pishiriqlar",
-    5: "🥤 Ichimliklar"
-};
+function useFallbackCategories() {
+    categories = [
+        { id: 1, name: "Meva & Sabzavotlar", icon: "🍎", image_url: "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200&auto=format&fit=crop&q=60" },
+        { id: 2, name: "Sut & Tuxum", icon: "🥛", image_url: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=200&auto=format&fit=crop&q=60" },
+        { id: 3, name: "Go'sht & Baliq", icon: "🥩", image_url: "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=200&auto=format&fit=crop&q=60" },
+        { id: 4, name: "Non & Pishiriqlar", icon: "🥖", image_url: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200&auto=format&fit=crop&q=60" },
+        { id: 5, name: "Ichimliklar", icon: "🥤", image_url: "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=200&auto=format&fit=crop&q=60" }
+    ];
+}
+
+function renderHomeCategoryPills() {
+    const bar = document.getElementById('home-categories-bar');
+    if (!bar) return;
+
+    let html = `
+        <div class="cat-pill ${currentCategory === 'all' ? 'active' : ''}" data-cat="all" onclick="selectCategory('all')">
+            <span class="cat-icon">🛍️</span>
+            <span class="cat-name">Barchasi</span>
+        </div>
+    `;
+
+    categories.forEach(cat => {
+        const isActive = String(currentCategory) === String(cat.id);
+        html += `
+            <div class="cat-pill ${isActive ? 'active' : ''}" data-cat="${cat.id}" onclick="selectCategory('${cat.id}')">
+                <span class="cat-icon">${cat.icon || '📦'}</span>
+                <span class="cat-name">${cat.name}</span>
+            </div>
+        `;
+    });
+
+    bar.innerHTML = html;
+}
+
+function renderCategoryDropdownOptions() {
+    const select = document.getElementById('add-prod-category');
+    if (!select) return;
+
+    select.innerHTML = categories.map(cat => `
+        <option value="${cat.id}">${cat.icon || '📦'} ${cat.name}</option>
+    `).join('');
+}
+
+// ----------------- ADMIN REJIM & TO'LIQ BOSHQARUV -----------------
+let currentAdminTab = 'add-prod';
+let deleteTarget = { type: null, id: null, name: "" };
 
 function toggleAdminMode() {
     isAdminMode = !isAdminMode;
     if (isAdminMode) {
         navigateTo('admin');
-        switchAdminTab('add');
+        switchAdminTab('add-prod');
         loadAdminCards();
+        renderAdminCategoriesList();
     } else {
         navigateTo('home');
     }
@@ -584,23 +639,81 @@ function toggleAdminMode() {
 
 function switchAdminTab(tab) {
     currentAdminTab = tab;
-    const btnAdd = document.getElementById('tab-btn-add');
-    const btnList = document.getElementById('tab-btn-list');
-    const viewAdd = document.getElementById('admin-view-add');
-    const viewList = document.getElementById('admin-view-list');
+    const btnAddProd = document.getElementById('tab-btn-add-prod');
+    const btnProdList = document.getElementById('tab-btn-prod-list');
+    const btnCatList = document.getElementById('tab-btn-categories');
 
-    if (tab === 'add') {
-        if (btnAdd) btnAdd.classList.add('active');
-        if (btnList) btnList.classList.remove('active');
-        if (viewAdd) viewAdd.classList.remove('hidden');
-        if (viewList) viewList.classList.add('hidden');
-    } else {
-        if (btnAdd) btnAdd.classList.remove('active');
-        if (btnList) btnList.classList.add('active');
-        if (viewAdd) viewAdd.classList.add('hidden');
-        if (viewList) viewList.classList.remove('hidden');
+    const viewAddProd = document.getElementById('admin-view-add-prod');
+    const viewProdList = document.getElementById('admin-view-prod-list');
+    const viewCatList = document.getElementById('admin-view-categories');
+
+    [btnAddProd, btnProdList, btnCatList].forEach(btn => btn?.classList.remove('active'));
+    [viewAddProd, viewProdList, viewCatList].forEach(v => v?.classList.add('hidden'));
+
+    if (tab === 'add-prod') {
+        btnAddProd?.classList.add('active');
+        viewAddProd?.classList.remove('hidden');
+        renderCategoryDropdownOptions();
+    } else if (tab === 'prod-list') {
+        btnProdList?.classList.add('active');
+        viewProdList?.classList.remove('hidden');
         loadAdminCards();
+    } else if (tab === 'categories') {
+        btnCatList?.classList.add('active');
+        viewCatList?.classList.remove('hidden');
+        renderAdminCategoriesList();
     }
+}
+
+// --- Image Upload Helpers ---
+async function uploadImageFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (res.ok) {
+            const data = await res.json();
+            return data.url;
+        }
+    } catch (e) {
+        console.warn('API upload failed, falling back to local Data URI', e);
+    }
+
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handleProductFilePicked(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    showToast("Rasm yuklanmoqda... ⏳", "success");
+    const uploadedUrl = await uploadImageFile(file);
+
+    const imgInput = document.getElementById('add-prod-image');
+    if (imgInput) imgInput.value = uploadedUrl;
+    updateAddImagePreview();
+    showToast("Rasm muvaffaqiyatli yuklandi! 📸", "success");
+}
+
+async function handleCategoryFilePicked(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    showToast("Kategoriya rasmi yuklanmoqda... ⏳", "success");
+    const uploadedUrl = await uploadImageFile(file);
+
+    const imgInput = document.getElementById('add-cat-image');
+    if (imgInput) imgInput.value = uploadedUrl;
+    updateCatImagePreview();
+    showToast("Kategoriya rasmi yuklandi! 📸", "success");
 }
 
 function updateAddImagePreview() {
@@ -609,7 +722,7 @@ function updateAddImagePreview() {
     const previewImg = document.getElementById('add-image-preview');
     const url = (input?.value || '').trim();
 
-    if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('assets/'))) {
+    if (url) {
         if (previewImg) previewImg.src = url;
         if (previewWrap) previewWrap.classList.remove('hidden');
     } else {
@@ -617,6 +730,21 @@ function updateAddImagePreview() {
     }
 }
 
+function updateCatImagePreview() {
+    const input = document.getElementById('add-cat-image');
+    const previewWrap = document.getElementById('add-cat-preview-wrap');
+    const previewImg = document.getElementById('add-cat-preview');
+    const url = (input?.value || '').trim();
+
+    if (url) {
+        if (previewImg) previewImg.src = url;
+        if (previewWrap) previewWrap.classList.remove('hidden');
+    } else {
+        if (previewWrap) previewWrap.classList.add('hidden');
+    }
+}
+
+// --- Product Creation & List ---
 async function submitAddNewProduct() {
     const nameInput = document.getElementById('add-prod-name');
     const priceInput = document.getElementById('add-prod-price');
@@ -637,13 +765,13 @@ async function submitAddNewProduct() {
 
     if (!name) {
         showToast("Iltimos, mahsulot nomini kiriting!", "error");
-        if (nameInput) nameInput.focus();
+        nameInput?.focus();
         return;
     }
 
     if (!price || price <= 0) {
         showToast("Iltimos, yaroqli narx kiriting!", "error");
-        if (priceInput) priceInput.focus();
+        priceInput?.focus();
         return;
     }
 
@@ -673,14 +801,12 @@ async function submitAddNewProduct() {
             const data = await res.json();
             showToast(`'${name}' muvaffaqiyatli qo'shildi! 🎉`, "success");
 
-            // Formani tozalash
             document.getElementById('form-add-product')?.reset();
             const previewWrap = document.getElementById('add-image-preview-wrap');
             if (previewWrap) previewWrap.classList.add('hidden');
 
-            // Ma'lumotlarni qayta yuklash
             await loadProducts();
-            switchAdminTab('list');
+            switchAdminTab('prod-list');
         } else {
             const err = await res.json().catch(() => ({}));
             showToast(err.detail || "Mahsulot qo'shishda xatolik yuz berdi!", "error");
@@ -714,7 +840,8 @@ function loadAdminCards(filteredList = null) {
     }
 
     grid.innerHTML = listToRender.map(p => {
-        const catName = CATEGORY_NAMES[p.category_id] || "Boshqa";
+        const catObj = categories.find(c => c.id == p.category_id);
+        const catName = catObj ? `${catObj.icon || ''} ${catObj.name}` : "Boshqa";
         const formattedPrice = (p.price || 0).toLocaleString('uz-UZ') + " so'm";
         const unit = p.unit || "kg";
         const safeName = (p.name || '').replace(/'/g, "\\'");
@@ -752,13 +879,120 @@ function filterAdminProducts() {
     loadAdminCards(filtered);
 }
 
+// --- Category Creation & List ---
+async function submitAddNewCategory() {
+    const nameInput = document.getElementById('add-cat-name');
+    const iconInput = document.getElementById('add-cat-icon');
+    const imageInput = document.getElementById('add-cat-image');
+    const submitBtn = document.getElementById('btn-submit-add-cat');
+
+    const name = (nameInput?.value || '').trim();
+    const icon = (iconInput?.value || '🛍️').trim();
+    const image_url = (imageInput?.value || '').trim();
+
+    if (!name) {
+        showToast("Iltimos, kategoriya nomini kiriting!", "error");
+        nameInput?.focus();
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span>⏳ Saqlanmoqda...</span>`;
+    }
+
+    try {
+        const res = await fetch('/api/categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, icon, image_url })
+        });
+
+        if (res.ok) {
+            showToast(`'${name}' kategoriyasi qo'shildi! 🎉`, "success");
+            document.getElementById('form-add-category')?.reset();
+            const previewWrap = document.getElementById('add-cat-preview-wrap');
+            if (previewWrap) previewWrap.classList.add('hidden');
+
+            await loadCategories();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.detail || "Kategoriya qo'shishda xatolik!", "error");
+        }
+    } catch (e) {
+        showToast("Server bilan bog'lanishda xatolik!", "error");
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<span>➕ Kategoriyani Saqlash</span>`;
+        }
+    }
+}
+
+function renderAdminCategoriesList() {
+    const listEl = document.getElementById('admin-categories-list');
+    const countEl = document.getElementById('admin-cat-count');
+
+    if (countEl) countEl.innerText = categories.length;
+    if (!listEl) return;
+
+    if (categories.length === 0) {
+        listEl.innerHTML = `
+            <div style="text-align: center; padding: 30px 10px; color: var(--text-muted);">
+                <p>Hozircha kategoriyalar yo'q</p>
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = categories.map(cat => {
+        const prodCount = products.filter(p => p.category_id == cat.id).length;
+        const safeName = (cat.name || '').replace(/'/g, "\\'");
+
+        return `
+            <div id="admin-cat-card-${cat.id}" class="admin-cat-card">
+                <div class="admin-cat-left">
+                    <div class="admin-cat-icon-wrap">
+                        ${cat.image_url && cat.image_url.startsWith('http') 
+                            ? `<img src="${cat.image_url}" alt="${cat.name}">` 
+                            : `<span>${cat.icon || '📁'}</span>`}
+                    </div>
+                    <div>
+                        <div class="admin-cat-name">${cat.icon ? cat.icon + ' ' : ''}${cat.name}</div>
+                        <div class="admin-cat-meta">${prodCount} ta mahsulot biriktirilgan</div>
+                    </div>
+                </div>
+                <button class="admin-cat-del-btn" onclick="confirmDeleteCategory(${cat.id}, '${safeName}')">
+                    🗑️ O'chirish
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+// --- Unified Delete Handling ---
 function confirmDeleteProduct(productId, productName) {
-    targetDeleteProductId = productId;
+    deleteTarget = { type: 'product', id: productId, name: productName };
     const modal = document.getElementById('modal-delete-confirm');
+    const title = document.getElementById('delete-modal-title');
     const desc = document.getElementById('delete-modal-desc');
 
+    if (title) title.innerText = "Mahsulotni o'chirish";
     if (desc) {
         desc.innerHTML = `Haqiqatan ham <strong>"${productName}"</strong> mahsulotini tizimdan butunlay o'chirmoqchimisiz?`;
+    }
+    if (modal) modal.classList.remove('hidden');
+}
+
+function confirmDeleteCategory(categoryId, categoryName) {
+    deleteTarget = { type: 'category', id: categoryId, name: categoryName };
+    const modal = document.getElementById('modal-delete-confirm');
+    const title = document.getElementById('delete-modal-title');
+    const desc = document.getElementById('delete-modal-desc');
+
+    if (title) title.innerText = "Kategoriyani o'chirish";
+    if (desc) {
+        desc.innerHTML = `Haqiqatan ham <strong>"${categoryName}"</strong> kategoriyasini o'chirmoqchimisiz? Bu kategoriya ostidagi mahsulotlar o'chirilmaydi.`;
     }
     if (modal) modal.classList.remove('hidden');
 }
@@ -767,11 +1001,11 @@ function closeDeleteConfirmModal(event) {
     if (event && event.target !== event.currentTarget) return;
     const modal = document.getElementById('modal-delete-confirm');
     if (modal) modal.classList.add('hidden');
-    targetDeleteProductId = null;
+    deleteTarget = { type: null, id: null, name: "" };
 }
 
-async function executeDeleteProduct() {
-    if (!targetDeleteProductId) return;
+async function executeDelete() {
+    if (!deleteTarget.type || !deleteTarget.id) return;
 
     const btn = document.getElementById('btn-confirm-delete');
     if (btn) {
@@ -779,32 +1013,53 @@ async function executeDeleteProduct() {
         btn.innerText = "O'chirilmoqda...";
     }
 
-    const pid = targetDeleteProductId;
+    const { type, id } = deleteTarget;
 
     try {
-        const res = await fetch(`/api/products/${pid}`, {
-            method: 'DELETE'
-        });
+        if (type === 'product') {
+            const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                const card = document.getElementById(`admin-card-${id}`);
+                if (card) {
+                    card.classList.add('card-removing');
+                    setTimeout(() => card.remove(), 350);
+                }
 
-        if (res.ok) {
-            const card = document.getElementById(`admin-card-${pid}`);
-            if (card) {
-                card.classList.add('card-removing');
-                setTimeout(() => card.remove(), 350);
+                showToast("Mahsulot muvaffaqiyatli o'chirildi! 🗑️", "success");
+                closeDeleteConfirmModal();
+
+                products = products.filter(p => p.id != id);
+                renderHomeProducts();
+                const countEl = document.getElementById('admin-prod-count');
+                if (countEl) countEl.innerText = products.length;
+                renderAdminCategoriesList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                showToast(err.detail || "O'chirishda xatolik yuz berdi!", "error");
+                closeDeleteConfirmModal();
             }
+        } else if (type === 'category') {
+            const res = await fetch(`/api/categories/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                const card = document.getElementById(`admin-cat-card-${id}`);
+                if (card) {
+                    card.classList.add('card-removing');
+                    setTimeout(() => card.remove(), 350);
+                }
 
-            showToast("Mahsulot muvaffaqiyatli o'chirildi! 🗑️", "success");
-            closeDeleteConfirmModal();
+                showToast("Kategoriya muvaffaqiyatli o'chirildi! 🗑️", "success");
+                closeDeleteConfirmModal();
 
-            // Lokal ma'lumotlarni yangilash
-            products = products.filter(p => p.id != pid);
-            renderHomeProducts();
-            const countEl = document.getElementById('admin-prod-count');
-            if (countEl) countEl.innerText = products.length;
-        } else {
-            const err = await res.json().catch(() => ({}));
-            showToast(err.detail || "O'chirishda xatolik yuz berdi!", "error");
-            closeDeleteConfirmModal();
+                categories = categories.filter(c => c.id != id);
+                renderHomeCategoryPills();
+                renderCategoryDropdownOptions();
+                const countEl = document.getElementById('admin-cat-count');
+                if (countEl) countEl.innerText = categories.length;
+            } else {
+                const err = await res.json().catch(() => ({}));
+                showToast(err.detail || "Kategoriyani o'chirishda xatolik!", "error");
+                closeDeleteConfirmModal();
+            }
         }
     } catch (e) {
         showToast("Server bilan bog'lanishda xatolik!", "error");
@@ -827,8 +1082,32 @@ async function handleFilePicked(event) {
     const file = event.target.files[0];
     if (!file || !targetAdminProductId) return;
 
-    showToast("Rasm muvaffaqiyatli tanlandi! 🖼️", "success");
+    showToast("Rasm yuklanmoqda... ⏳", "success");
+    const uploadedUrl = await uploadImageFile(file);
+
+    try {
+        const res = await fetch('/api/products/update-photo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                product_id: targetAdminProductId,
+                image_url: uploadedUrl
+            })
+        });
+
+        if (res.ok) {
+            showToast("Mahsulot rasmi yangilandi! 🖼️", "success");
+            await loadProducts();
+            loadAdminCards();
+        } else {
+            showToast("Rasmni yangilashda xatolik yuz berdi", "error");
+        }
+    } catch (e) {
+        showToast("Server xatosi", "error");
+    }
+
     event.target.value = '';
+    targetAdminProductId = null;
 }
 
 function showToast(message, type = "success") {

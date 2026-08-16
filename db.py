@@ -1,12 +1,63 @@
 from datetime import datetime
 
 CATEGORIES_DB = {
-    1: "Meva & Sabzavotlar",
-    2: "Sut & Tuxum",
-    3: "Go'sht & Baliq",
-    4: "Non & Pishiriqlar",
-    5: "Ichimliklar"
+    1: {"id": 1, "name": "Meva & Sabzavotlar", "icon": "🍎", "image_url": "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200&auto=format&fit=crop&q=60"},
+    2: {"id": 2, "name": "Sut & Tuxum", "icon": "🥛", "image_url": "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=200&auto=format&fit=crop&q=60"},
+    3: {"id": 3, "name": "Go'sht & Baliq", "icon": "🥩", "image_url": "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=200&auto=format&fit=crop&q=60"},
+    4: {"id": 4, "name": "Non & Pishiriqlar", "icon": "🥖", "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200&auto=format&fit=crop&q=60"},
+    5: {"id": 5, "name": "Ichimliklar", "icon": "🥤", "image_url": "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=200&auto=format&fit=crop&q=60"}
 }
+
+
+def get_all_categories() -> list[dict]:
+    return list(CATEGORIES_DB.values())
+
+
+def get_category(category_id: int | str) -> dict | None:
+    try:
+        cid = int(category_id)
+        return CATEGORIES_DB.get(cid)
+    except (ValueError, TypeError):
+        return None
+
+
+def get_category_name(category_id: int | str) -> str:
+    try:
+        cid = int(category_id)
+        cat = CATEGORIES_DB.get(cid)
+        if isinstance(cat, dict):
+            return cat.get("name", f"Kategoriya #{cid}")
+        elif isinstance(cat, str):
+            return cat
+        return f"Kategoriya #{cid}"
+    except (ValueError, TypeError):
+        return f"Kategoriya #{category_id}"
+
+
+def add_category(name: str, icon: str = "🛍️", image_url: str | None = None) -> dict:
+    new_id = (max(CATEGORIES_DB.keys()) + 1) if CATEGORIES_DB else 1
+    clean_name = name.strip() if name else f"Kategoriya #{new_id}"
+    clean_icon = icon.strip() if icon else "🛍️"
+
+    category = {
+        "id": new_id,
+        "name": clean_name,
+        "icon": clean_icon,
+        "image_url": image_url.strip() if image_url else "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=60"
+    }
+    CATEGORIES_DB[new_id] = category
+    return category
+
+
+def delete_category(category_id: int | str) -> bool:
+    try:
+        cid = int(category_id)
+        if cid in CATEGORIES_DB:
+            del CATEGORIES_DB[cid]
+            return True
+        return False
+    except (ValueError, TypeError):
+        return False
 
 PRODUCTS_DB = {
     101: {
@@ -296,7 +347,7 @@ def get_categories_with_nopic_products() -> list[dict]:
 
     result = []
     for cid, count in cat_counts.items():
-        cname = CATEGORIES_DB.get(cid, f"Kategoriya #{cid}")
+        cname = get_category_name(cid)
         result.append({
             "id": cid,
             "name": cname,

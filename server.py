@@ -1,8 +1,10 @@
 import os
 import sys
+import uuid
+import base64
 import logging
 from typing import Optional
-from fastapi import FastAPI, Query, HTTPException, Request
+from fastapi import FastAPI, Query, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
@@ -14,7 +16,11 @@ from db import (
     get_no_photo_products_api,
     update_product_photo_and_stock,
     add_product,
-    delete_product
+    delete_product,
+    get_all_categories,
+    get_category,
+    add_category,
+    delete_category
 )
 
 logger = logging.getLogger(__name__)
@@ -42,6 +48,98 @@ def create_webapp_server() -> FastAPI:
     async def health_check():
         return {"status": "ok", "service": "Bozorcha Mini App API"}
 
+    # ----------------- CATEGORY ENDPOINTS -----------------
+    @app.get("/api/categories")
+    async def handle_get_categories():
+        return get_all_categories()
+
+    @app.post("/api/categories")
+    async def handle_post_category(request: Request):
+        try:
+            data = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        name = data.get("name") or data.get("title")
+        if not name or not str(name).strip():
+            raise HTTPException(status_code=400, detail="Kategoriya nomi kiritilishi shart")
+
+        icon = data.get("icon") or "🛍️"
+        image_url = data.get("image_url")
+
+        new_cat = add_category(name=str(name).strip(), icon=str(icon).strip(), image_url=image_url)
+        return {
+            "success": True,
+            "message": f"'{new_cat['name']}' kategoriyasi muvaffaqiyatli qo'shildi!",
+            "category": new_cat
+        }
+
+    @app.delete("/api/categories/{category_id}")
+    async def handle_delete_category(category_id: int):
+        success = delete_category(category_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Kategoriya topilmadi yoki allaqachon o'chirilgan")
+
+        return {
+            "success": True,
+            "message": f"Kategoriya #{category_id} muvaffaqiyatli o'chirildi!",
+            "category_id": category_id
+        }
+
+    # ----------------- FILE / IMAGE UPLOAD ENDPOINT -----------------
+    @app.post("/api/upload")
+    async def handle_upload_image(file: Optional[UploadFile] = File(None), request: Request = None):
+        if file:
+            try:
+                contents = await file.read()
+                filename = file.filename or "upload.png"
+                ext = os.path.splitext(filename)[1].lower()
+                if ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"]:
+                    ext = ".png"
+
+                unique_name = f"upload_{uuid.uuid4().hex[:10]}{ext}"
+                upload_dir = os.path.join(webapp_path, "assets", "uploads")
+
+                try:
+                    os.makedirs(upload_dir, exist_ok=True)
+                    file_path = os.path.join(upload_dir, unique_name)
+                    with open(file_path, "wb") as f:
+                        f.write(contents)
+                    return {
+                        "success": True,
+                        "url": f"/assets/uploads/{unique_name}",
+                        "filename": unique_name
+                    }
+                except Exception:
+                    # In read-only serverless environment fallback to base64 Data URI
+                    mime_type = file.content_type or "image/png"
+                    b64_str = base64.b64encode(contents).decode("utf-8")
+                    data_uri = f"data:{mime_type};base64,{b64_str}"
+                    return {
+                        "success": True,
+                        "url": data_uri,
+                        "filename": unique_name
+                    }
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Rasm yuklashda xatolik: {str(e)}")
+
+        # Check JSON payload for base64 data
+        if request:
+            try:
+                body = await request.json()
+                data_uri = body.get("image") or body.get("data") or body.get("url")
+                if data_uri:
+                    return {
+                        "success": True,
+                        "url": data_uri,
+                        "filename": "image.png"
+                    }
+            except Exception:
+                pass
+
+        raise HTTPException(status_code=400, detail="Fayl yoki rasm ma'lumoti topilmadi")
+
+    # ----------------- PRODUCT ENDPOINTS -----------------
     @app.get("/api/products")
     async def handle_get_products(
         page: int = Query(1, ge=1, description="Page number"),
