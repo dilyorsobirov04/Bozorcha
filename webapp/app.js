@@ -61,14 +61,14 @@ function initTelegramApp() {
 function setupNavigationListeners() {
     const startBtns = document.querySelectorAll('#start-shopping-btn, .start-shopping-btn, [data-action="start-shopping"]');
     startBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
+        btn.onclick = (e) => {
+            if (e) e.preventDefault();
             startShopping();
-        });
+        };
     });
 }
 
-function startShopping(targetUrl = null) {
+function startShopping(eventOrUrl = null) {
     if (tg?.HapticFeedback) {
         tg.HapticFeedback.impactOccurred('medium');
     }
@@ -80,30 +80,45 @@ function startShopping(targetUrl = null) {
         console.warn('localStorage not accessible', e);
     }
 
-    if (targetUrl) {
-        if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+    if (typeof eventOrUrl === 'string') {
+        if (eventOrUrl.startsWith('http://') || eventOrUrl.startsWith('https://')) {
             if (tg?.openLink) {
-                tg.openLink(targetUrl);
+                tg.openLink(eventOrUrl);
             } else {
-                window.open(targetUrl, '_blank');
+                window.open(eventOrUrl, '_blank');
             }
             return;
-        } else {
-            window.location.href = targetUrl;
+        } else if (eventOrUrl) {
+            window.location.href = eventOrUrl;
             return;
         }
     }
 
-    // Direct in-app navigation to products catalog & smooth scroll
-    if (currentScreen !== 'home') {
-        navigateTo('home', false);
-        // Delay slightly for screen transition and layout rendering
+    // Immediately transition to 'home' store view
+    navigateTo('home', false);
+
+    // Make sure onboarding screen is explicitly hidden and home screen is active
+    const onboardingScreen = document.getElementById('screen-onboarding');
+    if (onboardingScreen) {
+        onboardingScreen.classList.remove('active');
+        onboardingScreen.style.display = 'none';
+    }
+
+    const homeScreen = document.getElementById('screen-home');
+    if (homeScreen) {
+        homeScreen.classList.add('active');
+        homeScreen.style.display = 'block';
+    }
+
+    // Render products immediately
+    renderHomeProducts();
+
+    // Smooth scroll down to products section
+    requestAnimationFrame(() => {
         setTimeout(() => {
             scrollToProducts();
-        }, 80);
-    } else {
-        scrollToProducts();
-    }
+        }, 50);
+    });
 }
 
 function scrollToProducts() {
@@ -120,11 +135,15 @@ function scrollToProducts() {
 // ----------------- SCREEN NAVIGATION -----------------
 function navigateTo(screenId, shouldScrollToTop = true) {
     currentScreen = screenId;
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.screen').forEach(s => {
+        s.classList.remove('active');
+        s.style.display = 'none';
+    });
 
     const targetScreen = document.getElementById(`screen-${screenId}`);
     if (targetScreen) {
         targetScreen.classList.add('active');
+        targetScreen.style.display = 'block';
         if (shouldScrollToTop) {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -132,10 +151,12 @@ function navigateTo(screenId, shouldScrollToTop = true) {
 
     // Bottom Navigation Bar update
     const navBar = document.getElementById('bottom-nav-bar');
-    if (screenId === 'onboarding') {
-        navBar.style.display = 'none';
-    } else {
-        navBar.style.display = 'flex';
+    if (navBar) {
+        if (screenId === 'onboarding') {
+            navBar.style.display = 'none';
+        } else {
+            navBar.style.display = 'flex';
+        }
     }
 
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -146,7 +167,9 @@ function navigateTo(screenId, shouldScrollToTop = true) {
         }
     });
 
-    if (screenId === 'checkout') {
+    if (screenId === 'home') {
+        renderHomeProducts();
+    } else if (screenId === 'checkout') {
         renderCheckout();
     } else if (screenId === 'tracking') {
         startLiveTrackingTimer();
