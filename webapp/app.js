@@ -182,15 +182,36 @@ function useFallbackProducts() {
     renderHomeProducts();
 }
 
+let currentCategory = 'all';
+let currentSubcategory = 'all';
+
 function selectCategory(catId) {
     currentCategory = catId;
-    document.querySelectorAll('.cat-pill').forEach(pill => {
-        if (pill.getAttribute('data-cat') === catId) {
+    currentSubcategory = 'all';
+
+    document.querySelectorAll('#home-categories-bar .cat-pill').forEach(pill => {
+        if (pill.getAttribute('data-cat') === String(catId)) {
             pill.classList.add('active');
         } else {
             pill.classList.remove('active');
         }
     });
+
+    renderHomeSubcategoryPills();
+    renderHomeProducts();
+}
+
+function selectSubcategory(subcatId) {
+    currentSubcategory = subcatId;
+
+    document.querySelectorAll('#home-subcategories-bar .subcat-pill').forEach(pill => {
+        if (pill.getAttribute('data-subcat') === String(subcatId)) {
+            pill.classList.add('active');
+        } else {
+            pill.classList.remove('active');
+        }
+    });
+
     renderHomeProducts();
 }
 
@@ -209,28 +230,47 @@ function focusSearch() {
 
 function renderHomeProducts() {
     const grid = document.getElementById('home-products-grid');
+    if (!grid) return;
     const query = (document.getElementById('home-search')?.value || '').toLowerCase().trim();
 
     let filtered = products;
 
     if (currentCategory !== 'all') {
-        filtered = filtered.filter(p => p.category_id == currentCategory);
+        if (currentSubcategory !== 'all') {
+            filtered = filtered.filter(p => String(p.category_id) === String(currentSubcategory));
+        } else {
+            const subIds = categories
+                .filter(c => String(c.parent_id) === String(currentCategory))
+                .map(c => String(c.id));
+            const targetIds = new Set([String(currentCategory), ...subIds]);
+            filtered = filtered.filter(p => targetIds.has(String(p.category_id)));
+        }
     }
 
     if (query) {
-        filtered = filtered.filter(p => p.name.toLowerCase().includes(query));
+        filtered = filtered.filter(p => (p.name || '').toLowerCase().includes(query));
+    }
+
+    if (filtered.length === 0) {
+        grid.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px 10px; color: var(--text-muted);">
+                <div style="font-size: 32px; margin-bottom: 8px;">🔍</div>
+                <p style="font-size: 14px; font-weight: 600;">Bu bo'limda hozircha mahsulotlar mavjud emas</p>
+            </div>
+        `;
+        return;
     }
 
     grid.innerHTML = filtered.map(p => {
         const hasDiscount = p.discount_percent && p.discount_percent > 0;
-        const formattedPrice = p.price.toLocaleString('uz-UZ') + " so'm";
-        const formattedOldPrice = p.old_price ? p.old_price.toLocaleString('uz-UZ') + " so'm" : '';
+        const formattedPrice = (p.price || 0).toLocaleString('uz-UZ') + " so'm";
+        const formattedOldPrice = p.old_price ? (p.old_price || 0).toLocaleString('uz-UZ') + " so'm" : '';
 
         return `
             <div class="product-card" onclick="openProductModal(${p.id})">
                 ${hasDiscount ? `<div class="discount-badge-corner">-${p.discount_percent}%</div>` : ''}
                 <div class="product-card-img-wrap">
-                    <img src="${p.image_url}" alt="${p.name}" loading="lazy">
+                    <img src="${p.image_url}" alt="${p.name}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60'">
                 </div>
                 <span class="product-unit-tag">${p.unit || 'dona'}</span>
                 <h4 class="product-title">${p.name}</h4>
@@ -574,23 +614,40 @@ async function loadCategories() {
         useFallbackCategories();
     }
     renderHomeCategoryPills();
+    renderHomeSubcategoryPills();
     renderCategoryDropdownOptions();
+    renderParentCategoryDropdownOptions();
     renderAdminCategoriesList();
 }
 
 function useFallbackCategories() {
     categories = [
-        { id: 1, name: "Meva & Sabzavotlar", icon: "🍎", image_url: "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200&auto=format&fit=crop&q=60" },
-        { id: 2, name: "Sut & Tuxum", icon: "🥛", image_url: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=200&auto=format&fit=crop&q=60" },
-        { id: 3, name: "Go'sht & Baliq", icon: "🥩", image_url: "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=200&auto=format&fit=crop&q=60" },
-        { id: 4, name: "Non & Pishiriqlar", icon: "🥖", image_url: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200&auto=format&fit=crop&q=60" },
-        { id: 5, name: "Ichimliklar", icon: "🥤", image_url: "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=200&auto=format&fit=crop&q=60" }
+        { id: 1, name: "Meva & Sabzavotlar", icon: "🍎", parent_id: null, image_url: "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200&auto=format&fit=crop&q=60" },
+        { id: 2, name: "Sut & Tuxum", icon: "🥛", parent_id: null, image_url: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=200&auto=format&fit=crop&q=60" },
+        { id: 3, name: "Go'sht & Baliq", icon: "🥩", parent_id: null, image_url: "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=200&auto=format&fit=crop&q=60" },
+        { id: 4, name: "Non & Pishiriqlar", icon: "🥖", parent_id: null, image_url: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200&auto=format&fit=crop&q=60" },
+        { id: 5, name: "Ichimliklar", icon: "🥤", parent_id: null, image_url: "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=200&auto=format&fit=crop&q=60" },
+        { id: 11, name: "Yangi Mevalar", icon: "🍓", parent_id: 1, image_url: "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=200&auto=format&fit=crop&q=60" },
+        { id: 12, name: "Sabzavotlar", icon: "🥑", parent_id: 1, image_url: "assets/organic_avocado.png" },
+        { id: 13, name: "Yashillik & Ko'kat", icon: "🌿", parent_id: 1, image_url: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=200&auto=format&fit=crop&q=60" },
+        { id: 21, name: "Sut & Qatiq", icon: "🥛", parent_id: 2, image_url: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=200&auto=format&fit=crop&q=60" },
+        { id: 22, name: "Pishloq & Tvorog", icon: "🧀", parent_id: 2, image_url: "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=200&auto=format&fit=crop&q=60" },
+        { id: 23, name: "Tuxum", icon: "🥚", parent_id: 2, image_url: "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=200&auto=format&fit=crop&q=60" },
+        { id: 31, name: "Mol & Qo'y go'shti", icon: "🥩", parent_id: 3, image_url: "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=200&auto=format&fit=crop&q=60" },
+        { id: 32, name: "Parranda go'shti", icon: "🍗", parent_id: 3, image_url: "https://images.unsplash.com/photo-1587593810167-a84920ea0781?w=200&auto=format&fit=crop&q=60" },
+        { id: 33, name: "Baliq & Dengiz", icon: "🐟", parent_id: 3, image_url: "https://images.unsplash.com/photo-1534939561126-855b8675edd7?w=200&auto=format&fit=crop&q=60" },
+        { id: 41, name: "Tandir & Qolip non", icon: "🍞", parent_id: 4, image_url: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=200&auto=format&fit=crop&q=60" },
+        { id: 42, name: "Kruassan & Pishiriq", icon: "🥐", parent_id: 4, image_url: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200&auto=format&fit=crop&q=60" },
+        { id: 51, name: "Sharbat & Fresh", icon: "🧃", parent_id: 5, image_url: "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=200&auto=format&fit=crop&q=60" },
+        { id: 52, name: "Suv & Gazli ichimlik", icon: "🥤", parent_id: 5, image_url: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=200&auto=format&fit=crop&q=60" }
     ];
 }
 
 function renderHomeCategoryPills() {
     const bar = document.getElementById('home-categories-bar');
     if (!bar) return;
+
+    const topCategories = categories.filter(c => !c.parent_id);
 
     let html = `
         <div class="cat-pill ${currentCategory === 'all' ? 'active' : ''}" data-cat="all" onclick="selectCategory('all')">
@@ -599,7 +656,7 @@ function renderHomeCategoryPills() {
         </div>
     `;
 
-    categories.forEach(cat => {
+    topCategories.forEach(cat => {
         const isActive = String(currentCategory) === String(cat.id);
         html += `
             <div class="cat-pill ${isActive ? 'active' : ''}" data-cat="${cat.id}" onclick="selectCategory('${cat.id}')">
@@ -612,13 +669,89 @@ function renderHomeCategoryPills() {
     bar.innerHTML = html;
 }
 
+function renderHomeSubcategoryPills() {
+    const subBar = document.getElementById('home-subcategories-bar');
+    if (!subBar) return;
+
+    if (currentCategory === 'all') {
+        subBar.classList.add('hidden');
+        subBar.innerHTML = '';
+        return;
+    }
+
+    const subcats = categories.filter(c => String(c.parent_id) === String(currentCategory));
+
+    if (subcats.length === 0) {
+        subBar.classList.add('hidden');
+        subBar.innerHTML = '';
+        return;
+    }
+
+    let html = `
+        <div class="subcat-pill ${currentSubcategory === 'all' ? 'active' : ''}" data-subcat="all" onclick="selectSubcategory('all')">
+            <span>Barchasi</span>
+        </div>
+    `;
+
+    subcats.forEach(sub => {
+        const isActive = String(currentSubcategory) === String(sub.id);
+        html += `
+            <div class="subcat-pill ${isActive ? 'active' : ''}" data-subcat="${sub.id}" onclick="selectSubcategory('${sub.id}')">
+                <span>${sub.icon || '🏷️'}</span>
+                <span>${sub.name}</span>
+            </div>
+        `;
+    });
+
+    subBar.innerHTML = html;
+    subBar.classList.remove('hidden');
+}
+
 function renderCategoryDropdownOptions() {
     const select = document.getElementById('add-prod-category');
     if (!select) return;
 
-    select.innerHTML = categories.map(cat => `
-        <option value="${cat.id}">${cat.icon || '📦'} ${cat.name}</option>
-    `).join('');
+    const topCategories = categories.filter(c => !c.parent_id);
+    let html = '';
+
+    topCategories.forEach(top => {
+        const subcats = categories.filter(c => String(c.parent_id) === String(top.id));
+        if (subcats.length > 0) {
+            html += `<optgroup label="${top.icon || '📁'} ${top.name}">`;
+            html += `<option value="${top.id}">⭐ ${top.name} (Umumiy toifa)</option>`;
+            subcats.forEach(sub => {
+                html += `<option value="${sub.id}">&nbsp;&nbsp;↳ ${sub.icon || '🏷️'} ${sub.name}</option>`;
+            });
+            html += `</optgroup>`;
+        } else {
+            html += `<option value="${top.id}">${top.icon || '📁'} ${top.name}</option>`;
+        }
+    });
+
+    const orphanSubcats = categories.filter(c => c.parent_id && !topCategories.some(t => t.id == c.parent_id));
+    if (orphanSubcats.length > 0) {
+        html += `<optgroup label="Boshqa toifalar">`;
+        orphanSubcats.forEach(sub => {
+            html += `<option value="${sub.id}">${sub.icon || '🏷️'} ${sub.name}</option>`;
+        });
+        html += `</optgroup>`;
+    }
+
+    select.innerHTML = html;
+}
+
+function renderParentCategoryDropdownOptions() {
+    const select = document.getElementById('add-cat-parent');
+    if (!select) return;
+
+    const topCategories = categories.filter(c => !c.parent_id);
+
+    let html = `<option value="">📁 Asosiy Kategoriya (Ota kategoriya yo'q)</option>`;
+    topCategories.forEach(top => {
+        html += `<option value="${top.id}">${top.icon || '📁'} ${top.name} (Ota kategoriya)</option>`;
+    });
+
+    select.innerHTML = html;
 }
 
 // ----------------- ADMIN REJIM & TO'LIQ BOSHQARUV -----------------
@@ -661,6 +794,7 @@ function switchAdminTab(tab) {
     } else if (tab === 'categories') {
         btnCatList?.classList.add('active');
         viewCatList?.classList.remove('hidden');
+        renderParentCategoryDropdownOptions();
         renderAdminCategoriesList();
     }
 }
@@ -821,6 +955,18 @@ async function submitAddNewProduct() {
     }
 }
 
+function getCategoryHierarchyName(categoryId) {
+    const cat = categories.find(c => c.id == categoryId);
+    if (!cat) return "Boshqa";
+    if (cat.parent_id) {
+        const parent = categories.find(c => c.id == cat.parent_id);
+        if (parent) {
+            return `${parent.icon || ''} ${parent.name} › ${cat.icon || ''} ${cat.name}`;
+        }
+    }
+    return `${cat.icon || ''} ${cat.name}`;
+}
+
 function loadAdminCards(filteredList = null) {
     const grid = document.getElementById('admin-products-grid');
     const countEl = document.getElementById('admin-prod-count');
@@ -840,8 +986,7 @@ function loadAdminCards(filteredList = null) {
     }
 
     grid.innerHTML = listToRender.map(p => {
-        const catObj = categories.find(c => c.id == p.category_id);
-        const catName = catObj ? `${catObj.icon || ''} ${catObj.name}` : "Boshqa";
+        const catName = getCategoryHierarchyName(p.category_id);
         const formattedPrice = (p.price || 0).toLocaleString('uz-UZ') + " so'm";
         const unit = p.unit || "kg";
         const safeName = (p.name || '').replace(/'/g, "\\'");
@@ -853,7 +998,7 @@ function loadAdminCards(filteredList = null) {
                 </div>
                 <div>
                     <h4 class="admin-card-title" title="${p.name}">${p.name}</h4>
-                    <div class="admin-card-cat">${catName} • ${p.stock || 0} ${unit}</div>
+                    <div class="admin-card-cat" title="${catName}">${catName} • ${p.stock || 0} ${unit}</div>
                     <div class="admin-card-price">${formattedPrice}</div>
                 </div>
                 <div class="admin-card-actions">
@@ -879,16 +1024,18 @@ function filterAdminProducts() {
     loadAdminCards(filtered);
 }
 
-// --- Category Creation & List ---
+// --- Category Creation & Tree List ---
 async function submitAddNewCategory() {
     const nameInput = document.getElementById('add-cat-name');
     const iconInput = document.getElementById('add-cat-icon');
     const imageInput = document.getElementById('add-cat-image');
+    const parentSelect = document.getElementById('add-cat-parent');
     const submitBtn = document.getElementById('btn-submit-add-cat');
 
     const name = (nameInput?.value || '').trim();
     const icon = (iconInput?.value || '🛍️').trim();
     const image_url = (imageInput?.value || '').trim();
+    const parent_id = parentSelect?.value ? parseInt(parentSelect.value, 10) : null;
 
     if (!name) {
         showToast("Iltimos, kategoriya nomini kiriting!", "error");
@@ -905,11 +1052,12 @@ async function submitAddNewCategory() {
         const res = await fetch('/api/categories', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, icon, image_url })
+            body: JSON.stringify({ name, icon, image_url, parent_id })
         });
 
         if (res.ok) {
-            showToast(`'${name}' kategoriyasi qo'shildi! 🎉`, "success");
+            const isSub = parent_id !== null;
+            showToast(`'${name}' ${isSub ? 'subkategoriyasi' : 'kategoriyasi'} qo'shildi! 🎉`, "success");
             document.getElementById('form-add-category')?.reset();
             const previewWrap = document.getElementById('add-cat-preview-wrap');
             if (previewWrap) previewWrap.classList.add('hidden');
@@ -945,26 +1093,62 @@ function renderAdminCategoriesList() {
         return;
     }
 
-    listEl.innerHTML = categories.map(cat => {
-        const prodCount = products.filter(p => p.category_id == cat.id).length;
-        const safeName = (cat.name || '').replace(/'/g, "\\'");
+    const topCategories = categories.filter(c => !c.parent_id);
+
+    listEl.innerHTML = topCategories.map(top => {
+        const subcats = categories.filter(c => String(c.parent_id) === String(top.id));
+        const subIds = subcats.map(s => s.id);
+        const allCatIds = [top.id, ...subIds];
+        const totalProdsCount = products.filter(p => allCatIds.includes(p.category_id)).length;
+        const safeTopName = (top.name || '').replace(/'/g, "\\'");
+
+        let subcatsHtml = '';
+        if (subcats.length > 0) {
+            subcatsHtml = `
+                <div class="admin-cat-sub-list">
+                    ${subcats.map(sub => {
+                        const subProdCount = products.filter(p => p.category_id == sub.id).length;
+                        const safeSubName = (sub.name || '').replace(/'/g, "\\'");
+                        return `
+                            <div id="admin-cat-card-${sub.id}" class="admin-cat-sub-item">
+                                <div class="admin-cat-sub-left">
+                                    <span style="color: var(--text-muted); font-size: 11px;">└──</span>
+                                    <span>${sub.icon || '🏷️'}</span>
+                                    <span style="font-weight: 600; color: var(--text-primary);">${sub.name}</span>
+                                    <span style="font-size: 11px; color: var(--text-muted); margin-left: 4px;">(${subProdCount} tovar)</span>
+                                </div>
+                                <button class="admin-cat-del-btn" style="padding: 4px 8px; font-size: 11px;" onclick="confirmDeleteCategory(${sub.id}, '${safeSubName}', true)">
+                                    🗑️
+                                </button>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
 
         return `
-            <div id="admin-cat-card-${cat.id}" class="admin-cat-card">
-                <div class="admin-cat-left">
-                    <div class="admin-cat-icon-wrap">
-                        ${cat.image_url && cat.image_url.startsWith('http') 
-                            ? `<img src="${cat.image_url}" alt="${cat.name}">` 
-                            : `<span>${cat.icon || '📁'}</span>`}
+            <div class="admin-cat-tree-wrap">
+                <div id="admin-cat-card-${top.id}" class="admin-cat-tree-parent">
+                    <div class="admin-cat-left">
+                        <div class="admin-cat-icon-wrap">
+                            ${top.image_url && top.image_url.startsWith('http') 
+                                ? `<img src="${top.image_url}" alt="${top.name}">` 
+                                : `<span>${top.icon || '📁'}</span>`}
+                        </div>
+                        <div>
+                            <div class="admin-cat-name">
+                                ${top.icon ? top.icon + ' ' : ''}${top.name}
+                                <span class="admin-cat-parent-badge">Asosiy</span>
+                            </div>
+                            <div class="admin-cat-meta">${subcats.length} ta subkategoriya • jami ${totalProdsCount} ta tovar</div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="admin-cat-name">${cat.icon ? cat.icon + ' ' : ''}${cat.name}</div>
-                        <div class="admin-cat-meta">${prodCount} ta mahsulot biriktirilgan</div>
-                    </div>
+                    <button class="admin-cat-del-btn" onclick="confirmDeleteCategory(${top.id}, '${safeTopName}', false)">
+                        🗑️ O'chirish
+                    </button>
                 </div>
-                <button class="admin-cat-del-btn" onclick="confirmDeleteCategory(${cat.id}, '${safeName}')">
-                    🗑️ O'chirish
-                </button>
+                ${subcatsHtml}
             </div>
         `;
     }).join('');
@@ -984,15 +1168,17 @@ function confirmDeleteProduct(productId, productName) {
     if (modal) modal.classList.remove('hidden');
 }
 
-function confirmDeleteCategory(categoryId, categoryName) {
+function confirmDeleteCategory(categoryId, categoryName, isSubcategory = false) {
     deleteTarget = { type: 'category', id: categoryId, name: categoryName };
     const modal = document.getElementById('modal-delete-confirm');
     const title = document.getElementById('delete-modal-title');
     const desc = document.getElementById('delete-modal-desc');
 
-    if (title) title.innerText = "Kategoriyani o'chirish";
+    if (title) title.innerText = isSubcategory ? "Subkategoriyani o'chirish" : "Asosiy Kategoriyani o'chirish";
     if (desc) {
-        desc.innerHTML = `Haqiqatan ham <strong>"${categoryName}"</strong> kategoriyasini o'chirmoqchimisiz? Bu kategoriya ostidagi mahsulotlar o'chirilmaydi.`;
+        desc.innerHTML = isSubcategory
+            ? `Haqiqatan ham <strong>"${categoryName}"</strong> subkategoriyasini o'chirmoqchimisiz?`
+            : `Haqiqatan ham <strong>"${categoryName}"</strong> asosiy kategoriyasini o'chirmoqchimisiz? (Barcha ichki subkategoriyalar mustaqil bo'lib qoladi)`;
     }
     if (modal) modal.classList.remove('hidden');
 }
@@ -1050,11 +1236,7 @@ async function executeDelete() {
                 showToast("Kategoriya muvaffaqiyatli o'chirildi! 🗑️", "success");
                 closeDeleteConfirmModal();
 
-                categories = categories.filter(c => c.id != id);
-                renderHomeCategoryPills();
-                renderCategoryDropdownOptions();
-                const countEl = document.getElementById('admin-cat-count');
-                if (countEl) countEl.innerText = categories.length;
+                await loadCategories();
             } else {
                 const err = await res.json().catch(() => ({}));
                 showToast(err.detail || "Kategoriyani o'chirishda xatolik!", "error");

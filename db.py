@@ -1,16 +1,70 @@
 from datetime import datetime
 
 CATEGORIES_DB = {
-    1: {"id": 1, "name": "Meva & Sabzavotlar", "icon": "🍎", "image_url": "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200&auto=format&fit=crop&q=60"},
-    2: {"id": 2, "name": "Sut & Tuxum", "icon": "🥛", "image_url": "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=200&auto=format&fit=crop&q=60"},
-    3: {"id": 3, "name": "Go'sht & Baliq", "icon": "🥩", "image_url": "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=200&auto=format&fit=crop&q=60"},
-    4: {"id": 4, "name": "Non & Pishiriqlar", "icon": "🥖", "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200&auto=format&fit=crop&q=60"},
-    5: {"id": 5, "name": "Ichimliklar", "icon": "🥤", "image_url": "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=200&auto=format&fit=crop&q=60"}
+    # Top-Level Main Categories (parent_id: None)
+    1: {"id": 1, "name": "Meva & Sabzavotlar", "icon": "🍎", "parent_id": None, "image_url": "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200&auto=format&fit=crop&q=60"},
+    2: {"id": 2, "name": "Sut & Tuxum", "icon": "🥛", "parent_id": None, "image_url": "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=200&auto=format&fit=crop&q=60"},
+    3: {"id": 3, "name": "Go'sht & Baliq", "icon": "🥩", "parent_id": None, "image_url": "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=200&auto=format&fit=crop&q=60"},
+    4: {"id": 4, "name": "Non & Pishiriqlar", "icon": "🥖", "parent_id": None, "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200&auto=format&fit=crop&q=60"},
+    5: {"id": 5, "name": "Ichimliklar", "icon": "🥤", "parent_id": None, "image_url": "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=200&auto=format&fit=crop&q=60"},
+
+    # Subcategories under Meva & Sabzavotlar (parent_id: 1)
+    11: {"id": 11, "name": "Yangi Mevalar", "icon": "🍓", "parent_id": 1, "image_url": "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=200&auto=format&fit=crop&q=60"},
+    12: {"id": 12, "name": "Sabzavotlar", "icon": "🥑", "parent_id": 1, "image_url": "assets/organic_avocado.png"},
+    13: {"id": 13, "name": "Yashillik & Ko'kat", "icon": "🌿", "parent_id": 1, "image_url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=200&auto=format&fit=crop&q=60"},
+
+    # Subcategories under Sut & Tuxum (parent_id: 2)
+    21: {"id": 21, "name": "Sut & Qatiq", "icon": "🥛", "parent_id": 2, "image_url": "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=200&auto=format&fit=crop&q=60"},
+    22: {"id": 22, "name": "Pishloq & Tvorog", "icon": "🧀", "parent_id": 2, "image_url": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=200&auto=format&fit=crop&q=60"},
+    23: {"id": 23, "name": "Tuxum", "icon": "🥚", "parent_id": 2, "image_url": "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=200&auto=format&fit=crop&q=60"},
+
+    # Subcategories under Go'sht & Baliq (parent_id: 3)
+    31: {"id": 31, "name": "Mol & Qo'y go'shti", "icon": "🥩", "parent_id": 3, "image_url": "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=200&auto=format&fit=crop&q=60"},
+    32: {"id": 32, "name": "Parranda go'shti", "icon": "🍗", "parent_id": 3, "image_url": "https://images.unsplash.com/photo-1587593810167-a84920ea0781?w=200&auto=format&fit=crop&q=60"},
+    33: {"id": 33, "name": "Baliq & Dengiz", "icon": "🐟", "parent_id": 3, "image_url": "https://images.unsplash.com/photo-1534939561126-855b8675edd7?w=200&auto=format&fit=crop&q=60"},
+
+    # Subcategories under Non & Pishiriqlar (parent_id: 4)
+    41: {"id": 41, "name": "Tandir & Qolip non", "icon": "🍞", "parent_id": 4, "image_url": "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=200&auto=format&fit=crop&q=60"},
+    42: {"id": 42, "name": "Kruassan & Pishiriq", "icon": "🥐", "parent_id": 4, "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200&auto=format&fit=crop&q=60"},
+
+    # Subcategories under Ichimliklar (parent_id: 5)
+    51: {"id": 51, "name": "Sharbat & Fresh", "icon": "🧃", "parent_id": 5, "image_url": "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=200&auto=format&fit=crop&q=60"},
+    52: {"id": 52, "name": "Suv & Gazli ichimlik", "icon": "🥤", "parent_id": 5, "image_url": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=200&auto=format&fit=crop&q=60"}
 }
 
 
-def get_all_categories() -> list[dict]:
-    return list(CATEGORIES_DB.values())
+def get_all_categories(nested: bool = False) -> list[dict]:
+    cats = list(CATEGORIES_DB.values())
+    if not nested:
+        return cats
+
+    # Return nested tree structure
+    top_level = []
+    sub_map = {}
+    for c in cats:
+        if c.get("parent_id") is None:
+            top_level.append({**c, "subcategories": []})
+        else:
+            pid = c["parent_id"]
+            if pid not in sub_map:
+                sub_map[pid] = []
+            sub_map[pid].append(c)
+
+    for top in top_level:
+        top["subcategories"] = sub_map.get(top["id"], [])
+    return top_level
+
+
+def get_subcategories(category_id: int | str) -> list[dict]:
+    try:
+        cid = int(category_id)
+        return [c for c in CATEGORIES_DB.values() if c.get("parent_id") == cid]
+    except (ValueError, TypeError):
+        return []
+
+
+def get_top_level_categories() -> list[dict]:
+    return [c for c in CATEGORIES_DB.values() if c.get("parent_id") is None]
 
 
 def get_category(category_id: int | str) -> dict | None:
@@ -34,15 +88,30 @@ def get_category_name(category_id: int | str) -> str:
         return f"Kategoriya #{category_id}"
 
 
-def add_category(name: str, icon: str = "🛍️", image_url: str | None = None) -> dict:
+def add_category(
+    name: str,
+    icon: str = "🛍️",
+    image_url: str | None = None,
+    parent_id: int | str | None = None
+) -> dict:
     new_id = (max(CATEGORIES_DB.keys()) + 1) if CATEGORIES_DB else 1
     clean_name = name.strip() if name else f"Kategoriya #{new_id}"
     clean_icon = icon.strip() if icon else "🛍️"
+
+    pid = None
+    if parent_id is not None and str(parent_id).strip() != "" and str(parent_id).strip() != "0" and str(parent_id).strip().lower() != "null":
+        try:
+            pid_int = int(parent_id)
+            if pid_int in CATEGORIES_DB:
+                pid = pid_int
+        except (ValueError, TypeError):
+            pid = None
 
     category = {
         "id": new_id,
         "name": clean_name,
         "icon": clean_icon,
+        "parent_id": pid,
         "image_url": image_url.strip() if image_url else "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=60"
     }
     CATEGORIES_DB[new_id] = category
@@ -54,6 +123,11 @@ def delete_category(category_id: int | str) -> bool:
         cid = int(category_id)
         if cid in CATEGORIES_DB:
             del CATEGORIES_DB[cid]
+            # Handle child subcategories if parent is deleted
+            child_ids = [c["id"] for c in CATEGORIES_DB.values() if c.get("parent_id") == cid]
+            for child_id in child_ids:
+                if child_id in CATEGORIES_DB:
+                    CATEGORIES_DB[child_id]["parent_id"] = None
             return True
         return False
     except (ValueError, TypeError):
@@ -62,7 +136,7 @@ def delete_category(category_id: int | str) -> bool:
 PRODUCTS_DB = {
     101: {
         "id": 101,
-        "category_id": 1,
+        "category_id": 12,  # Sabzavotlar (parent 1)
         "name": "Organik Avokado Hass",
         "unit": "kg",
         "price": 68000,
@@ -78,7 +152,7 @@ PRODUCTS_DB = {
     },
     102: {
         "id": 102,
-        "category_id": 1,
+        "category_id": 11,  # Yangi Mevalar (parent 1)
         "name": "Qulupnay Premium Sweet",
         "unit": "kg",
         "price": 45000,
@@ -94,7 +168,7 @@ PRODUCTS_DB = {
     },
     103: {
         "id": 103,
-        "category_id": 2,
+        "category_id": 21,  # Sut & Qatiq (parent 2)
         "name": "Fermer Suti 3.2% Bio",
         "unit": "dona",
         "price": 14000,
@@ -110,7 +184,7 @@ PRODUCTS_DB = {
     },
     104: {
         "id": 104,
-        "category_id": 3,
+        "category_id": 31,  # Mol & Qo'y go'shti (parent 3)
         "name": "Mol Go'shti Ribeye Steyk",
         "unit": "kg",
         "price": 145000,
@@ -126,7 +200,7 @@ PRODUCTS_DB = {
     },
     105: {
         "id": 105,
-        "category_id": 4,
+        "category_id": 42,  # Kruassan & Pishiriq (parent 4)
         "name": "Fransuzcha Kruassan Butter",
         "unit": "dona",
         "price": 18000,
@@ -142,7 +216,7 @@ PRODUCTS_DB = {
     },
     106: {
         "id": 106,
-        "category_id": 5,
+        "category_id": 51,  # Sharbat & Fresh (parent 5)
         "name": "Apelsin Sharbati Fresh 1L",
         "unit": "dona",
         "price": 22000,
@@ -155,6 +229,38 @@ PRODUCTS_DB = {
         "image_url": "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=500&auto=format&fit=crop&q=60",
         "is_promo": True,
         "recommendation": None
+    },
+    107: {
+        "id": 107,
+        "category_id": 22,  # Pishloq & Tvorog (parent 2)
+        "name": "Gollandiya Pishlog'i Gouda",
+        "unit": "kg",
+        "price": 95000,
+        "old_price": 115000,
+        "discount_percent": 17,
+        "stock": 25,
+        "description": "Klassik mazali Gollandiya Gouda pishlog'i.",
+        "nutrition": {"cal": "350 kcal", "protein": "25g", "fat": "27g"},
+        "photo_file_id": None,
+        "image_url": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=500&auto=format&fit=crop&q=60",
+        "is_promo": True,
+        "recommendation": "Asal va yong'oq"
+    },
+    108: {
+        "id": 108,
+        "category_id": 13,  # Yashillik & Ko'kat (parent 1)
+        "name": "Organik Ko'katlar To'plami",
+        "unit": "dona",
+        "price": 8000,
+        "old_price": 10000,
+        "discount_percent": 20,
+        "stock": 60,
+        "description": "Kashnich, rayhon, ukrop va petrushka to'plami.",
+        "nutrition": {"cal": "20 kcal", "protein": "1.5g", "fat": "0.2g"},
+        "photo_file_id": None,
+        "image_url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&auto=format&fit=crop&q=60",
+        "is_promo": False,
+        "recommendation": "Salatlar uchun"
     }
 }
 
@@ -165,8 +271,18 @@ STATISTICS_DB = {
 }
 
 
-def get_all_products(page: int = 1, limit: int = 100) -> dict:
+def get_all_products(page: int = 1, limit: int = 100, category_id: int | str | None = None) -> dict:
     all_prods = list(PRODUCTS_DB.values())
+
+    if category_id is not None and str(category_id).strip() != "" and str(category_id) != "all":
+        try:
+            cid = int(category_id)
+            sub_ids = [c["id"] for c in CATEGORIES_DB.values() if c.get("parent_id") == cid]
+            target_ids = {cid, *sub_ids}
+            all_prods = [p for p in all_prods if p.get("category_id") in target_ids]
+        except (ValueError, TypeError):
+            pass
+
     start = (page - 1) * limit
     end = start + limit
     items = all_prods[start:end]

@@ -18,6 +18,8 @@ from db import (
     add_product,
     delete_product,
     get_all_categories,
+    get_subcategories,
+    get_top_level_categories,
     get_category,
     add_category,
     delete_category
@@ -50,11 +52,21 @@ def create_webapp_server() -> FastAPI:
 
     # ----------------- CATEGORY ENDPOINTS -----------------
     @app.get("/api/categories")
-    async def handle_get_categories():
-        return get_all_categories()
+    async def handle_get_categories(
+        nested: bool = Query(False, description="Return tree structure with nested subcategories"),
+        parent_id: Optional[str] = Query(None, description="Filter by parent_id")
+    ):
+        if parent_id is not None:
+            if parent_id.lower() in ["none", "null", "top"]:
+                return get_top_level_categories()
+            return get_subcategories(parent_id)
+        return get_all_categories(nested=nested)
 
-    @app.post("/api/categories")
-    async def handle_post_category(request: Request):
+    @app.get("/api/categories/{category_id}/subcategories")
+    async def handle_get_subcategories(category_id: int):
+        return get_subcategories(category_id)
+
+    async def _process_add_category(request: Request):
         try:
             data = await request.json()
         except Exception:
@@ -66,16 +78,29 @@ def create_webapp_server() -> FastAPI:
 
         icon = data.get("icon") or "🛍️"
         image_url = data.get("image_url")
+        parent_id = data.get("parent_id")
 
-        new_cat = add_category(name=str(name).strip(), icon=str(icon).strip(), image_url=image_url)
+        new_cat = add_category(
+            name=str(name).strip(),
+            icon=str(icon).strip(),
+            image_url=image_url,
+            parent_id=parent_id
+        )
         return {
             "success": True,
             "message": f"'{new_cat['name']}' kategoriyasi muvaffaqiyatli qo'shildi!",
             "category": new_cat
         }
 
-    @app.delete("/api/categories/{category_id}")
-    async def handle_delete_category(category_id: int):
+    @app.post("/api/categories")
+    async def handle_post_category(request: Request):
+        return await _process_add_category(request)
+
+    @app.post("/api/admin/categories")
+    async def handle_admin_post_category(request: Request):
+        return await _process_add_category(request)
+
+    async def _process_delete_category(category_id: int):
         success = delete_category(category_id)
         if not success:
             raise HTTPException(status_code=404, detail="Kategoriya topilmadi yoki allaqachon o'chirilgan")
@@ -85,6 +110,14 @@ def create_webapp_server() -> FastAPI:
             "message": f"Kategoriya #{category_id} muvaffaqiyatli o'chirildi!",
             "category_id": category_id
         }
+
+    @app.delete("/api/categories/{category_id}")
+    async def handle_delete_category(category_id: int):
+        return await _process_delete_category(category_id)
+
+    @app.delete("/api/admin/categories/{category_id}")
+    async def handle_admin_delete_category(category_id: int):
+        return await _process_delete_category(category_id)
 
     # ----------------- FILE / IMAGE UPLOAD ENDPOINT -----------------
     @app.post("/api/upload")
@@ -143,9 +176,10 @@ def create_webapp_server() -> FastAPI:
     @app.get("/api/products")
     async def handle_get_products(
         page: int = Query(1, ge=1, description="Page number"),
-        limit: int = Query(100, ge=1, le=500, description="Items per page")
+        limit: int = Query(100, ge=1, le=500, description="Items per page"),
+        category_id: Optional[str] = Query(None, description="Category or subcategory ID filter")
     ):
-        data = get_all_products(page=page, limit=limit)
+        data = get_all_products(page=page, limit=limit, category_id=category_id)
         return data
 
     @app.get("/api/discount-products")
