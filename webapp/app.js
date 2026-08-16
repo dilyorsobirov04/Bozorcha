@@ -282,9 +282,6 @@ function useFallbackProducts() {
     renderHomeProducts();
 }
 
-let currentCategory = 'all';
-let currentSubcategory = 'all';
-
 function selectCategory(catId) {
     currentCategory = catId;
     currentSubcategory = 'all';
@@ -1667,3 +1664,31 @@ function showToast(message, type = "success") {
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
+
+// Explicit window bindings for Telegram WebApp compatibility
+window.startShopping = startShopping;
+window.scrollToProducts = scrollToProducts;
+window.navigateTo = navigateTo;
+window.filterByPromo = filterByPromo;
+window.handleSearch = handleSearch;
+window.clearSearch = clearSearch;
+window.focusSearch = focusSearch;
+window.setSort = setSort;
+window.resetAllFilters = resetAllFilters;
+window.selectCategory = selectCategory;
+window.selectSubcategory = selectSubcategory;
+window.openProductModal = openProductModal;
+window.closeProductModal = closeProductModal;
+window.setProductDetailWeight = setProductDetailWeight;
+window.addProductModalToCart = addProductModalToCart;
+window.quickAddToCart = quickAddToCart;
+window.updateCartItemQty = updateCartItemQty;
+window.selectTimeSlot = selectTimeSlot;
+window.showAddressPicker = showAddressPicker;
+window.selectPaymentMethod = selectPaymentMethod;
+window.triggerPaymentSuccess = triggerPaymentSuccess;
+window.openClickPaymentUrl = openClickPaymentUrl;
+window.callCourier = callCourier;
+window.chatCourier = chatCourier;
+window.callSupport = callSupport;
+window.toggleAdminMode = toggleAdminMode;
