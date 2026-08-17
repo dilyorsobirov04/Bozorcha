@@ -410,21 +410,75 @@
             </header>
 
             <div class="admin-content-scroll">
-                <!-- Segmented Tab Bar (3 tabs) -->
+                <!-- Segmented Tab Bar (4 tabs) -->
                 <div class="admin-tabs-bar">
-                    <button id="tab-btn-add-prod" class="admin-tab-btn active" onclick="switchAdminTab('add-prod')">
+                    <button id="tab-btn-analytics" class="admin-tab-btn active" onclick="switchAdminTab('analytics')">
+                        <span>📊 Tahlil</span>
+                    </button>
+                    <button id="tab-btn-add-prod" class="admin-tab-btn" onclick="switchAdminTab('add-prod')">
                         <span>➕ Mahsulot</span>
                     </button>
                     <button id="tab-btn-prod-list" class="admin-tab-btn" onclick="switchAdminTab('prod-list')">
                         <span>📦 Tovarlar (<span id="admin-prod-count">0</span>)</span>
                     </button>
                     <button id="tab-btn-categories" class="admin-tab-btn" onclick="switchAdminTab('categories')">
-                        <span>📁 Kategoriyalar (<span id="admin-cat-count">0</span>)</span>
+                        <span>📁 Bo'limlar (<span id="admin-cat-count">0</span>)</span>
                     </button>
                 </div>
 
+                <!-- TAB 0: ANALYTICS DASHBOARD -->
+                <div id="admin-view-analytics" class="admin-tab-pane">
+                    <!-- Revenue Metrics Grid -->
+                    <div class="analytics-metrics-grid">
+                        <div class="metric-card daily-card">
+                            <div class="metric-header">
+                                <span class="metric-badge">⚡️ Bugungi Savdo</span>
+                                <span class="metric-icon">📅</span>
+                            </div>
+                            <div class="metric-value" id="stats-daily-rev">0 so'm</div>
+                            <div class="metric-sub">
+                                <span>Buyurtmalar:</span>
+                                <strong id="stats-daily-orders">0 ta</strong>
+                            </div>
+                        </div>
+
+                        <div class="metric-card monthly-card">
+                            <div class="metric-header">
+                                <span class="metric-badge month-badge">📈 Oylik Savdo (30 kun)</span>
+                                <span class="metric-icon">💼</span>
+                            </div>
+                            <div class="metric-value" id="stats-monthly-rev">0 so'm</div>
+                            <div class="metric-sub">
+                                <span>Buyurtmalar:</span>
+                                <strong id="stats-monthly-orders">0 ta</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top 5 Popular Products Section -->
+                    <div class="admin-card-glass" style="margin-top: 14px;">
+                        <div class="form-title-wrap">
+                            <span class="form-title-icon">🔥</span>
+                            <div>
+                                <h3 class="form-title">Eng Ko'p Sotilgan Tovarlar (Top-5)</h3>
+                                <p class="form-subtitle">Eng ommabop va ko'p buyurtma qilingan mahsulotlar</p>
+                            </div>
+                        </div>
+
+                        <div id="stats-top-products-list" class="top-products-list">
+                            <!-- Dynamically populated top products -->
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 16px;">
+                        <button type="button" class="analytics-refresh-btn" onclick="loadAdminStats()">
+                            <span>🔄 Ma'lumotlarni yangilash</span>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- TAB 1: ADD PRODUCT FORM -->
-                <div id="admin-view-add-prod" class="admin-tab-pane">
+                <div id="admin-view-add-prod" class="admin-tab-pane hidden">
                     <div class="admin-card-glass">
                         <div class="form-title-wrap">
                             <span class="form-title-icon">📦</span>

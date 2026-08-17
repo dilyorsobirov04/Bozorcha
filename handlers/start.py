@@ -12,6 +12,7 @@ router = Router()
 
 @router.message(CommandStart())
 @router.message(Command("start"))
+@router.message(Command("menu"))
 async def cmd_start_handler(message: Message):
     """
     /start buyrug'i kelganda foydalanuvchiga xush kelibsiz xabarini

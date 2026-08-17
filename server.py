@@ -27,7 +27,8 @@ from db import (
     get_orders,
     get_order,
     update_order_status,
-    generate_click_url
+    generate_click_url,
+    get_admin_analytics
 )
 
 logger = logging.getLogger(__name__)
@@ -394,6 +395,20 @@ def create_webapp_server() -> FastAPI:
             "success": True,
             "order": updated
         }
+
+    # ----------------- ADMIN ANALYTICS ENDPOINT -----------------
+    @app.get("/api/admin/stats")
+    async def handle_get_admin_stats(
+        user_id: Optional[str] = Query(None, description="Admin Telegram ID"),
+        request: Request = None
+    ):
+        admin_id_str = "7351189083"
+        req_id = user_id or (request.headers.get("X-Admin-Id") if request else None)
+        if req_id is not None and str(req_id).strip() != "" and str(req_id).strip() != admin_id_str:
+            raise HTTPException(status_code=403, detail="Faqat administrator uchun ruxsat berilgan")
+
+        stats = get_admin_analytics()
+        return stats
 
     # Direct static file routes for root-level asset requests
     @app.get("/styles.css")

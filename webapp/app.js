@@ -476,6 +476,7 @@ function renderHomeProducts() {
         const hasDiscount = p.discount_percent && p.discount_percent > 0;
         const formattedPrice = (p.price || 0).toLocaleString('uz-UZ') + " so'm";
         const formattedOldPrice = p.old_price ? (p.old_price || 0).toLocaleString('uz-UZ') + " so'm" : '';
+        const qty = getProductCartQty(p.id);
 
         return `
             <div class="product-card" onclick="openProductModal(${p.id})">
@@ -490,7 +491,9 @@ function renderHomeProducts() {
                         ${hasDiscount ? `<span class="card-old-price">${formattedOldPrice}</span>` : ''}
                         <span class="card-price">${formattedPrice}</span>
                     </div>
-                    <button class="quick-add-btn" onclick="event.stopPropagation(); quickAddToCart(${p.id})">+</button>
+                    <div id="card-action-${p.id}" class="card-action-wrap" onclick="event.stopPropagation()">
+                        ${renderProductCardAction(p.id, qty)}
+                    </div>
                 </div>
             </div>
         `;
@@ -564,6 +567,108 @@ function updateModalPrice() {
     }
 }
 
+// ----------------- PRODUCT COUNTER & CART HELPERS -----------------
+function getProductCartQty(productId) {
+    let total = 0;
+    for (const key in cart) {
+        if (cart[key] && cart[key].item && (cart[key].item.id == productId || String(key).startsWith(`${productId}_`))) {
+            total += cart[key].qty || 0;
+        }
+    }
+    return total;
+}
+
+function renderProductCardAction(productId, qty) {
+    if (!qty || qty <= 0) {
+        return `<button class="quick-add-btn" onclick="event.stopPropagation(); changeProductCardQty(${productId}, 1, event)" aria-label="Savatga qo'shish">+</button>`;
+    }
+    return `
+        <div class="card-stepper-control" onclick="event.stopPropagation()">
+            <button class="card-stepper-btn minus" onclick="event.stopPropagation(); changeProductCardQty(${productId}, -1, event)" aria-label="Kamaytirish">−</button>
+            <span class="card-stepper-qty pop">${qty}</span>
+            <button class="card-stepper-btn plus" onclick="event.stopPropagation(); changeProductCardQty(${productId}, 1, event)" aria-label="Ko'paytirish">+</button>
+        </div>
+    `;
+}
+
+function changeProductCardQty(productId, delta, event) {
+    if (event) {
+        event.stopPropagation();
+        if (event.preventDefault) event.preventDefault();
+    }
+
+    const prod = products.find(p => p.id == productId);
+    if (!prod) return;
+
+    const defaultKey = `${productId}_1.0`;
+
+    if (delta > 0) {
+        if (cart[defaultKey]) {
+            cart[defaultKey].qty += delta;
+        } else {
+            let existingKey = null;
+            for (const k in cart) {
+                if (cart[k]?.item?.id == productId) {
+                    existingKey = k;
+                    break;
+                }
+            }
+            if (existingKey) {
+                cart[existingKey].qty += delta;
+            } else {
+                cart[defaultKey] = {
+                    item: prod,
+                    weight: 1.0,
+                    qty: 1
+                };
+            }
+        }
+        if (tg?.HapticFeedback) {
+            tg.HapticFeedback.impactOccurred('medium');
+        }
+    } else if (delta < 0) {
+        let keyToReduce = cart[defaultKey] ? defaultKey : null;
+        if (!keyToReduce) {
+            for (const k in cart) {
+                if (cart[k]?.item?.id == productId) {
+                    keyToReduce = k;
+                    break;
+                }
+            }
+        }
+        if (keyToReduce && cart[keyToReduce]) {
+            cart[keyToReduce].qty += delta;
+            if (cart[keyToReduce].qty <= 0) {
+                delete cart[keyToReduce];
+            }
+        }
+        if (tg?.HapticFeedback) {
+            tg.HapticFeedback.impactOccurred('light');
+        }
+    }
+
+    updateProductCardCounter(productId);
+    updateNavCartBadge();
+
+    if (currentScreen === 'checkout') {
+        renderCheckout();
+    }
+}
+
+function updateProductCardCounter(productId) {
+    const actionWrap = document.getElementById(`card-action-${productId}`);
+    const qty = getProductCartQty(productId);
+    if (actionWrap) {
+        actionWrap.innerHTML = renderProductCardAction(productId, qty);
+    }
+}
+
+function syncAllProductCardCounters() {
+    products.forEach(p => {
+        updateProductCardCounter(p.id);
+    });
+}
+
 function addCurrentProductToCart() {
     if (!selectedDetailProduct) return;
 
@@ -585,29 +690,12 @@ function addCurrentProductToCart() {
     }
 
     updateNavCartBadge();
+    updateProductCardCounter(pid);
     closeProductModal();
 }
 
 function quickAddToCart(productId) {
-    const prod = products.find(p => p.id == productId);
-    if (!prod) return;
-
-    const cartKey = `${productId}_1.0`;
-    if (cart[cartKey]) {
-        cart[cartKey].qty += 1;
-    } else {
-        cart[cartKey] = {
-            item: prod,
-            weight: 1.0,
-            qty: 1
-        };
-    }
-
-    if (tg?.HapticFeedback) {
-        tg.HapticFeedback.impactOccurred('medium');
-    }
-
-    updateNavCartBadge();
+    changeProductCardQty(productId, 1);
 }
 
 function updateNavCartBadge() {
@@ -615,6 +703,9 @@ function updateNavCartBadge() {
     const badge = document.getElementById('nav-cart-count');
     if (badge) {
         badge.innerText = totalQty;
+        badge.classList.remove('badge-bounce');
+        void badge.offsetWidth;
+        badge.classList.add('badge-bounce');
     }
 }
 
@@ -676,6 +767,7 @@ function renderCheckout() {
 function updateCartItemQty(cartKey, delta) {
     if (!cart[cartKey]) return;
 
+    const pid = cart[cartKey]?.item?.id || parseInt(cartKey.split('_')[0]);
     cart[cartKey].qty += delta;
     if (cart[cartKey].qty <= 0) {
         delete cart[cartKey];
@@ -683,6 +775,9 @@ function updateCartItemQty(cartKey, delta) {
 
     updateNavCartBadge();
     renderCheckout();
+    if (pid) {
+        updateProductCardCounter(pid);
+    }
 }
 
 function selectTimeSlot(element) {
@@ -909,6 +1004,7 @@ async function triggerPaymentSuccess() {
     // Reset Cart and Navigate to Live Tracking Screen
     cart = {};
     updateNavCartBadge();
+    syncAllProductCardCounters();
     navigateTo('tracking');
 }
 
@@ -1110,14 +1206,15 @@ function renderParentCategoryDropdownOptions() {
 }
 
 // ----------------- ADMIN REJIM & TO'LIQ BOSHQARUV -----------------
-let currentAdminTab = 'add-prod';
+let currentAdminTab = 'analytics';
 let deleteTarget = { type: null, id: null, name: "" };
 
 function toggleAdminMode() {
     isAdminMode = !isAdminMode;
     if (isAdminMode) {
         navigateTo('admin');
-        switchAdminTab('add-prod');
+        switchAdminTab('analytics');
+        loadAdminStats();
         loadAdminCards();
         renderAdminCategoriesList();
     } else {
@@ -1127,18 +1224,24 @@ function toggleAdminMode() {
 
 function switchAdminTab(tab) {
     currentAdminTab = tab;
+    const btnAnalytics = document.getElementById('tab-btn-analytics');
     const btnAddProd = document.getElementById('tab-btn-add-prod');
     const btnProdList = document.getElementById('tab-btn-prod-list');
     const btnCatList = document.getElementById('tab-btn-categories');
 
+    const viewAnalytics = document.getElementById('admin-view-analytics');
     const viewAddProd = document.getElementById('admin-view-add-prod');
     const viewProdList = document.getElementById('admin-view-prod-list');
     const viewCatList = document.getElementById('admin-view-categories');
 
-    [btnAddProd, btnProdList, btnCatList].forEach(btn => btn?.classList.remove('active'));
-    [viewAddProd, viewProdList, viewCatList].forEach(v => v?.classList.add('hidden'));
+    [btnAnalytics, btnAddProd, btnProdList, btnCatList].forEach(btn => btn?.classList.remove('active'));
+    [viewAnalytics, viewAddProd, viewProdList, viewCatList].forEach(v => v?.classList.add('hidden'));
 
-    if (tab === 'add-prod') {
+    if (tab === 'analytics') {
+        btnAnalytics?.classList.add('active');
+        viewAnalytics?.classList.remove('hidden');
+        loadAdminStats();
+    } else if (tab === 'add-prod') {
         btnAddProd?.classList.add('active');
         viewAddProd?.classList.remove('hidden');
         renderCategoryDropdownOptions();
@@ -1151,6 +1254,63 @@ function switchAdminTab(tab) {
         viewCatList?.classList.remove('hidden');
         renderParentCategoryDropdownOptions();
         renderAdminCategoriesList();
+    }
+}
+
+async function loadAdminStats() {
+    const dailyRevEl = document.getElementById('stats-daily-rev');
+    const dailyOrdersEl = document.getElementById('stats-daily-orders');
+    const monthlyRevEl = document.getElementById('stats-monthly-rev');
+    const monthlyOrdersEl = document.getElementById('stats-monthly-orders');
+    const topListEl = document.getElementById('stats-top-products-list');
+
+    try {
+        const user = tg?.initDataUnsafe?.user;
+        const userId = user?.id || ADMIN_ID;
+        const res = await fetch(`/api/admin/stats?user_id=${userId}`);
+        if (res.ok) {
+            const data = await res.json();
+
+            if (dailyRevEl) dailyRevEl.innerText = (data.daily_revenue || 0).toLocaleString('uz-UZ') + " so'm";
+            if (dailyOrdersEl) dailyOrdersEl.innerText = (data.daily_orders || 0) + " ta";
+            if (monthlyRevEl) monthlyRevEl.innerText = (data.monthly_revenue || 0).toLocaleString('uz-UZ') + " so'm";
+            if (monthlyOrdersEl) monthlyOrdersEl.innerText = (data.monthly_orders || 0) + " ta";
+
+            if (topListEl && Array.isArray(data.top_products)) {
+                if (data.top_products.length === 0) {
+                    topListEl.innerHTML = `
+                        <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                            <p>Hozircha sotilgan tovarlar ma'lumoti mavjud emas</p>
+                        </div>
+                    `;
+                } else {
+                    topListEl.innerHTML = data.top_products.map((p, idx) => {
+                        const rankBadge = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+                        const formattedPrice = (p.price || 0).toLocaleString('uz-UZ') + " so'm";
+                        const formattedTotal = (p.total_amount || (p.count * (p.price || 0))).toLocaleString('uz-UZ') + " so'm";
+
+                        return `
+                            <div class="top-product-row">
+                                <div class="top-prod-rank">${rankBadge}</div>
+                                <div class="top-prod-img-wrap">
+                                    <img src="${p.image_url}" alt="${p.name}" onerror="this.src='https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=60'">
+                                </div>
+                                <div class="top-prod-info">
+                                    <h4 class="top-prod-name">${p.name}</h4>
+                                    <div class="top-prod-sub">${p.category_name || 'Bozorcha'} • ${formattedPrice}</div>
+                                </div>
+                                <div class="top-prod-stats">
+                                    <span class="top-prod-count">${p.count} ta sotildi</span>
+                                    <span class="top-prod-revenue">${formattedTotal}</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("Could not fetch admin stats from API", e);
     }
 }
 
@@ -1680,7 +1840,12 @@ window.selectSubcategory = selectSubcategory;
 window.openProductModal = openProductModal;
 window.closeProductModal = closeProductModal;
 window.setProductDetailWeight = setProductDetailWeight;
-window.addProductModalToCart = addProductModalToCart;
+window.changeProductCardQty = changeProductCardQty;
+window.renderProductCardAction = renderProductCardAction;
+window.getProductCartQty = getProductCartQty;
+window.updateProductCardCounter = updateProductCardCounter;
+window.syncAllProductCardCounters = syncAllProductCardCounters;
+window.addProductModalToCart = addCurrentProductToCart;
 window.quickAddToCart = quickAddToCart;
 window.updateCartItemQty = updateCartItemQty;
 window.selectTimeSlot = selectTimeSlot;
@@ -1692,3 +1857,5 @@ window.callCourier = callCourier;
 window.chatCourier = chatCourier;
 window.callSupport = callSupport;
 window.toggleAdminMode = toggleAdminMode;
+window.switchAdminTab = switchAdminTab;
+window.loadAdminStats = loadAdminStats;

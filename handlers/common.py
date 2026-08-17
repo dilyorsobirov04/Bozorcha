@@ -9,7 +9,7 @@ from keyboards import get_main_reply_keyboard, get_channel_inline_keyboard, get_
 router = Router()
 
 
-@router.message(F.text == "📢 Bizning kanal")
+@router.message(F.text.in_(["📣 Bizning kanal", "📢 Bizning kanal"]))
 async def show_channel_info(message: Message):
     try:
         await message.answer(
