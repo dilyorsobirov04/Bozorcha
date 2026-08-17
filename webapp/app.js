@@ -14,6 +14,7 @@ let activeOrder = null;
 let cart = {}; // { productId: { item: product, weight: 1.0, qty: 1 } }
 let selectedDetailProduct = null;
 let currentSelectedWeight = 1.0;
+let currentSelectedQty = 1;
 let isAdminMode = false;
 let targetAdminProductId = null;
 let trackingInterval = null;
@@ -501,69 +502,224 @@ function renderHomeProducts() {
 }
 
 // ----------------- 3. PRODUCT DETAILS MODAL -----------------
+function isProductWeightBased(prod) {
+    if (!prod) return false;
+    if (prod.is_weight_based !== undefined && prod.is_weight_based !== null) {
+        return Boolean(prod.is_weight_based);
+    }
+    const unit = (prod.unit_type || prod.unit || '').toLowerCase().trim();
+    return unit === 'kg' || unit === 'g' || unit === 'gram' || unit === 'kilo' || unit === 'kilogram';
+}
+
 function openProductModal(productId) {
     selectedDetailProduct = products.find(p => p.id == productId);
     if (!selectedDetailProduct) return;
 
+    const isWeight = isProductWeightBased(selectedDetailProduct);
     currentSelectedWeight = 1.0;
+    currentSelectedQty = 1;
 
-    document.getElementById('detail-product-img').src = selectedDetailProduct.image_url;
-    document.getElementById('detail-product-title').innerText = selectedDetailProduct.name;
-    document.getElementById('detail-stock-badge').innerText = `📊 Qoldiq: ${selectedDetailProduct.stock} ${selectedDetailProduct.unit || 'ta'}`;
-    document.getElementById('detail-product-desc').innerText = selectedDetailProduct.description || '';
+    // Set Image, Title, Stock, Description
+    const imgEl = document.getElementById('detail-product-img');
+    if (imgEl) imgEl.src = selectedDetailProduct.image_url;
+
+    const titleEl = document.getElementById('detail-product-title');
+    if (titleEl) titleEl.innerText = selectedDetailProduct.name;
+
+    const stockBadge = document.getElementById('detail-stock-badge');
+    if (stockBadge) {
+        const unitLabel = isWeight ? 'kg' : (selectedDetailProduct.unit || 'dona');
+        stockBadge.innerText = `📊 Qoldiq: ${selectedDetailProduct.stock} ${unitLabel}`;
+    }
+
+    const descEl = document.getElementById('detail-product-desc');
+    if (descEl) descEl.innerText = selectedDetailProduct.description || '';
+
+    // Discount Pill
+    const discountPill = document.getElementById('detail-discount-badge');
+    if (discountPill) {
+        if (selectedDetailProduct.discount_percent && selectedDetailProduct.discount_percent > 0) {
+            discountPill.innerText = `-${selectedDetailProduct.discount_percent}%`;
+            discountPill.style.display = 'block';
+        } else {
+            discountPill.style.display = 'none';
+        }
+    }
 
     // Nutrition
     const nut = selectedDetailProduct.nutrition || { cal: "160 kcal", protein: "2g", fat: "15g" };
-    document.getElementById('nutri-cal').innerText = nut.cal;
-    document.getElementById('nutri-protein').innerText = nut.protein;
-    document.getElementById('nutri-fat').innerText = nut.fat;
+    const nutriCal = document.getElementById('nutri-cal');
+    const nutriProtein = document.getElementById('nutri-protein');
+    const nutriFat = document.getElementById('nutri-fat');
+    if (nutriCal) nutriCal.innerText = nut.cal;
+    if (nutriProtein) nutriProtein.innerText = nut.protein;
+    if (nutriFat) nutriFat.innerText = nut.fat;
 
-    // Reset weight selector pills
-    document.querySelectorAll('.weight-btn').forEach(btn => {
-        if (btn.getAttribute('data-weight') === '1.0') {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
-    });
+    // Render Dynamic Selector
+    renderModalSelector(isWeight);
 
     updateModalPrice();
 
     const modal = document.getElementById('modal-product-detail');
-    modal.classList.remove('hidden');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function renderModalSelector(isWeight) {
+    const labelEl = document.getElementById('modal-selector-label');
+    const containerEl = document.getElementById('modal-selector-container');
+    const unitHintEl = document.getElementById('modal-unit-base-price');
+
+    if (!containerEl) return;
+
+    if (isWeight) {
+        // ----------------- VAZNLI MAHSULOT: Hajm / Vazn variantlari -----------------
+        if (labelEl) labelEl.innerText = "Hajm / Vaznni tanlang:";
+        if (unitHintEl) {
+            unitHintEl.innerText = `1 kg = ${(selectedDetailProduct.price || 0).toLocaleString('uz-UZ')} so'm`;
+            unitHintEl.style.display = 'inline-block';
+        }
+
+        const variants = selectedDetailProduct.weight_variants || [
+            { label: '250 g', weight: 0.25 },
+            { label: '500 g', weight: 0.5 },
+            { label: '1 kg', weight: 1.0 },
+            { label: '2 kg', weight: 2.0 }
+        ];
+
+        // 1 kg yoki 1-variantni default qilish
+        const defaultVar = variants.find(v => v.weight === 1.0) || variants[0];
+        currentSelectedWeight = defaultVar.weight;
+
+        containerEl.innerHTML = `
+            <div class="weight-pills">
+                ${variants.map(v => `
+                    <button type="button" class="weight-btn ${v.weight === currentSelectedWeight ? 'active' : ''}" 
+                            data-weight="${v.weight}" 
+                            onclick="selectWeight(${v.weight})">
+                        ${v.label}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        // ----------------- DONALIK MAHSULOT: Soni va +/- Sanagich -----------------
+        if (labelEl) labelEl.innerText = "Miqdor / Soni tanlang:";
+        if (unitHintEl) {
+            unitHintEl.innerText = `1 dona = ${(selectedDetailProduct.price || 0).toLocaleString('uz-UZ')} so'm`;
+            unitHintEl.style.display = 'inline-block';
+        }
+
+        const quickOptions = selectedDetailProduct.piece_quick_options || [1, 2, 3, 5];
+        currentSelectedQty = 1;
+
+        containerEl.innerHTML = `
+            <div class="piece-selector-wrapper">
+                <div class="piece-pills-row">
+                    ${quickOptions.map(opt => `
+                        <button type="button" class="weight-btn piece-quick-btn ${opt === currentSelectedQty ? 'active' : ''}" 
+                                data-qty="${opt}" 
+                                onclick="setModalQty(${opt})">
+                            ${opt} dona
+                        </button>
+                    `).join('')}
+                </div>
+                
+                <div class="piece-stepper-row">
+                    <span class="stepper-label">Aniq sonini belgilash:</span>
+                    <div class="piece-counter-box">
+                        <button type="button" class="piece-counter-btn minus" onclick="changeModalQty(-1)" aria-label="Kamaytirish">−</button>
+                        <div class="piece-counter-center">
+                            <span id="modal-piece-qty-val" class="piece-counter-val">${currentSelectedQty}</span>
+                            <span class="piece-counter-unit">dona</span>
+                        </div>
+                        <button type="button" class="piece-counter-btn plus" onclick="changeModalQty(1)" aria-label="Ko'paytirish">+</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 }
 
 function closeProductModal(event) {
-    document.getElementById('modal-product-detail').classList.add('hidden');
+    const modal = document.getElementById('modal-product-detail');
+    if (modal) modal.classList.add('hidden');
 }
 
 function selectWeight(weight) {
     currentSelectedWeight = weight;
-    document.querySelectorAll('.weight-btn').forEach(btn => {
+    document.querySelectorAll('#modal-selector-container .weight-btn').forEach(btn => {
         if (parseFloat(btn.getAttribute('data-weight')) === weight) {
             btn.classList.add('active');
         } else {
             btn.classList.remove('active');
         }
     });
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('light');
+    }
     updateModalPrice();
+}
+
+function setModalQty(qty) {
+    if (!selectedDetailProduct) return;
+    const maxStock = selectedDetailProduct.stock || 999;
+    currentSelectedQty = Math.max(1, Math.min(maxStock, qty));
+
+    // Update active class on quick pills
+    document.querySelectorAll('#modal-selector-container .piece-quick-btn').forEach(btn => {
+        if (parseInt(btn.getAttribute('data-qty'), 10) === currentSelectedQty) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Update counter display
+    const counterVal = document.getElementById('modal-piece-qty-val');
+    if (counterVal) counterVal.innerText = currentSelectedQty;
+
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('light');
+    }
+    updateModalPrice();
+}
+
+function changeModalQty(delta) {
+    if (!selectedDetailProduct) return;
+    setModalQty(currentSelectedQty + delta);
 }
 
 function updateModalPrice() {
     if (!selectedDetailProduct) return;
 
-    const basePrice = selectedDetailProduct.price;
-    const baseOldPrice = selectedDetailProduct.old_price;
+    const isWeight = isProductWeightBased(selectedDetailProduct);
+    const basePrice = selectedDetailProduct.price || 0;
+    const baseOldPrice = selectedDetailProduct.old_price || 0;
 
-    const calcPrice = Math.round(basePrice * currentSelectedWeight);
-    const calcOldPrice = baseOldPrice ? Math.round(baseOldPrice * currentSelectedWeight) : 0;
+    let calcPrice = 0;
+    let calcOldPrice = 0;
 
-    document.getElementById('detail-current-price').innerText = calcPrice.toLocaleString('uz-UZ') + " so'm";
-    if (calcOldPrice > 0) {
-        document.getElementById('detail-old-price').innerText = calcOldPrice.toLocaleString('uz-UZ') + " so'm";
-        document.getElementById('detail-old-price').style.display = 'block';
+    if (isWeight) {
+        calcPrice = Math.round(basePrice * currentSelectedWeight);
+        calcOldPrice = baseOldPrice ? Math.round(baseOldPrice * currentSelectedWeight) : 0;
     } else {
-        document.getElementById('detail-old-price').style.display = 'none';
+        calcPrice = Math.round(basePrice * currentSelectedQty);
+        calcOldPrice = baseOldPrice ? Math.round(baseOldPrice * currentSelectedQty) : 0;
+    }
+
+    const priceEl = document.getElementById('detail-current-price');
+    if (priceEl) {
+        priceEl.innerText = calcPrice.toLocaleString('uz-UZ') + " so'm";
+    }
+
+    const oldPriceEl = document.getElementById('detail-old-price');
+    if (oldPriceEl) {
+        if (calcOldPrice > 0) {
+            oldPriceEl.innerText = calcOldPrice.toLocaleString('uz-UZ') + " so'm";
+            oldPriceEl.style.display = 'block';
+        } else {
+            oldPriceEl.style.display = 'none';
+        }
     }
 }
 
@@ -600,7 +756,8 @@ function changeProductCardQty(productId, delta, event) {
     const prod = products.find(p => p.id == productId);
     if (!prod) return;
 
-    const defaultKey = `${productId}_1.0`;
+    const isWeight = isProductWeightBased(prod);
+    const defaultKey = isWeight ? `${productId}_1.0` : `${productId}_dona`;
 
     if (delta > 0) {
         if (cart[defaultKey]) {
@@ -618,7 +775,8 @@ function changeProductCardQty(productId, delta, event) {
             } else {
                 cart[defaultKey] = {
                     item: prod,
-                    weight: 1.0,
+                    weight: isWeight ? 1.0 : 1.0,
+                    is_weight: isWeight,
                     qty: 1
                 };
             }
@@ -673,16 +831,32 @@ function addCurrentProductToCart() {
     if (!selectedDetailProduct) return;
 
     const pid = selectedDetailProduct.id;
-    const cartKey = `${pid}_${currentSelectedWeight}`;
+    const isWeight = isProductWeightBased(selectedDetailProduct);
 
-    if (cart[cartKey]) {
-        cart[cartKey].qty += 1;
+    if (isWeight) {
+        const cartKey = `${pid}_${currentSelectedWeight}`;
+        if (cart[cartKey]) {
+            cart[cartKey].qty += 1;
+        } else {
+            cart[cartKey] = {
+                item: selectedDetailProduct,
+                weight: currentSelectedWeight,
+                is_weight: true,
+                qty: 1
+            };
+        }
     } else {
-        cart[cartKey] = {
-            item: selectedDetailProduct,
-            weight: currentSelectedWeight,
-            qty: 1
-        };
+        const cartKey = `${pid}_dona`;
+        if (cart[cartKey]) {
+            cart[cartKey].qty += currentSelectedQty;
+        } else {
+            cart[cartKey] = {
+                item: selectedDetailProduct,
+                weight: 1.0,
+                is_weight: false,
+                qty: currentSelectedQty
+            };
+        }
     }
 
     if (tg?.HapticFeedback) {
@@ -733,9 +907,20 @@ function renderCheckout() {
 
     list.innerHTML = entries.map(([key, entry]) => {
         const item = entry.item;
-        const weightText = entry.weight === 1.0 ? '' : ` (${entry.weight}x)`;
-        const itemPrice = Math.round(item.price * entry.weight);
-        const itemOldPrice = item.old_price ? Math.round(item.old_price * entry.weight) : itemPrice;
+        const isWeight = entry.is_weight !== undefined ? entry.is_weight : isProductWeightBased(item);
+
+        let weightText = '';
+        if (isWeight) {
+            if (entry.weight === 0.25) weightText = ' (250 g)';
+            else if (entry.weight === 0.5) weightText = ' (500 g)';
+            else if (entry.weight === 1.0) weightText = ' (1 kg)';
+            else if (entry.weight === 2.0) weightText = ' (2 kg)';
+            else weightText = ` (${entry.weight} kg)`;
+        }
+
+        const multiplier = isWeight ? (entry.weight || 1.0) : 1.0;
+        const itemPrice = Math.round((item.price || 0) * multiplier);
+        const itemOldPrice = item.old_price ? Math.round(item.old_price * multiplier) : itemPrice;
 
         const rowTotal = itemPrice * entry.qty;
         subtotal += rowTotal;
@@ -743,7 +928,7 @@ function renderCheckout() {
 
         return `
             <div class="cart-item-row">
-                <img src="${item.image_url}" alt="${item.name}" class="cart-item-thumb">
+                <img src="${item.image_url}" alt="${item.name}" class="cart-item-thumb" onerror="this.src='https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60'">
                 <div class="cart-item-meta">
                     <h4>${item.name}${weightText}</h4>
                     <span>${rowTotal.toLocaleString('uz-UZ')} so'm</span>
@@ -1839,13 +2024,16 @@ window.selectCategory = selectCategory;
 window.selectSubcategory = selectSubcategory;
 window.openProductModal = openProductModal;
 window.closeProductModal = closeProductModal;
-window.setProductDetailWeight = setProductDetailWeight;
+window.selectWeight = selectWeight;
+window.setModalQty = setModalQty;
+window.changeModalQty = changeModalQty;
+window.addCurrentProductToCart = addCurrentProductToCart;
+window.addProductModalToCart = addCurrentProductToCart;
 window.changeProductCardQty = changeProductCardQty;
 window.renderProductCardAction = renderProductCardAction;
 window.getProductCartQty = getProductCartQty;
 window.updateProductCardCounter = updateProductCardCounter;
 window.syncAllProductCardCounters = syncAllProductCardCounters;
-window.addProductModalToCart = addCurrentProductToCart;
 window.quickAddToCart = quickAddToCart;
 window.updateCartItemQty = updateCartItemQty;
 window.selectTimeSlot = selectTimeSlot;

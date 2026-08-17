@@ -875,22 +875,44 @@ body {
     font-weight: 700;
 }
 
-/* Weight Selector */
+/* Weight / Quantity Dynamic Selector */
 .weight-selector-section {
     margin: 16px 0;
 }
 
-.section-sub-label {
-    font-size: 12px;
-    color: var(--text-muted);
-    display: block;
+.selector-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 8px;
-    font-weight: 600;
+}
+
+.section-sub-label {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.unit-base-price-hint {
+    font-size: 11px;
+    color: var(--emerald-primary);
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 700;
 }
 
 .weight-pills {
     display: flex;
-    gap: 10px;
+    gap: 8px;
+}
+
+.piece-pills-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
 }
 
 .weight-btn {
@@ -898,13 +920,19 @@ body {
     background: var(--bg-card);
     border: 1px solid var(--border-glass);
     color: var(--text-secondary);
-    padding: 10px;
+    padding: 10px 6px;
     border-radius: var(--radius-md);
     font-family: var(--font-heading);
     font-weight: 700;
-    font-size: 14px;
+    font-size: 13px;
+    text-align: center;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.weight-btn:hover {
+    border-color: rgba(16, 185, 129, 0.4);
+    color: var(--text-primary);
 }
 
 .weight-btn.active {
@@ -912,6 +940,91 @@ body {
     border-color: transparent;
     color: #fff;
     box-shadow: 0 4px 14px var(--emerald-glow);
+    transform: translateY(-1px);
+}
+
+.piece-selector-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.piece-stepper-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px solid var(--border-subtle);
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+}
+
+.stepper-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.piece-counter-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.piece-counter-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--border-glass);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 18px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.piece-counter-btn:hover {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: var(--emerald-primary);
+    color: var(--emerald-primary);
+}
+
+.piece-counter-btn.plus {
+    background: var(--emerald-primary);
+    border-color: var(--emerald-primary);
+    color: #fff;
+}
+
+.piece-counter-btn.plus:hover {
+    background: #059669;
+}
+
+.piece-counter-btn:active {
+    transform: scale(0.92);
+}
+
+.piece-counter-center {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    min-width: 44px;
+    justify-content: center;
+}
+
+.piece-counter-val {
+    font-family: var(--font-heading);
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--emerald-primary);
+}
+
+.piece-counter-unit {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
 }
 
 /* Nutrition Grid */

@@ -152,13 +152,18 @@
                         </div>
                     </div>
 
-                    <!-- Weight / Quantity Selector -->
-                    <div class="weight-selector-section">
-                        <span class="section-sub-label">Hajm / Vaznni tanlang:</span>
-                        <div class="weight-pills">
-                            <button class="weight-btn active" data-weight="0.5" onclick="selectWeight(0.5)">500 g</button>
-                            <button class="weight-btn" data-weight="1.0" onclick="selectWeight(1.0)">1 kg</button>
-                            <button class="weight-btn" data-weight="2.0" onclick="selectWeight(2.0)">2 kg</button>
+                    <!-- Weight / Quantity Selector (Dynamic) -->
+                    <div id="modal-selector-section" class="weight-selector-section">
+                        <div class="selector-header-row">
+                            <span id="modal-selector-label" class="section-sub-label">Hajm / Vaznni tanlang:</span>
+                            <span id="modal-unit-base-price" class="unit-base-price-hint"></span>
+                        </div>
+                        <div id="modal-selector-container">
+                            <div class="weight-pills">
+                                <button class="weight-btn active" data-weight="0.5" onclick="selectWeight(0.5)">500 g</button>
+                                <button class="weight-btn" data-weight="1.0" onclick="selectWeight(1.0)">1 kg</button>
+                                <button class="weight-btn" data-weight="2.0" onclick="selectWeight(2.0)">2 kg</button>
+                            </div>
                         </div>
                     </div>
 
