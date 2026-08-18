@@ -69,18 +69,19 @@ async def notify_admins_new_order(order: dict):
         total = order.get("total_amount", 0)
         payment_name = order.get("payment_method_name") or ("Click / Payme" if order.get("payment_type") == "click" else "Naqd pul")
         user_info = order.get("user_info", {})
-        user_name = user_info.get("first_name") or user_info.get("username") or "Mijoz"
+        
+        # Build customer line: {name} (@{username} / {phone})
+        first_name = user_info.get("first_name", "")
+        last_name = user_info.get("last_name", "")
+        full_name = f"{first_name} {last_name}".strip() or user_info.get("name") or "Mijoz"
+        username = user_info.get("username")
+        username_str = f"@{username}" if username else "Mavjud emas"
+        phone = user_info.get("phone") or user_info.get("phone_number") or order.get("phone") or "Mavjud emas"
+        customer_line = f"{full_name} ({username_str} / {phone})"
+
+        # Build items list
         cart = order.get("cart", {})
-
-        text = (
-            f"🔔 <b>YANGI BUYURTMA #{order_id}</b>\n\n"
-            f"👤 <b>Mijoz:</b> {user_name}\n"
-            f"💳 <b>To'lov turi:</b> {payment_name}\n"
-            f"💰 <b>Jami summa:</b> {total:,.0f} so'm\n".replace(",", " ") +
-            f"📌 <b>Boshlang'ich holati:</b> Qabul qilindi\n\n"
-            f"<b>Savatdagi mahsulotlar:</b>\n"
-        )
-
+        items_list = []
         if isinstance(cart, dict):
             for k, v in cart.items():
                 item = v.get("item", {})
@@ -88,9 +89,20 @@ async def notify_admins_new_order(order: dict):
                 qty = v.get("qty", 1)
                 weight = v.get("weight")
                 w_text = f" ({weight} kg)" if weight and weight != 1.0 else ""
-                text += f"• {name}{w_text} — {qty} ta\n"
+                items_list.append(f"• {name}{w_text} — {qty} ta")
+        items_str = "\n".join(items_list) if items_list else "• Mahsulotlar mavjud emas"
 
-        text += "\n👇 <b>Statusni o'zgartirish uchun tugmani bosing:</b>"
+        formatted_total = f"{total:,.0f}".replace(",", " ")
+        address = order.get("address") or "Mini App orqali buyurtma"
+
+        text = (
+            f"📦 <b>Yangi buyurtma!</b>\n\n"
+            f"👤 <b>Mijoz:</b> {customer_line}\n"
+            f"🛍 <b>Mahsulotlar:</b>\n{items_str}\n\n"
+            f"💰 <b>Jami summa:</b> {formatted_total} so'm\n"
+            f"💳 <b>To'lov turi:</b> {payment_name}\n"
+            f"📍 <b>Manzil/Lokatsiya:</b> {address}\n"
+        )
 
         keyboard = get_order_admin_keyboard(order_id, current_status="accepted")
 
@@ -101,6 +113,44 @@ async def notify_admins_new_order(order: dict):
                 logger.warning(f"Failed to send order notification to admin {admin_id}: {e}")
     except Exception as e:
         logger.exception(f"Error in notify_admins_new_order: {e}")
+
+
+async def notify_customer_order_status(order_id: str | int, action_or_status: str):
+    bot = get_bot_instance()
+    if not bot:
+        return
+
+    order = get_order(order_id)
+    if not order:
+        return
+
+    user_info = order.get("user_info") or {}
+    customer_id = user_info.get("id")
+    if not customer_id:
+        return
+
+    status_name = order.get("status") or action_or_status
+
+    customer_messages = {
+        "accept": f"🔔 <b>Sizning buyurtmangiz holati:</b> Qabul qilindi ✅\nBuyurtma raqami: <b>#{order_id}</b>\nTez orada tayyorlanadi.",
+        "accepted": f"🔔 <b>Sizning buyurtmangiz holati:</b> Qabul qilindi ✅\nBuyurtma raqami: <b>#{order_id}</b>\nTez orada tayyorlanadi.",
+        "pack": f"🔔 <b>Sizning buyurtmangiz holati:</b> Yig'ildi 📦\nBuyurtma raqami: <b>#{order_id}</b>\nKuryerga topshirilmoqda.",
+        "packed": f"🔔 <b>Sizning buyurtmangiz holati:</b> Yig'ildi 📦\nBuyurtma raqami: <b>#{order_id}</b>\nKuryerga topshirilmoqda.",
+        "ship": f"🔔 <b>Sizning buyurtmangiz holati:</b> Yo'lga chiqdi 🛵\nBuyurtma raqami: <b>#{order_id}</b>\nKuryer tez orada yetib boradi.",
+        "on_the_way": f"🔔 <b>Sizning buyurtmangiz holati:</b> Yo'lga chiqdi 🛵\nBuyurtma raqami: <b>#{order_id}</b>\nKuryer tez orada yetib boradi.",
+        "deliver": f"🔔 <b>Sizning buyurtmangiz holati:</b> Yetkazildi 🏁\nBuyurtma raqami: <b>#{order_id}</b>\nBozorcha xizmatidan foydalanganingiz uchun rahmat!",
+        "delivered": f"🔔 <b>Sizning buyurtmangiz holati:</b> Yetkazildi 🏁\nBuyurtma raqami: <b>#{order_id}</b>\nBozorcha xizmatidan foydalanganingiz uchun rahmat!"
+    }
+
+    msg = customer_messages.get(
+        str(action_or_status).lower(),
+        f"🔔 <b>Sizning buyurtmangiz holati:</b> {status_name}\nBuyurtma raqami: <b>#{order_id}</b>"
+    )
+
+    try:
+        await bot.send_message(chat_id=int(customer_id), text=msg, parse_mode="HTML")
+    except Exception as e:
+        logger.warning(f"Could not notify customer {customer_id}: {e}")
 
 
 def create_webapp_server() -> FastAPI:
@@ -460,16 +510,62 @@ def create_webapp_server() -> FastAPI:
 
         status = data.get("status")
         status_code = data.get("status_code")
-        if not status:
+        if not status and not status_code:
             raise HTTPException(status_code=400, detail="Status ko'rsatilishi shart")
 
-        updated = update_order_status(order_id, status=status, status_code=status_code)
+        status_map = {
+            "accept": ("Qabul qilindi", "accepted"),
+            "accepted": ("Qabul qilindi", "accepted"),
+            "pack": ("Yig'ildi", "packed"),
+            "packed": ("Yig'ildi", "packed"),
+            "ship": ("Yo'lga chiqdi", "on_the_way"),
+            "on_the_way": ("Yo'lga chiqdi", "on_the_way"),
+            "deliver": ("Yetkazildi", "delivered"),
+            "delivered": ("Yetkazildi", "delivered"),
+        }
+
+        if status_code in status_map:
+            status_text, s_code = status_map[status_code]
+        elif status:
+            status_text = status
+            s_code = status_code or "accepted"
+        else:
+            status_text = "Qabul qilindi"
+            s_code = "accepted"
+
+        updated = update_order_status(order_id, status=status_text, status_code=s_code)
         if not updated:
             raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
+
+        # Notify customer via Telegram bot in background
+        try:
+            import asyncio
+            asyncio.create_task(notify_customer_order_status(order_id, s_code))
+        except Exception as e:
+            logger.warning(f"Could not trigger customer notification task: {e}")
 
         return {
             "success": True,
             "order": updated
+        }
+
+    # ----------------- ADMIN ORDERS ENDPOINT -----------------
+    @app.get("/api/admin/orders")
+    async def handle_get_admin_orders(
+        user_id: Optional[str] = Query(None, description="Admin Telegram ID"),
+        limit: int = Query(50, ge=1, le=200),
+        request: Request = None
+    ):
+        admin_id_str = "7351189083"
+        req_id = user_id or (request.headers.get("X-Admin-Id") if request else None)
+        if req_id is not None and str(req_id).strip() != "" and str(req_id).strip() != admin_id_str:
+            raise HTTPException(status_code=403, detail="Faqat administrator uchun ruxsat berilgan")
+
+        orders = get_orders(limit=limit)
+        return {
+            "success": True,
+            "orders": orders,
+            "total": len(orders)
         }
 
     # ----------------- ADMIN ANALYTICS ENDPOINT -----------------

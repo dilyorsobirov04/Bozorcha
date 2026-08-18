@@ -576,13 +576,11 @@ def create_order(
 
     clean_payment_type = "click" if str(payment_type).lower() == "click" else "cash"
 
+    status = "Qabul qilindi"
+    status_code = "accepted"
     if clean_payment_type == "click":
-        status = "To'langan (Click)"
-        status_code = "paid_click"
         click_url = generate_click_url(order_id, total_amount)
     else:
-        status = "Kutilmoqda (Naqd)"
-        status_code = "pending_cash"
         click_url = None
 
     order_record = {
@@ -591,7 +589,7 @@ def create_order(
         "cart": cart,
         "total_amount": int(total_amount),
         "payment_type": clean_payment_type,
-        "payment_method_name": "Click" if clean_payment_type == "click" else "Naqd pul",
+        "payment_method_name": "Click / Payme" if clean_payment_type == "click" else "Naqd pul",
         "status": status,
         "status_code": status_code,
         "address": address,
@@ -618,7 +616,9 @@ def create_order(
 
 
 def get_orders(limit: int = 50) -> list[dict]:
-    return list(ORDERS_DB.values())[-limit:]
+    all_orders = list(ORDERS_DB.values())
+    all_orders.reverse()
+    return all_orders[:limit]
 
 
 def get_order(order_id: str | int) -> dict | None:

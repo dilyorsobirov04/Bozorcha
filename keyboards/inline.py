@@ -176,7 +176,7 @@ def get_order_admin_keyboard(order_id: str | int, current_status: str = "accepte
                 callback_data=f"order_status:ship:{order_id}"
             ),
             InlineKeyboardButton(
-                text=f"{deliver_mark}🎉 Yetkazildi",
+                text=f"{deliver_mark}🏁 Yetkazildi",
                 callback_data=f"order_status:deliver:{order_id}"
             )
         ]

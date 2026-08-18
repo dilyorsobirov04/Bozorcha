@@ -357,9 +357,12 @@
             </header>
 
             <div class="admin-content-scroll">
-                <!-- Segmented Tab Bar (4 tabs) -->
+                <!-- Segmented Tab Bar (5 tabs) -->
                 <div class="admin-tabs-bar">
-                    <button id="tab-btn-analytics" class="admin-tab-btn active" onclick="switchAdminTab('analytics')">
+                    <button id="tab-btn-orders" class="admin-tab-btn active" onclick="switchAdminTab('orders')">
+                        <span>🛍 Buyurtmalar (<span id="admin-orders-count">0</span>)</span>
+                    </button>
+                    <button id="tab-btn-analytics" class="admin-tab-btn" onclick="switchAdminTab('analytics')">
                         <span>📊 Tahlil</span>
                     </button>
                     <button id="tab-btn-add-prod" class="admin-tab-btn" onclick="switchAdminTab('add-prod')">
@@ -373,8 +376,28 @@
                     </button>
                 </div>
 
-                <!-- TAB 0: ANALYTICS DASHBOARD -->
-                <div id="admin-view-analytics" class="admin-tab-pane">
+                <!-- TAB 0: ORDERS MANAGEMENT (REAL-TIME STREAM) -->
+                <div id="admin-view-orders" class="admin-tab-pane">
+                    <div class="admin-orders-header-row">
+                        <div class="form-title-wrap" style="margin-bottom: 0;">
+                            <span class="form-title-icon">🛍️</span>
+                            <div>
+                                <h3 class="form-title">Tushgan Buyurtmalar</h3>
+                                <p class="form-subtitle">Real-vaqt rejimida yangilanadi</p>
+                            </div>
+                        </div>
+                        <button type="button" class="analytics-refresh-btn" onclick="loadAdminOrders()">
+                            <span>🔄 Yangilash</span>
+                        </button>
+                    </div>
+
+                    <div id="admin-orders-list" class="admin-orders-list" style="margin-top: 14px;">
+                        <!-- Dynamically rendered order cards -->
+                    </div>
+                </div>
+
+                <!-- TAB 1: ANALYTICS DASHBOARD -->
+                <div id="admin-view-analytics" class="admin-tab-pane hidden">
                     <!-- Revenue Metrics Grid -->
                     <div class="analytics-metrics-grid">
                         <div class="metric-card daily-card">

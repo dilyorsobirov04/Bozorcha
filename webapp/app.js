@@ -172,12 +172,19 @@ function navigateTo(screenId, shouldScrollToTop = true) {
         trackingInterval = null;
     }
 
+    if (screenId !== 'admin' && adminOrdersInterval) {
+        clearInterval(adminOrdersInterval);
+        adminOrdersInterval = null;
+    }
+
     if (screenId === 'home') {
         renderHomeProducts();
     } else if (screenId === 'checkout') {
         renderCheckout();
     } else if (screenId === 'tracking') {
         startLiveTrackingTimer();
+    } else if (screenId === 'admin') {
+        switchAdminTab(currentAdminTab || 'orders');
     }
 }
 
@@ -1451,14 +1458,17 @@ function renderParentCategoryDropdownOptions() {
 }
 
 // ----------------- ADMIN REJIM & TO'LIQ BOSHQARUV -----------------
-let currentAdminTab = 'analytics';
+let currentAdminTab = 'orders';
 let deleteTarget = { type: null, id: null, name: "" };
+let adminOrdersInterval = null;
+let adminOrdersList = [];
 
 function toggleAdminMode() {
     isAdminMode = !isAdminMode;
     if (isAdminMode) {
         navigateTo('admin');
-        switchAdminTab('analytics');
+        switchAdminTab('orders');
+        loadAdminOrders();
         loadAdminStats();
         loadAdminCards();
         renderAdminCategoriesList();
@@ -1469,20 +1479,37 @@ function toggleAdminMode() {
 
 function switchAdminTab(tab) {
     currentAdminTab = tab;
+    const btnOrders = document.getElementById('tab-btn-orders');
     const btnAnalytics = document.getElementById('tab-btn-analytics');
     const btnAddProd = document.getElementById('tab-btn-add-prod');
     const btnProdList = document.getElementById('tab-btn-prod-list');
     const btnCatList = document.getElementById('tab-btn-categories');
 
+    const viewOrders = document.getElementById('admin-view-orders');
     const viewAnalytics = document.getElementById('admin-view-analytics');
     const viewAddProd = document.getElementById('admin-view-add-prod');
     const viewProdList = document.getElementById('admin-view-prod-list');
     const viewCatList = document.getElementById('admin-view-categories');
 
-    [btnAnalytics, btnAddProd, btnProdList, btnCatList].forEach(btn => btn?.classList.remove('active'));
-    [viewAnalytics, viewAddProd, viewProdList, viewCatList].forEach(v => v?.classList.add('hidden'));
+    [btnOrders, btnAnalytics, btnAddProd, btnProdList, btnCatList].forEach(btn => btn?.classList.remove('active'));
+    [viewOrders, viewAnalytics, viewAddProd, viewProdList, viewCatList].forEach(v => v?.classList.add('hidden'));
 
-    if (tab === 'analytics') {
+    if (adminOrdersInterval) {
+        clearInterval(adminOrdersInterval);
+        adminOrdersInterval = null;
+    }
+
+    if (tab === 'orders') {
+        btnOrders?.classList.add('active');
+        viewOrders?.classList.remove('hidden');
+        loadAdminOrders();
+        // Start polling orders every 4 seconds
+        adminOrdersInterval = setInterval(() => {
+            if (currentScreen === 'admin' && currentAdminTab === 'orders') {
+                loadAdminOrders();
+            }
+        }, 4000);
+    } else if (tab === 'analytics') {
         btnAnalytics?.classList.add('active');
         viewAnalytics?.classList.remove('hidden');
         loadAdminStats();
@@ -1499,6 +1526,171 @@ function switchAdminTab(tab) {
         viewCatList?.classList.remove('hidden');
         renderParentCategoryDropdownOptions();
         renderAdminCategoriesList();
+    }
+}
+
+async function loadAdminOrders() {
+    const listEl = document.getElementById('admin-orders-list');
+    const countEl = document.getElementById('admin-orders-count');
+
+    try {
+        const user = tg?.initDataUnsafe?.user;
+        const userId = user?.id || ADMIN_ID;
+        const res = await fetch(`/api/admin/orders?user_id=${userId}`);
+        if (res.ok) {
+            const data = await res.json();
+            adminOrdersList = data.orders || [];
+
+            if (countEl) {
+                countEl.innerText = adminOrdersList.length;
+            }
+
+            if (!listEl) return;
+
+            if (adminOrdersList.length === 0) {
+                listEl.innerHTML = `
+                    <div class="empty-admin-orders">
+                        <span class="empty-icon">🛍️</span>
+                        <h4>Hozircha yangi buyurtmalar yo'q</h4>
+                        <p>Yangi buyurtma tushganda shu yerda avtomatik ko'rinadi</p>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = adminOrdersList.map(order => {
+                const totalFormatted = (order.total_amount || 0).toLocaleString('uz-UZ') + " so'm";
+                const isClick = order.payment_type === 'click';
+                const payBadge = isClick
+                    ? `<span class="order-pay-badge click">⚡️ Click / Payme</span>`
+                    : `<span class="order-pay-badge cash">💵 Naqd pul</span>`;
+
+                const user = order.user_info || {};
+                const name = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.name || "Mijoz";
+                const username = user.username ? `@${user.username}` : "Username yo'q";
+                const phone = user.phone || user.phone_number || order.phone || "Tel ko'rsatilmagan";
+                const address = order.address || "Mini App orqali buyurtma";
+                const timeStr = order.created_at || "Yangi";
+
+                const sCode = (order.status_code || '').toLowerCase();
+                const sText = order.status || 'Qabul qilindi';
+
+                // Status badge class
+                let statusBadgeClass = 'status-badge-step1';
+                if (sCode === 'delivered' || sText.toLowerCase().includes('yetkazildi')) {
+                    statusBadgeClass = 'status-badge-step4';
+                } else if (sCode === 'on_the_way' || sText.toLowerCase().includes("yo'lga") || sText.toLowerCase().includes("kuryer")) {
+                    statusBadgeClass = 'status-badge-step3';
+                } else if (sCode === 'packed' || sText.toLowerCase().includes("yig'ildi")) {
+                    statusBadgeClass = 'status-badge-step2';
+                }
+
+                // Cart items list
+                let itemsHtml = '';
+                if (order.cart && typeof order.cart === 'object') {
+                    itemsHtml = Object.values(order.cart).map(entry => {
+                        const item = entry.item || {};
+                        const iName = item.name || 'Mahsulot';
+                        const qty = entry.qty || 1;
+                        const weight = entry.weight;
+                        const wText = weight && weight !== 1 ? ` (${weight} kg)` : '';
+                        const price = (item.price || 0) * qty * (weight || 1);
+                        return `
+                            <div class="admin-order-item-row">
+                                <span class="order-item-name">• ${iName}${wText}</span>
+                                <span class="order-item-qty">x${qty}</span>
+                                <span class="order-item-sum">${price.toLocaleString('uz-UZ')} so'm</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                const isAcceptActive = (sCode === 'accepted' || sCode === 'pending_cash' || sCode === 'paid_click' || sText.includes('Qabul'));
+                const isPackActive = (sCode === 'packed' || sText.includes("Yig'ildi"));
+                const isShipActive = (sCode === 'on_the_way' || sText.includes("Yo'lga"));
+                const isDeliverActive = (sCode === 'delivered' || sText.includes("Yetkazildi"));
+
+                return `
+                    <div class="admin-order-card" id="admin-order-${order.id}">
+                        <div class="admin-order-card-header">
+                            <div class="order-header-left">
+                                <span class="order-card-id">Buyurtma #${order.id}</span>
+                                <span class="order-card-time">🕒 ${timeStr}</span>
+                            </div>
+                            <div class="order-header-right">
+                                ${payBadge}
+                                <span class="order-status-pill ${statusBadgeClass}">${sText}</span>
+                            </div>
+                        </div>
+
+                        <div class="admin-order-customer-box">
+                            <div class="customer-info-line">
+                                <strong>👤 Mijoz:</strong> ${name} <span class="customer-uname">(${username} / 📞 ${phone})</span>
+                            </div>
+                            <div class="customer-info-line">
+                                <strong>📍 Manzil:</strong> ${address}
+                            </div>
+                        </div>
+
+                        <div class="admin-order-items-box">
+                            <div class="order-items-title">🛍 Savatdagi mahsulotlar:</div>
+                            ${itemsHtml}
+                        </div>
+
+                        <div class="admin-order-total-row">
+                            <span>Jami summa:</span>
+                            <strong class="order-total-val">${totalFormatted}</strong>
+                        </div>
+
+                        <div class="admin-order-actions-grid">
+                            <button class="order-action-btn ${isAcceptActive ? 'active' : ''}" onclick="updateAdminOrderStatus('${order.id}', 'accepted', 'Qabul qilindi')">
+                                ✅ Qabul qilish
+                            </button>
+                            <button class="order-action-btn ${isPackActive ? 'active' : ''}" onclick="updateAdminOrderStatus('${order.id}', 'packed', 'Yig\\'ildi')">
+                                📦 Yig'ildi
+                            </button>
+                            <button class="order-action-btn ${isShipActive ? 'active' : ''}" onclick="updateAdminOrderStatus('${order.id}', 'on_the_way', 'Yo\\'lga chiqdi')">
+                                🛵 Yo'lga chiqdi
+                            </button>
+                            <button class="order-action-btn ${isDeliverActive ? 'active' : ''}" onclick="updateAdminOrderStatus('${order.id}', 'delivered', 'Yetkazildi')">
+                                🏁 Yetkazildi
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    } catch (e) {
+        console.warn("Could not load admin orders", e);
+    }
+}
+
+async function updateAdminOrderStatus(orderId, statusCode, statusText) {
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('medium');
+    }
+
+    try {
+        const res = await fetch(`/api/orders/${orderId}/status`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': ADMIN_ID
+            },
+            body: JSON.stringify({
+                status: statusText,
+                status_code: statusCode
+            })
+        });
+
+        if (res.ok) {
+            showToast(`✅ Buyurtma #${orderId} holati yangilandi: ${statusText}`, 'success');
+            await loadAdminOrders();
+        } else {
+            showToast(`⚠️ Statusni yangilab bo'lmadi!`, 'error');
+        }
+    } catch (e) {
+        showToast(`⚠️ Server bilan aloqa uzildi!`, 'error');
     }
 }
 

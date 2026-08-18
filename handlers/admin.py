@@ -165,10 +165,10 @@ async def process_order_status_change(callback: CallbackQuery):
         customer_id = user_info.get("id")
 
         customer_messages = {
-            "accept": f"🔔 <b>Buyurtmangiz holati yangilandi!</b>\n\n✅ <b>Zakazingiz qabul qilindi!</b>\nBuyurtma raqami: <b>#{order_id}</b>\nTez orada tayyorlanadi.",
-            "pack": f"🔔 <b>Buyurtmangiz holati yangilandi!</b>\n\n📦 <b>Buyurtmangiz (#{order_id}) yig'ildi va qadoqlandi!</b>\nKuryerga topshirilmoqda.",
-            "ship": f"🔔 <b>Buyurtmangiz holati yangilandi!</b>\n\n🛵 <b>Buyurtmangiz (#{order_id}) kuryer orqali yo'lga chiqdi!</b>\nKuryer tez orada yetib boradi.",
-            "deliver": f"🔔 <b>Buyurtmangiz holati yangilandi!</b>\n\n🎉 <b>Buyurtmangiz (#{order_id}) muvaffaqiyatli yetkazib berildi!</b>\nBozorcha xizmatidan foydalanganingiz uchun rahmat!"
+            "accept": f"🔔 <b>Sizning buyurtmangiz holati:</b> Qabul qilindi ✅\nBuyurtma raqami: <b>#{order_id}</b>\nTez orada tayyorlanadi.",
+            "pack": f"🔔 <b>Sizning buyurtmangiz holati:</b> Yig'ildi 📦\nBuyurtma raqami: <b>#{order_id}</b>\nKuryerga topshirilmoqda.",
+            "ship": f"🔔 <b>Sizning buyurtmangiz holati:</b> Yo'lga chiqdi 🛵\nBuyurtma raqami: <b>#{order_id}</b>\nKuryer tez orada yetib boradi.",
+            "deliver": f"🔔 <b>Sizning buyurtmangiz holati:</b> Yetkazildi 🏁\nBuyurtma raqami: <b>#{order_id}</b>\nBozorcha xizmatidan foydalanganingiz uchun rahmat!"
         }
 
         if customer_id:
