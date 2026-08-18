@@ -1016,16 +1016,9 @@ function selectPaymentMethod(method) {
     }
 }
 
-async function submitOrder() {
-    const entries = Object.entries(cart);
-    if (entries.length === 0) {
-        if (tg?.showAlert) {
-            tg.showAlert("Savatchangiz bo'sh!");
-        } else {
-            alert("Savatchangiz bo'sh!");
-        }
-        return;
-    }
+function submitOrder() {
+    openCheckoutModal();
+}
 
 let orderUserLocation = { lat: null, lng: null };
 
@@ -2525,10 +2518,13 @@ window.updateProductCardCounter = updateProductCardCounter;
 window.syncAllProductCardCounters = syncAllProductCardCounters;
 window.quickAddToCart = quickAddToCart;
 window.updateCartItemQty = updateCartItemQty;
-window.selectTimeSlot = selectTimeSlot;
-window.showAddressPicker = showAddressPicker;
 window.selectPaymentMethod = selectPaymentMethod;
-window.triggerPaymentSuccess = triggerPaymentSuccess;
+window.submitOrder = submitOrder;
+window.openCheckoutModal = openCheckoutModal;
+window.closeCheckoutModal = closeCheckoutModal;
+window.setModalPaymentMethod = setModalPaymentMethod;
+window.requestUserLocation = requestUserLocation;
+window.submitOrderFinal = submitOrderFinal;
 window.openClickPaymentUrl = openClickPaymentUrl;
 window.callCourier = callCourier;
 window.chatCourier = chatCourier;
@@ -2536,3 +2532,5 @@ window.callSupport = callSupport;
 window.toggleAdminMode = toggleAdminMode;
 window.switchAdminTab = switchAdminTab;
 window.loadAdminStats = loadAdminStats;
+window.loadAdminOrders = loadAdminOrders;
+window.updateAdminOrderStatus = updateAdminOrderStatus;
