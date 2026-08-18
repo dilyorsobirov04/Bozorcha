@@ -1027,44 +1027,276 @@ async function submitOrder() {
         return;
     }
 
-    const submitBtn = document.getElementById('btn-submit-order');
-    if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = `<span>Buyurtma berilmoqda...</span>`;
+let orderUserLocation = { lat: null, lng: null };
+
+function openCheckoutModal() {
+    // Check if cart is empty
+    if (!cart || Object.keys(cart).length === 0) {
+        showToast("Savatchangiz bo'sh! 🛒", "error");
+        return;
     }
 
-    try {
-        await triggerPaymentSuccess();
-    } finally {
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = `<span>Buyurtmani tasdiqlash</span><span class="btn-arrow">→</span>`;
-        }
-    }
-}
-
-async function triggerPaymentSuccess() {
     if (tg?.HapticFeedback) {
-        tg.HapticFeedback.notificationOccurred('success');
+        tg.HapticFeedback.impactOccurred('medium');
     }
 
     // Calculate total amount
     let subtotal = 0;
     Object.values(cart).forEach(entry => {
-        const item = entry.item;
+        const item = entry.item || {};
         const isWeight = entry.is_weight !== undefined ? entry.is_weight : isProductWeightBased(item);
         const multiplier = isWeight ? (entry.weight || 1.0) : 1.0;
         const itemPrice = Math.round((item.price || 0) * multiplier);
-        subtotal += itemPrice * entry.qty;
+        subtotal += itemPrice * (entry.qty || 1);
     });
+
+    const modalTotal = document.getElementById('modal-bill-total');
+    if (modalTotal) {
+        modalTotal.innerText = subtotal.toLocaleString('uz-UZ') + " so'm";
+    }
+
+    // Pre-fill Name
+    const nameInput = document.getElementById('checkout-user-name');
+    if (nameInput) {
+        const tgUser = tg?.initDataUnsafe?.user;
+        const tgName = tgUser ? `${tgUser.first_name || ''} ${tgUser.last_name || ''}`.trim() || tgUser.username : '';
+        const savedName = localStorage.getItem('bozorcha_user_name') || '';
+        nameInput.value = savedName || tgName || '';
+    }
+
+    // Pre-fill Phone
+    const phoneInput = document.getElementById('checkout-user-phone');
+    if (phoneInput) {
+        const savedPhone = localStorage.getItem('bozorcha_user_phone') || '';
+        phoneInput.value = savedPhone;
+    }
+
+    // Pre-fill Address
+    const addressInput = document.getElementById('checkout-user-address');
+    if (addressInput) {
+        const savedAddress = localStorage.getItem('bozorcha_user_address') || '';
+        addressInput.value = savedAddress;
+    }
+
+    // Sync Payment Method in modal
+    setModalPaymentMethod(selectedPaymentMethod || 'cash');
+
+    // Reset location status
+    orderUserLocation = { lat: null, lng: null };
+    const geoBadge = document.getElementById('geo-status-badge');
+    if (geoBadge) geoBadge.classList.add('hidden');
+    const geoBtnText = document.getElementById('geo-btn-text');
+    if (geoBtnText) geoBtnText.innerText = "Geolokatsiyani yuborish";
+
+    // Hide error alert
+    const errEl = document.getElementById('checkout-modal-error');
+    if (errEl) {
+        errEl.innerText = '';
+        errEl.classList.add('hidden');
+    }
+
+    // Open Modal
+    const modalEl = document.getElementById('modal-checkout-order');
+    if (modalEl) {
+        modalEl.classList.remove('hidden');
+    }
+}
+
+function closeCheckoutModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modalEl = document.getElementById('modal-checkout-order');
+    if (modalEl) {
+        modalEl.classList.add('hidden');
+    }
+}
+
+function setModalPaymentMethod(method) {
+    selectedPaymentMethod = method;
+    selectPaymentMethod(method);
+
+    const cashCard = document.getElementById('modal-pay-cash');
+    const clickCard = document.getElementById('modal-pay-click');
+
+    if (method === 'click') {
+        clickCard?.classList.add('active');
+        cashCard?.classList.remove('active');
+    } else {
+        cashCard?.classList.add('active');
+        clickCard?.classList.remove('active');
+    }
+}
+
+function requestUserLocation() {
+    const geoBtnText = document.getElementById('geo-btn-text');
+    if (geoBtnText) geoBtnText.innerText = "Aniqlanmoqda... ⏳";
+
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('light');
+    }
+
+    // Check if Telegram WebApp LocationManager is available
+    if (tg?.LocationManager) {
+        try {
+            tg.LocationManager.init(() => {
+                tg.LocationManager.getLocation((data) => {
+                    if (data && data.latitude && data.longitude) {
+                        handleLocationSuccess(data.latitude, data.longitude);
+                    } else {
+                        fallbackHtml5Location();
+                    }
+                });
+            });
+            return;
+        } catch (e) {
+            console.warn("Telegram LocationManager error, falling back", e);
+        }
+    }
+
+    fallbackHtml5Location();
+}
+
+function fallbackHtml5Location() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                handleLocationSuccess(pos.coords.latitude, pos.coords.longitude);
+            },
+            (err) => {
+                console.warn("Geolocation error:", err);
+                const geoBtnText = document.getElementById('geo-btn-text');
+                if (geoBtnText) geoBtnText.innerText = "📍 Qayta urinish";
+                showToast("Geolokatsiyani aniqlab bo'lmadi, manzilni qo'lda kiriting", "error");
+            },
+            { timeout: 10000, enableHighAccuracy: true }
+        );
+    } else {
+        const geoBtnText = document.getElementById('geo-btn-text');
+        if (geoBtnText) geoBtnText.innerText = "📍 Geolokatsiya";
+        showToast("Brauzeringizda geolokatsiya qo'llab-quvvatlanmaydi", "error");
+    }
+}
+
+function handleLocationSuccess(lat, lng) {
+    orderUserLocation = { lat: Number(lat), lng: Number(lng) };
+
+    const geoBadge = document.getElementById('geo-status-badge');
+    const geoCoords = document.getElementById('geo-badge-coords');
+    const geoBtnText = document.getElementById('geo-btn-text');
+
+    if (geoCoords) {
+        geoCoords.innerText = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    }
+    if (geoBadge) {
+        geoBadge.classList.remove('hidden');
+    }
+    if (geoBtnText) {
+        geoBtnText.innerText = "📍 Qayta aniqlash";
+    }
+
+    const addrInput = document.getElementById('checkout-user-address');
+    if (addrInput && !addrInput.value.trim()) {
+        addrInput.value = "📍 Geolokatsiya bo'yicha yetkazish";
+    }
+
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred('success');
+    }
+    showToast("Geolokatsiya muvaffaqiyatli olindi! 📍", "success");
+}
+
+async function submitOrderFinal() {
+    const nameInput = document.getElementById('checkout-user-name');
+    const phoneInput = document.getElementById('checkout-user-phone');
+    const addressInput = document.getElementById('checkout-user-address');
+    const errorEl = document.getElementById('checkout-modal-error');
+    const submitBtn = document.getElementById('btn-confirm-final-order');
+
+    const fullName = nameInput ? nameInput.value.trim() : '';
+    const phoneNumber = phoneInput ? phoneInput.value.trim() : '';
+    const address = addressInput ? addressInput.value.trim() : '';
+
+    // Clear previous error
+    if (errorEl) {
+        errorEl.innerText = '';
+        errorEl.classList.add('hidden');
+    }
+
+    // Validation 1: Full Name
+    if (!fullName) {
+        if (errorEl) {
+            errorEl.innerText = "⚠️ Iltimos, ism va familiyangizni kiriting!";
+            errorEl.classList.remove('hidden');
+        }
+        nameInput?.focus();
+        return;
+    }
+
+    // Validation 2: Phone number
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    if (!phoneNumber || cleanPhone.length < 7) {
+        if (errorEl) {
+            errorEl.innerText = "⚠️ Iltimos, to'g'ri telefon raqamingizni kiriting (Masalan: +998901234567)!";
+            errorEl.classList.remove('hidden');
+        }
+        phoneInput?.focus();
+        return;
+    }
+
+    // Validation 3: Address or Geolocation
+    if (!address && (orderUserLocation.lat === null || orderUserLocation.lng === null)) {
+        if (errorEl) {
+            errorEl.innerText = "⚠️ Iltimos, yetkazib berish manzilini kiriting yoki geolokatsiyani yuboring!";
+            errorEl.classList.remove('hidden');
+        }
+        addressInput?.focus();
+        return;
+    }
+
+    // Save to local storage for convenience
+    try {
+        localStorage.setItem('bozorcha_user_name', fullName);
+        localStorage.setItem('bozorcha_user_phone', phoneNumber);
+        if (address) localStorage.setItem('bozorcha_user_address', address);
+    } catch (e) {}
+
+    // Calculate total amount
+    let subtotal = 0;
+    Object.values(cart).forEach(entry => {
+        const item = entry.item || {};
+        const isWeight = entry.is_weight !== undefined ? entry.is_weight : isProductWeightBased(item);
+        const multiplier = isWeight ? (entry.weight || 1.0) : 1.0;
+        const itemPrice = Math.round((item.price || 0) * multiplier);
+        subtotal += itemPrice * (entry.qty || 1);
+    });
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span>⏳ Buyurtma berilmoqda...</span>`;
+    }
 
     const user = tg?.initDataUnsafe?.user;
 
     const orderPayload = {
-        cart: cart,
-        total_amount: subtotal,
+        user_id: user?.id,
+        full_name: fullName,
+        phone_number: phoneNumber,
+        address: address || `Geolokatsiya: ${orderUserLocation.lat.toFixed(4)}, ${orderUserLocation.lng.toFixed(4)}`,
+        location_lat: orderUserLocation.lat,
+        location_lng: orderUserLocation.lng,
+        payment_method: selectedPaymentMethod,
         payment_type: selectedPaymentMethod,
-        user_info: user ? { id: user.id, first_name: user.first_name, username: user.username } : {}
+        cart: cart,
+        cart_items: cart,
+        total_amount: subtotal,
+        total_price: subtotal,
+        user_info: {
+            id: user?.id,
+            first_name: user?.first_name || fullName,
+            last_name: user?.last_name || '',
+            username: user?.username,
+            full_name: fullName,
+            phone: phoneNumber
+        }
     };
 
     let createdOrder = null;
@@ -1092,27 +1324,23 @@ async function triggerPaymentSuccess() {
             total_amount: subtotal,
             payment_type: selectedPaymentMethod,
             payment_method_name: selectedPaymentMethod === 'click' ? 'Click / Payme' : 'Naqd pul',
-            status: selectedPaymentMethod === 'click' ? "To'langan (Onlayn)" : "Kutilmoqda (Naqd)",
+            status: "Qabul qilindi",
             click_url: `https://my.click.uz/services/pay?service_id=32514&merchant_id=21458&amount=${subtotal}&transaction_param=${fallbackId}`
         };
     }
 
     activeOrder = createdOrder;
 
-    // Send data to Telegram Bot if WebApp context exists
-    if (tg) {
-        try {
-            tg.sendData(JSON.stringify({
-                order_id: createdOrder.id,
-                total: subtotal,
-                payment_type: selectedPaymentMethod,
-                payment_method_name: selectedPaymentMethod === 'click' ? 'Click / Payme' : 'Naqd pul',
-                status: createdOrder.status,
-                cart: cart
-            }));
-        } catch (err) {
-            console.log('tg.sendData not available in this view');
-        }
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred('success');
+    }
+
+    // Close modal
+    closeCheckoutModal();
+
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<span>✅ Buyurtmani tasdiqlash</span>`;
     }
 
     // Update Live Tracking Screen Elements
@@ -1153,6 +1381,7 @@ async function triggerPaymentSuccess() {
     cart = {};
     updateNavCartBadge();
     syncAllProductCardCounters();
+    showToast("Buyurtmangiz muvaffaqiyatli qabul qilindi! 🎉", "success");
     navigateTo('tracking');
 }
 
@@ -1625,11 +1854,19 @@ async function loadAdminOrders() {
 
                         <div class="admin-order-customer-box">
                             <div class="customer-info-line">
-                                <strong>👤 Mijoz:</strong> ${name} <span class="customer-uname">(${username} / 📞 ${phone})</span>
+                                <strong>👤 Mijoz:</strong> ${name} <span class="customer-uname">(${username})</span>
+                            </div>
+                            <div class="customer-info-line">
+                                <strong>📞 Telefon:</strong> <a href="tel:${phone}" style="color: var(--primary-red); text-decoration: underline; font-weight: 700;">${phone}</a>
                             </div>
                             <div class="customer-info-line">
                                 <strong>📍 Manzil:</strong> ${address}
                             </div>
+                            ${order.location_lat && order.location_lng ? `
+                                <div class="customer-info-line">
+                                    <strong>🗺 Geolokatsiya:</strong> <a href="https://maps.google.com/?q=${order.location_lat},${order.location_lng}" target="_blank" style="color: #38bdf8; text-decoration: underline; font-weight: 700;">📍 Google Maps da ochish (${Number(order.location_lat).toFixed(4)}, ${Number(order.location_lng).toFixed(4)})</a>
+                                </div>
+                            ` : ''}
                         </div>
 
                         <div class="admin-order-items-box">

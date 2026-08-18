@@ -568,7 +568,11 @@ def create_order(
     payment_type: str = "cash",
     address: str = "Chilonzor 9-kvartal, 14-uy",
     delivery_time: str = "15 - 25 daqiqa",
-    user_info: dict | None = None
+    user_info: dict | None = None,
+    full_name: str | None = None,
+    phone_number: str | None = None,
+    location_lat: float | None = None,
+    location_lng: float | None = None
 ) -> dict:
     order_num = 84000 + len(ORDERS_DB) + 1
     order_id = str(order_num)
@@ -583,6 +587,10 @@ def create_order(
     else:
         click_url = None
 
+    u_info = user_info or {}
+    resolved_name = full_name or u_info.get("full_name") or f"{u_info.get('first_name', '')} {u_info.get('last_name', '')}".strip() or u_info.get("name") or "Mijoz"
+    resolved_phone = phone_number or u_info.get("phone") or u_info.get("phone_number") or "Mavjud emas"
+
     order_record = {
         "id": order_id,
         "order_id": order_id,
@@ -594,7 +602,11 @@ def create_order(
         "status_code": status_code,
         "address": address,
         "delivery_time": delivery_time,
-        "user_info": user_info or {},
+        "full_name": resolved_name,
+        "phone_number": resolved_phone,
+        "location_lat": location_lat,
+        "location_lng": location_lng,
+        "user_info": u_info,
         "click_url": click_url,
         "created_at": now_str
     }

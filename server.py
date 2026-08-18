@@ -70,13 +70,11 @@ async def notify_admins_new_order(order: dict):
         payment_name = order.get("payment_method_name") or ("Click / Payme" if order.get("payment_type") == "click" else "Naqd pul")
         user_info = order.get("user_info", {})
         
-        # Build customer line: {name} (@{username} / {phone})
-        first_name = user_info.get("first_name", "")
-        last_name = user_info.get("last_name", "")
-        full_name = f"{first_name} {last_name}".strip() or user_info.get("name") or "Mijoz"
+        # Build customer line: {full_name} (@{username} / {phone})
+        full_name = order.get("full_name") or user_info.get("full_name") or f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip() or user_info.get("name") or "Mijoz"
+        phone = order.get("phone_number") or user_info.get("phone") or user_info.get("phone_number") or order.get("phone") or "Mavjud emas"
         username = user_info.get("username")
-        username_str = f"@{username}" if username else "Mavjud emas"
-        phone = user_info.get("phone") or user_info.get("phone_number") or order.get("phone") or "Mavjud emas"
+        username_str = f"@{username}" if username else "Username yo'q"
         customer_line = f"{full_name} ({username_str} / {phone})"
 
         # Build items list
@@ -94,6 +92,14 @@ async def notify_admins_new_order(order: dict):
 
         formatted_total = f"{total:,.0f}".replace(",", " ")
         address = order.get("address") or "Mini App orqali buyurtma"
+        lat = order.get("location_lat")
+        lng = order.get("location_lng")
+        geo_line = ""
+        if lat is not None and lng is not None:
+            try:
+                geo_line = f"\n🗺 <b>Geolokatsiya:</b> <a href=\"https://maps.google.com/?q={float(lat)},{float(lng)}\">📍 Google Maps da ko'rish</a> ({float(lat):.4f}, {float(lng):.4f})"
+            except (ValueError, TypeError):
+                pass
 
         text = (
             f"📦 <b>Yangi buyurtma!</b>\n\n"
@@ -101,7 +107,7 @@ async def notify_admins_new_order(order: dict):
             f"🛍 <b>Mahsulotlar:</b>\n{items_str}\n\n"
             f"💰 <b>Jami summa:</b> {formatted_total} so'm\n"
             f"💳 <b>To'lov turi:</b> {payment_name}\n"
-            f"📍 <b>Manzil/Lokatsiya:</b> {address}\n"
+            f"📍 <b>Manzil/Lokatsiya:</b> {address}{geo_line}\n"
         )
 
         keyboard = get_order_admin_keyboard(order_id, current_status="accepted")
@@ -435,12 +441,16 @@ def create_webapp_server() -> FastAPI:
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-        cart = data.get("cart") or data.get("items") or {}
-        total_amount = data.get("total_amount") or data.get("total") or 0
+        cart = data.get("cart") or data.get("items") or data.get("cart_items") or {}
+        total_amount = data.get("total_amount") or data.get("total") or data.get("total_price") or 0
         payment_type = data.get("payment_type") or data.get("payment_method") or "cash"
-        address = data.get("address") or "Chilonzor 9-kvartal, 14-uy"
+        address = data.get("address") or "Mini App orqali buyurtma"
         delivery_time = data.get("delivery_time") or "15 - 25 daqiqa"
         user_info = data.get("user_info") or data.get("user") or {}
+        full_name = data.get("full_name") or data.get("name")
+        phone_number = data.get("phone_number") or data.get("phone")
+        location_lat = data.get("location_lat") or data.get("lat")
+        location_lng = data.get("location_lng") or data.get("lng")
 
         try:
             total_val = int(total_amount)
@@ -462,7 +472,11 @@ def create_webapp_server() -> FastAPI:
             payment_type=payment_type,
             address=address,
             delivery_time=delivery_time,
-            user_info=user_info
+            user_info=user_info,
+            full_name=full_name,
+            phone_number=phone_number,
+            location_lat=location_lat,
+            location_lng=location_lng
         )
 
         # Notify Telegram Admin Bot in background

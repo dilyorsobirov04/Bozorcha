@@ -258,7 +258,7 @@
                         <span>Jami to'lov:</span>
                         <span id="bill-total" class="total-amount">0 so'm</span>
                     </div>
-                    <button id="btn-submit-order" class="primary-checkout-btn" onclick="submitOrder()">
+                    <button id="btn-submit-order" class="primary-checkout-btn" onclick="openCheckoutModal()">
                         <span>Buyurtmani tasdiqlash</span>
                         <span class="btn-arrow">→</span>
                     </button>
@@ -592,6 +592,86 @@
 
             <input type="file" id="file-picker" accept="image/*" style="display: none" onchange="handleFilePicked(event)">
         </section>
+
+        <!-- ================= CHECKOUT / ORDER PLACEMENT MODAL ================= -->
+        <div id="modal-checkout-order" class="modal-backdrop hidden" onclick="closeCheckoutModal(event)">
+            <div class="modal-checkout-sheet" onclick="event.stopPropagation()">
+                <div class="modal-checkout-header">
+                    <div>
+                        <h3 class="modal-checkout-title">🛍️ Buyurtmani Rasmiylashtirish</h3>
+                        <p class="modal-checkout-subtitle">Yetkazib berish ma'lumotlarini to'ldiring</p>
+                    </div>
+                    <button type="button" class="modal-close-btn" onclick="closeCheckoutModal()">✕</button>
+                </div>
+
+                <form id="form-checkout-order" onsubmit="event.preventDefault(); submitOrderFinal();" class="modal-checkout-form">
+                    <!-- 1. Full Name -->
+                    <div class="form-group">
+                        <label class="form-label" for="checkout-user-name">
+                            Ism va Familiyangiz <span class="req-star">*</span>
+                        </label>
+                        <input type="text" id="checkout-user-name" class="form-input" placeholder="Masalan: Jasur Rahimov" required>
+                    </div>
+
+                    <!-- 2. Phone Number -->
+                    <div class="form-group">
+                        <label class="form-label" for="checkout-user-phone">
+                            Telefon raqamingiz <span class="req-star">*</span>
+                        </label>
+                        <input type="tel" id="checkout-user-phone" class="form-input" placeholder="+998 90 123 45 67" required>
+                    </div>
+
+                    <!-- 3. Location & Address -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            Yetkazib berish manzili <span class="req-star">*</span>
+                        </label>
+                        <div class="geo-location-row">
+                            <button type="button" id="btn-request-geo" class="geo-locate-btn" onclick="requestUserLocation()">
+                                <span id="geo-btn-icon">📍</span>
+                                <span id="geo-btn-text">Geolokatsiyani yuborish</span>
+                            </button>
+                            <div id="geo-status-badge" class="geo-status-badge hidden">
+                                <span>✅ <span id="geo-badge-coords">Aniqlangan</span></span>
+                            </div>
+                        </div>
+                        <textarea id="checkout-user-address" class="form-textarea" rows="2" placeholder="Yoki manzilni qo'lda kiriting (Masalan: Chilonzor 9-kvartal, 14-uy, 25-xonadon)..."></textarea>
+                    </div>
+
+                    <!-- 4. Payment Method Selection in Modal -->
+                    <div class="form-group">
+                        <label class="form-label">To'lov usuli</label>
+                        <div class="modal-payment-grid">
+                            <div id="modal-pay-cash" class="modal-pay-card active" onclick="setModalPaymentMethod('cash')">
+                                <span class="modal-pay-icon">💵</span>
+                                <span class="modal-pay-text">Naqd pul</span>
+                            </div>
+                            <div id="modal-pay-click" class="modal-pay-card" onclick="setModalPaymentMethod('click')">
+                                <span class="modal-pay-icon">⚡️</span>
+                                <span class="modal-pay-text">Click / Payme</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 5. Order Summary inside Modal -->
+                    <div class="checkout-modal-summary">
+                        <span class="modal-summary-label">Jami to'lov:</span>
+                        <strong id="modal-bill-total" class="modal-summary-amount">0 so'm</strong>
+                    </div>
+
+                    <!-- Error Alert -->
+                    <div id="checkout-modal-error" class="modal-error-alert hidden"></div>
+
+                    <!-- Modal Actions -->
+                    <div class="modal-checkout-actions">
+                        <button type="button" class="modal-cancel-btn" onclick="closeCheckoutModal()">Bekor qilish</button>
+                        <button type="submit" id="btn-confirm-final-order" class="modal-submit-order-btn">
+                            <span>✅ Buyurtmani tasdiqlash</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
         <!-- ================= DELETE CONFIRMATION MODAL ================= -->
         <div id="modal-delete-confirm" class="modal-backdrop hidden" onclick="closeDeleteConfirmModal(event)">

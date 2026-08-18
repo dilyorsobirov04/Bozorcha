@@ -2742,6 +2742,211 @@ body {
     100% { opacity: 0; transform: scale(0.6) translateY(-20px); max-height: 0; margin-bottom: 0; padding: 0; border: none; }
 }
 
+/* ================= CHECKOUT / ORDER PLACEMENT MODAL ================= */
+.modal-checkout-sheet {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-glass);
+    border-radius: 28px 28px 0 0;
+    width: 100%;
+    max-width: 480px;
+    padding: 22px 20px 30px;
+    margin-top: auto;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7);
+    animation: slideUpModal 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+@keyframes slideUpModal {
+    from { opacity: 0; transform: translateY(100%); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-checkout-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 12px;
+}
+
+.modal-checkout-title {
+    font-family: var(--font-heading);
+    font-size: 17px;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.modal-checkout-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.modal-close-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-glass);
+    color: var(--text-secondary);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.modal-close-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+
+.modal-checkout-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.geo-location-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.geo-locate-btn {
+    background: linear-gradient(135deg, rgba(255, 42, 77, 0.15) 0%, rgba(220, 38, 38, 0.25) 100%);
+    border: 1px solid rgba(255, 42, 77, 0.4);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 9px 14px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.geo-locate-btn:hover {
+    background: linear-gradient(135deg, rgba(255, 42, 77, 0.3) 0%, rgba(220, 38, 38, 0.45) 100%);
+    box-shadow: 0 4px 12px var(--red-glow);
+}
+
+.geo-status-badge {
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    color: #4ade80;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: var(--radius-full);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.modal-payment-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.modal-pay-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1.5px solid var(--border-glass);
+    border-radius: var(--radius-md);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.modal-pay-card.active {
+    border-color: var(--primary-red);
+    background: linear-gradient(135deg, rgba(255, 42, 77, 0.2) 0%, rgba(15, 23, 42, 0.9) 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 15px rgba(255, 42, 77, 0.25);
+}
+
+.checkout-modal-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    margin: 4px 0;
+}
+
+.modal-summary-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.modal-summary-amount {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--primary-red);
+}
+
+.modal-error-alert {
+    background: rgba(239, 68, 68, 0.16);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #f87171;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.modal-checkout-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.modal-submit-order-btn {
+    flex: 2;
+    background: var(--red-gradient);
+    border: none;
+    color: #ffffff;
+    padding: 13px 16px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 4px 18px var(--red-glow);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.modal-submit-order-btn:hover {
+    box-shadow: 0 6px 22px rgba(255, 42, 77, 0.55);
+}
+
+.modal-submit-order-btn:active {
+    transform: scale(0.98);
+}
+
 /* Delete Confirmation Modal */
 .modal-delete-sheet {
     background: var(--bg-surface);
