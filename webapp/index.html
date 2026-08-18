@@ -61,7 +61,9 @@
             <!-- App Bar / Brand Header & Admin -->
             <header class="home-header">
                 <div class="brand-header-brand">
-                    <div class="brand-icon-gem">🛍️</div>
+                    <div class="brand-logo-badge">
+                        <span class="logo-letter">B</span>
+                    </div>
                     <span class="brand-title">Bozorcha</span>
                 </div>
                 <button id="admin-mode-toggle" class="admin-chip-btn" onclick="toggleAdminMode()">
@@ -275,6 +277,10 @@
             <!-- 3D Live Map View -->
             <div class="live-map-container">
                 <img src="assets/courier_tracking.png" alt="Live Courier Route Map" class="tracking-map-img">
+                <svg class="map-route-svg" viewBox="0 0 400 300" preserveAspectRatio="none">
+                    <path class="route-line-glow" d="M 60 230 Q 140 140 200 150 T 340 70" />
+                    <path class="route-line-main" d="M 60 230 Q 140 140 200 150 T 340 70" />
+                </svg>
                 <div class="courier-pulse-marker">
                     <div class="pulse-ring"></div>
                     <span class="scooter-emoji">🛵</span>
@@ -286,11 +292,11 @@
                 <div class="eta-header">
                     <div>
                         <span class="eta-label">Taxminiy yetib kelish vaqti:</span>
-                        <h2 id="eta-countdown" class="eta-time">14 daqiqa</h2>
+                        <h2 id="eta-countdown" class="eta-time">15 - 20 daqiqa</h2>
                     </div>
                     <div class="tracking-chips-wrap">
-                        <div class="status-live-chip">
-                            <span class="live-dot"></span> Yo'lda
+                        <div id="tracking-status-chip" class="status-live-chip">
+                            <span class="live-dot"></span> <span id="tracking-chip-text">Qabul qilindi</span>
                         </div>
                         <div id="tracking-payment-badge" class="status-live-chip payment-live-chip">
                             💵 Naqd pul
@@ -306,7 +312,7 @@
                     </div>
                     <div class="summary-row">
                         <span class="summary-label">To'lov holati:</span>
-                        <span id="tracking-order-status" class="summary-status-badge status-pending">Kutilmoqda (Naqd)</span>
+                        <span id="tracking-order-status" class="summary-status-badge status-pending">Qabul qilindi</span>
                     </div>
                     <div id="tracking-click-action" class="tracking-click-wrap hidden">
                         <button class="click-pay-action-btn" onclick="openClickPaymentUrl()">
@@ -315,36 +321,28 @@
                     </div>
                 </div>
 
-                <!-- Progress Steps -->
-                <div class="order-progress-bar">
-                    <div class="progress-step done">
-                        <div class="step-dot">✓</div>
-                        <span>Qabul qilindi</span>
+                <!-- Dynamic 4-Step Progress Flow -->
+                <div class="order-progress-wrapper">
+                    <div class="order-progress-line-bg">
+                        <div id="tracking-progress-fill" class="order-progress-line-fill"></div>
                     </div>
-                    <div class="progress-step done">
-                        <div class="step-dot">✓</div>
-                        <span>Yig'ildi</span>
-                    </div>
-                    <div class="progress-step active">
-                        <div class="step-dot">🛵</div>
-                        <span>Kuryerda</span>
-                    </div>
-                    <div class="progress-step">
-                        <div class="step-dot">🏠</div>
-                        <span>Yetkazildi</span>
-                    </div>
-                </div>
-
-                <!-- Courier Profile Card -->
-                <div class="courier-profile-box">
-                    <div class="courier-avatar">🚴‍♂️</div>
-                    <div class="courier-meta">
-                        <h4>Jasur Rahimov</h4>
-                        <div class="courier-rating">⭐ 4.95 • 1,420+ yetkazish</div>
-                    </div>
-                    <div class="courier-actions">
-                        <button class="action-circle-btn phone-btn" onclick="callCourier()">📞</button>
-                        <button class="action-circle-btn chat-btn" onclick="chatCourier()">💬</button>
+                    <div id="tracking-progress-bar" class="order-progress-bar">
+                        <div id="step-node-1" class="progress-step active">
+                            <div class="step-dot">1</div>
+                            <span>Qabul qilindi</span>
+                        </div>
+                        <div id="step-node-2" class="progress-step">
+                            <div class="step-dot">2</div>
+                            <span>Yig'ildi</span>
+                        </div>
+                        <div id="step-node-3" class="progress-step">
+                            <div class="step-dot">3</div>
+                            <span>Yo'lga chiqdi</span>
+                        </div>
+                        <div id="step-node-4" class="progress-step">
+                            <div class="step-dot">4</div>
+                            <span>Yetkazildi</span>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -33,6 +33,75 @@ from db import (
 
 logger = logging.getLogger(__name__)
 
+_bot_instance = None
+
+
+def set_bot_instance(bot):
+    global _bot_instance
+    _bot_instance = bot
+
+
+def get_bot_instance():
+    global _bot_instance
+    if _bot_instance is None:
+        try:
+            from config import BOT_TOKEN
+            from aiogram import Bot
+            from aiogram.enums import ParseMode
+            from aiogram.client.default import DefaultBotProperties
+            if BOT_TOKEN and BOT_TOKEN != "YOUR_BOT_TOKEN_HERE":
+                _bot_instance = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+        except Exception as e:
+            logger.warning(f"Could not initialize bot instance in server: {e}")
+    return _bot_instance
+
+
+async def notify_admins_new_order(order: dict):
+    bot = get_bot_instance()
+    if not bot:
+        return
+
+    try:
+        from config import ADMINS
+        from keyboards import get_order_admin_keyboard
+
+        order_id = order.get("id") or order.get("order_id")
+        total = order.get("total_amount", 0)
+        payment_name = order.get("payment_method_name") or ("Click / Payme" if order.get("payment_type") == "click" else "Naqd pul")
+        user_info = order.get("user_info", {})
+        user_name = user_info.get("first_name") or user_info.get("username") or "Mijoz"
+        cart = order.get("cart", {})
+
+        text = (
+            f"🔔 <b>YANGI BUYURTMA #{order_id}</b>\n\n"
+            f"👤 <b>Mijoz:</b> {user_name}\n"
+            f"💳 <b>To'lov turi:</b> {payment_name}\n"
+            f"💰 <b>Jami summa:</b> {total:,.0f} so'm\n".replace(",", " ") +
+            f"📌 <b>Boshlang'ich holati:</b> Qabul qilindi\n\n"
+            f"<b>Savatdagi mahsulotlar:</b>\n"
+        )
+
+        if isinstance(cart, dict):
+            for k, v in cart.items():
+                item = v.get("item", {})
+                name = item.get("name", "Mahsulot")
+                qty = v.get("qty", 1)
+                weight = v.get("weight")
+                w_text = f" ({weight} kg)" if weight and weight != 1.0 else ""
+                text += f"• {name}{w_text} — {qty} ta\n"
+
+        text += "\n👇 <b>Statusni o'zgartirish uchun tugmani bosing:</b>"
+
+        keyboard = get_order_admin_keyboard(order_id, current_status="accepted")
+
+        for admin_id in ADMINS:
+            try:
+                await bot.send_message(chat_id=admin_id, text=text, reply_markup=keyboard, parse_mode="HTML")
+            except Exception as e:
+                logger.warning(f"Failed to send order notification to admin {admin_id}: {e}")
+    except Exception as e:
+        logger.exception(f"Error in notify_admins_new_order: {e}")
+
 
 def create_webapp_server() -> FastAPI:
     app = FastAPI(
@@ -345,6 +414,13 @@ def create_webapp_server() -> FastAPI:
             delivery_time=delivery_time,
             user_info=user_info
         )
+
+        # Notify Telegram Admin Bot in background
+        try:
+            import asyncio
+            asyncio.create_task(notify_admins_new_order(order))
+        except Exception as e:
+            logger.warning(f"Could not trigger admin notification task: {e}")
 
         return {
             "success": True,

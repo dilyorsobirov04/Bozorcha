@@ -4,7 +4,8 @@ from .inline import (
     get_stats_inline_keyboard,
     get_product_card_keyboard,
     get_nopic_categories_keyboard,
-    get_nopic_product_card_keyboard
+    get_nopic_product_card_keyboard,
+    get_order_admin_keyboard
 )
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "get_stats_inline_keyboard",
     "get_product_card_keyboard",
     "get_nopic_categories_keyboard",
-    "get_nopic_product_card_keyboard"
+    "get_nopic_product_card_keyboard",
+    "get_order_admin_keyboard"
 ]

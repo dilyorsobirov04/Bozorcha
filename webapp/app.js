@@ -167,6 +167,11 @@ function navigateTo(screenId, shouldScrollToTop = true) {
         }
     });
 
+    if (screenId !== 'tracking' && trackingInterval) {
+        clearInterval(trackingInterval);
+        trackingInterval = null;
+    }
+
     if (screenId === 'home') {
         renderHomeProducts();
     } else if (screenId === 'checkout') {
@@ -1125,17 +1130,6 @@ async function triggerPaymentSuccess() {
         trackingTotal.innerText = subtotal.toLocaleString('uz-UZ') + " so'm";
     }
 
-    const trackingStatus = document.getElementById('tracking-order-status');
-    if (trackingStatus) {
-        const orderStatus = createdOrder.status || (selectedPaymentMethod === 'click' ? "To'langan (Onlayn)" : "Kutilmoqda (Naqd)");
-        trackingStatus.innerText = orderStatus;
-        if (selectedPaymentMethod === 'click') {
-            trackingStatus.className = 'summary-status-badge status-paid';
-        } else {
-            trackingStatus.className = 'summary-status-badge status-pending';
-        }
-    }
-
     const clickActionBox = document.getElementById('tracking-click-action');
     if (clickActionBox) {
         if (selectedPaymentMethod === 'click' && createdOrder.click_url) {
@@ -1144,6 +1138,9 @@ async function triggerPaymentSuccess() {
             clickActionBox.classList.add('hidden');
         }
     }
+
+    // Set initial tracking progress: Step 1 ("Qabul qilindi")
+    updateTrackingProgress("accepted", "Qabul qilindi");
 
     // Reset Cart and Navigate to Live Tracking Screen
     cart = {};
@@ -1164,32 +1161,136 @@ function openClickPaymentUrl() {
     }
 }
 
-// ----------------- 5. LIVE ORDER TRACKING -----------------
-function startLiveTrackingTimer() {
-    remainingMinutes = 14;
-    const countdownEl = document.getElementById('eta-countdown');
-    if (countdownEl) {
-        countdownEl.innerText = `${remainingMinutes} daqiqa`;
+// ----------------- 5. DYNAMIC ORDER STATUS & LIVE TRACKING -----------------
+function updateTrackingProgress(statusCode, statusText) {
+    const sCode = String(statusCode || '').toLowerCase();
+    const sText = String(statusText || '').toLowerCase();
+
+    const step1 = document.getElementById('step-node-1');
+    const step2 = document.getElementById('step-node-2');
+    const step3 = document.getElementById('step-node-3');
+    const step4 = document.getElementById('step-node-4');
+    const fillEl = document.getElementById('tracking-progress-fill');
+    const chipText = document.getElementById('tracking-chip-text');
+    const etaCountdown = document.getElementById('eta-countdown');
+    const orderStatusEl = document.getElementById('tracking-order-status');
+
+    [step1, step2, step3, step4].forEach(step => {
+        if (step) {
+            step.className = 'progress-step';
+            const dot = step.querySelector('.step-dot');
+            if (dot) dot.innerText = step.id.replace('step-node-', '');
+        }
+    });
+
+    if (sCode === 'delivered' || sText.includes('yetkazildi')) {
+        // Step 4: Yetkazildi (Delivered)
+        if (step1) { step1.className = 'progress-step done'; step1.querySelector('.step-dot').innerText = '✓'; }
+        if (step2) { step2.className = 'progress-step done'; step2.querySelector('.step-dot').innerText = '✓'; }
+        if (step3) { step3.className = 'progress-step done'; step3.querySelector('.step-dot').innerText = '✓'; }
+        if (step4) { step4.className = 'progress-step done active'; step4.querySelector('.step-dot').innerText = '✓'; }
+        if (fillEl) fillEl.style.width = '100%';
+        if (chipText) chipText.innerText = 'Yetkazildi';
+        if (etaCountdown) etaCountdown.innerText = 'Yetkazib berildi ✅';
+        if (orderStatusEl) {
+            orderStatusEl.innerText = 'Yetkazildi';
+            orderStatusEl.className = 'summary-status-badge status-paid';
+        }
+    } else if (sCode === 'on_the_way' || sCode === 'ship' || sText.includes("yo'lga") || sText.includes("yo`lga") || sText.includes('kuryer')) {
+        // Step 3: Yo'lga chiqdi (On the way)
+        if (step1) { step1.className = 'progress-step done'; step1.querySelector('.step-dot').innerText = '✓'; }
+        if (step2) { step2.className = 'progress-step done'; step2.querySelector('.step-dot').innerText = '✓'; }
+        if (step3) { step3.className = 'progress-step active'; step3.querySelector('.step-dot').innerText = '🛵'; }
+        if (step4) { step4.className = 'progress-step'; }
+        if (fillEl) fillEl.style.width = '70%';
+        if (chipText) chipText.innerText = "Yo'lda";
+        if (etaCountdown) etaCountdown.innerText = '5 - 10 daqiqa';
+        if (orderStatusEl) {
+            orderStatusEl.innerText = "Yo'lga chiqdi";
+            orderStatusEl.className = 'summary-status-badge status-pending';
+        }
+    } else if (sCode === 'packed' || sCode === 'pack' || sText.includes("yig'ildi") || sText.includes("yig`ildi")) {
+        // Step 2: Yig'ildi (Packed)
+        if (step1) { step1.className = 'progress-step done'; step1.querySelector('.step-dot').innerText = '✓'; }
+        if (step2) { step2.className = 'progress-step active'; step2.querySelector('.step-dot').innerText = '📦'; }
+        if (step3) { step3.className = 'progress-step'; }
+        if (step4) { step4.className = 'progress-step'; }
+        if (fillEl) fillEl.style.width = '38%';
+        if (chipText) chipText.innerText = "Yig'ildi";
+        if (etaCountdown) etaCountdown.innerText = '10 - 15 daqiqa';
+        if (orderStatusEl) {
+            orderStatusEl.innerText = "Yig'ildi";
+            orderStatusEl.className = 'summary-status-badge status-pending';
+        }
+    } else {
+        // Step 1: Qabul qilindi (Accepted / Initial state)
+        if (step1) { step1.className = 'progress-step active'; step1.querySelector('.step-dot').innerText = '✓'; }
+        if (step2) { step2.className = 'progress-step'; }
+        if (step3) { step3.className = 'progress-step'; }
+        if (step4) { step4.className = 'progress-step'; }
+        if (fillEl) fillEl.style.width = '8%';
+        if (chipText) chipText.innerText = 'Qabul qilindi';
+        if (etaCountdown) etaCountdown.innerText = '15 - 20 daqiqa';
+        if (orderStatusEl) {
+            orderStatusEl.innerText = 'Qabul qilindi';
+            orderStatusEl.className = 'summary-status-badge status-pending';
+        }
     }
+}
+
+function startLiveTrackingTimer() {
+    if (!activeOrder) {
+        activeOrder = {
+            id: '84091',
+            status: 'Qabul qilindi',
+            status_code: 'accepted',
+            total_amount: 0,
+            payment_type: 'cash'
+        };
+    }
+
+    const trackingOrderId = document.getElementById('tracking-order-id');
+    if (trackingOrderId && activeOrder.id) {
+        trackingOrderId.innerText = `Buyurtma #${activeOrder.id}`;
+    }
+
+    const trackingTotal = document.getElementById('tracking-order-total');
+    if (trackingTotal && activeOrder.total_amount) {
+        trackingTotal.innerText = Number(activeOrder.total_amount).toLocaleString('uz-UZ') + " so'm";
+    }
+
+    const trackingPayBadge = document.getElementById('tracking-payment-badge');
+    if (trackingPayBadge) {
+        if (activeOrder.payment_type === 'click') {
+            trackingPayBadge.innerText = '⚡️ Click / Payme';
+            trackingPayBadge.className = 'status-live-chip payment-live-chip';
+        } else {
+            trackingPayBadge.innerText = '💵 Naqd pul';
+            trackingPayBadge.className = 'status-live-chip';
+        }
+    }
+
+    // Set current progress
+    updateTrackingProgress(activeOrder.status_code || activeOrder.status, activeOrder.status);
 
     if (trackingInterval) clearInterval(trackingInterval);
 
-    trackingInterval = setInterval(() => {
-        if (remainingMinutes > 1) {
-            remainingMinutes--;
-            if (countdownEl) {
-                countdownEl.innerText = `${remainingMinutes} daqiqa`;
+    // Dynamic real-time polling from API every 3.5 seconds
+    trackingInterval = setInterval(async () => {
+        if (currentScreen !== 'tracking' || !activeOrder?.id) return;
+        try {
+            const res = await fetch(`/api/orders/${activeOrder.id}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.order) {
+                    activeOrder = data.order;
+                    updateTrackingProgress(activeOrder.status_code || activeOrder.status, activeOrder.status);
+                }
             }
+        } catch (e) {
+            // Silently ignore polling hiccups
         }
-    }, 45000);
-}
-
-function callCourier() {
-    alert("Kuryerga qo'ng'iroq qilinmoqda: +998 90 123 45 67 (Jasur)");
-}
-
-function chatCourier() {
-    alert("Kuryer bilan chat: 'Assalomu alaykum, eshik oldidaman.'");
+    }, 3500);
 }
 
 function callSupport() {

@@ -14,12 +14,15 @@ from db import (
     get_categories_with_nopic_products,
     get_nopic_products_by_category,
     clear_product_stock,
-    CATEGORIES_DB
+    CATEGORIES_DB,
+    get_order,
+    update_order_status
 )
 from keyboards import (
     get_stats_inline_keyboard,
     get_nopic_categories_keyboard,
-    get_nopic_product_card_keyboard
+    get_nopic_product_card_keyboard,
+    get_order_admin_keyboard
 )
 
 router = Router()
@@ -113,3 +116,80 @@ async def process_manual_order_amount_input(message: Message, state: FSMContext)
         await message.answer(f"✅ Telefon zakazi bazaga qo'shildi: {amount_str} so'm!")
     except Exception as e:
         logging.exception("Error in process_manual_order_amount_input: %s", e)
+
+
+@router.callback_query(F.data.startswith("order_status:"))
+async def process_order_status_change(callback: CallbackQuery):
+    """
+    Admin tomonidan buyurtma holatini o'zgartirish callback handleri:
+    - [ ✅ Qabul qilish ] -> "Zakazingiz qabul qilindi"
+    - [ 📦 Yig'ildi ]
+    - [ 🛵 Yo'lga chiqdi ]
+    - [ 🎉 Yetkazildi ]
+    """
+    try:
+        if callback.from_user.id not in ADMINS:
+            await callback.answer("❌ Siz admin emassiz!", show_alert=True)
+            return
+
+        parts = callback.data.split(":")
+        if len(parts) != 3:
+            await callback.answer("⚠️ Noto'g'ri so'rov!")
+            return
+
+        _, action, order_id = parts
+
+        status_map = {
+            "accept": ("Qabul qilindi", "accepted", "Zakazingiz qabul qilindi"),
+            "pack": ("Yig'ildi", "packed", "Buyurtma yig'ildi"),
+            "ship": ("Yo'lga chiqdi", "on_the_way", "Buyurtma kuryerga berildi (Yo'lda)"),
+            "deliver": ("Yetkazildi", "delivered", "Buyurtma yetkazildi")
+        }
+
+        if action not in status_map:
+            await callback.answer("⚠️ Noma'lum status!")
+            return
+
+        status_text, status_code, popup_text = status_map[action]
+
+        updated = update_order_status(order_id, status=status_text, status_code=status_code)
+        if not updated:
+            await callback.answer("⚠️ Buyurtma topilmadi!", show_alert=True)
+            return
+
+        # Show popup alert to Admin
+        await callback.answer(popup_text, show_alert=True)
+
+        # Notify customer via Telegram if user_id is present
+        user_info = updated.get("user_info") or {}
+        customer_id = user_info.get("id")
+
+        customer_messages = {
+            "accept": f"🔔 <b>Buyurtmangiz holati yangilandi!</b>\n\n✅ <b>Zakazingiz qabul qilindi!</b>\nBuyurtma raqami: <b>#{order_id}</b>\nTez orada tayyorlanadi.",
+            "pack": f"🔔 <b>Buyurtmangiz holati yangilandi!</b>\n\n📦 <b>Buyurtmangiz (#{order_id}) yig'ildi va qadoqlandi!</b>\nKuryerga topshirilmoqda.",
+            "ship": f"🔔 <b>Buyurtmangiz holati yangilandi!</b>\n\n🛵 <b>Buyurtmangiz (#{order_id}) kuryer orqali yo'lga chiqdi!</b>\nKuryer tez orada yetib boradi.",
+            "deliver": f"🔔 <b>Buyurtmangiz holati yangilandi!</b>\n\n🎉 <b>Buyurtmangiz (#{order_id}) muvaffaqiyatli yetkazib berildi!</b>\nBozorcha xizmatidan foydalanganingiz uchun rahmat!"
+        }
+
+        if customer_id:
+            try:
+                await callback.bot.send_message(
+                    chat_id=int(customer_id),
+                    text=customer_messages[action],
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logging.warning(f"Could not notify customer {customer_id}: {e}")
+
+        # Update Admin inline keyboard to highlight the current active button
+        new_keyboard = get_order_admin_keyboard(order_id, current_status=status_code)
+
+        try:
+            await callback.message.edit_reply_markup(reply_markup=new_keyboard)
+        except Exception as edit_err:
+            logging.info(f"Keyboard already up to date: {edit_err}")
+
+    except Exception as e:
+        logging.exception("Error in process_order_status_change: %s", e)
+        await callback.answer("⚠️ Xatolik yuz berdi!", show_alert=True)
+

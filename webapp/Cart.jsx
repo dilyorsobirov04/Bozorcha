@@ -286,7 +286,7 @@ const styles = {
   itemPrice: {
     fontSize: '13px',
     fontWeight: '800',
-    color: '#10b981'
+    color: '#ff2a4d'
   },
   stepper: {
     display: 'flex',
@@ -338,11 +338,11 @@ const styles = {
   activePill: {
     fontSize: '11px',
     fontWeight: '700',
-    color: '#10b981',
-    background: 'rgba(16, 185, 129, 0.15)',
+    color: '#ff2a4d',
+    background: 'rgba(255, 42, 77, 0.15)',
     padding: '2px 8px',
     borderRadius: '999px',
-    border: '1px solid rgba(16, 185, 129, 0.3)'
+    border: '1px solid rgba(255, 42, 77, 0.3)'
   },
   paymentGrid: {
     display: 'grid',
@@ -361,9 +361,9 @@ const styles = {
     transition: 'all 0.2s ease'
   },
   paymentOptionActive: {
-    borderColor: '#10b981',
-    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.9) 100%)',
-    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.2)'
+    borderColor: '#ff2a4d',
+    background: 'linear-gradient(135deg, rgba(255, 42, 77, 0.18) 0%, rgba(15, 23, 42, 0.9) 100%)',
+    boxShadow: '0 4px 15px rgba(255, 42, 77, 0.25)'
   },
   radioCircle: {
     width: '16px',
@@ -379,7 +379,7 @@ const styles = {
     width: '8px',
     height: '8px',
     borderRadius: '50%',
-    background: '#10b981'
+    background: '#ff2a4d'
   },
   paymentIcon: {
     fontSize: '18px'
@@ -415,13 +415,13 @@ const styles = {
   totalAmount: {
     fontSize: '20px',
     fontWeight: '800',
-    color: '#10b981'
+    color: '#ff2a4d'
   },
   checkoutBtn: {
     width: '100%',
     height: '50px',
     borderRadius: '14px',
-    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    background: 'linear-gradient(135deg, #ff2a4d 0%, #dc2626 100%)',
     border: 'none',
     color: '#ffffff',
     fontSize: '15px',
@@ -431,7 +431,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)',
+    boxShadow: '0 6px 20px rgba(255, 42, 77, 0.4)',
     transition: 'all 0.2s ease'
   },
   checkoutBtnDisabled: {
@@ -474,7 +474,7 @@ const styles = {
   emptyActionBtn: {
     padding: '10px 24px',
     borderRadius: '999px',
-    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    background: 'linear-gradient(135deg, #ff2a4d 0%, #dc2626 100%)',
     color: '#ffffff',
     fontSize: '13px',
     fontWeight: '700',

@@ -9,7 +9,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import BOT_TOKEN, WEBAPP_URL
 from handlers import start_router, admin_router, common_router
-from server import app, application, handler, create_webapp_server
+from server import app, application, handler, create_webapp_server, set_bot_instance
 
 
 async def main():
@@ -27,6 +27,7 @@ async def main():
         token=BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
+    set_bot_instance(bot)
     dp = Dispatcher(storage=MemoryStorage())
 
     # Routerlarni Dispatcher'ga ulash (start, admin, common)

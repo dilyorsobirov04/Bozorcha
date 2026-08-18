@@ -144,3 +144,42 @@ def get_nopic_product_card_keyboard(
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+
+def get_order_admin_keyboard(order_id: str | int, current_status: str = "accepted") -> InlineKeyboardMarkup:
+    """
+    Admin uchun buyurtma statuslarini boshqarish tugmalari:
+    - [ ✅ Qabul qilish ]
+    - [ 📦 Yig'ildi ]
+    - [ 🛵 Yo'lga chiqdi ]
+    - [ 🎉 Yetkazildi ]
+    """
+    accept_mark = "👉 " if current_status in ["pending", "accepted"] else ""
+    pack_mark = "👉 " if current_status == "packed" else ""
+    ship_mark = "👉 " if current_status == "on_the_way" else ""
+    deliver_mark = "👉 " if current_status == "delivered" else ""
+
+    inline_keyboard = [
+        [
+            InlineKeyboardButton(
+                text=f"{accept_mark}✅ Qabul qilish",
+                callback_data=f"order_status:accept:{order_id}"
+            ),
+            InlineKeyboardButton(
+                text=f"{pack_mark}📦 Yig'ildi",
+                callback_data=f"order_status:pack:{order_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"{ship_mark}🛵 Yo'lga chiqdi",
+                callback_data=f"order_status:ship:{order_id}"
+            ),
+            InlineKeyboardButton(
+                text=f"{deliver_mark}🎉 Yetkazildi",
+                callback_data=f"order_status:deliver:{order_id}"
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
