@@ -24,7 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initTelegramApp();
     loadCategories();
     loadProducts();
-    initSlideToPay();
     setupNavigationListeners();
 
     // Check if returning user has already seen welcome onboarding
@@ -886,24 +885,32 @@ function updateNavCartBadge() {
 // ----------------- 4. SHOPPING CART & CHECKOUT -----------------
 function renderCheckout() {
     const list = document.getElementById('checkout-items-list');
+    const paymentBox = document.getElementById('checkout-payment-box');
+    const summaryBox = document.getElementById('checkout-summary-box');
     const entries = Object.entries(cart);
 
     if (entries.length === 0) {
-        list.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">🛒</div>
-                <h4>Savatchangiz bo'sh</h4>
-                <p>Katalogdan sevimli tovarlaringizni qo'shing.</p>
-            </div>
-        `;
-        document.getElementById('bill-subtotal').innerText = '0 so\'m';
-        document.getElementById('bill-discount').innerText = '-0 so\'m';
-        document.getElementById('bill-total').innerText = '0 so\'m';
+        if (list) {
+            list.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">🛒</div>
+                    <h4>Savatchangiz bo'sh</h4>
+                    <p>Katalogdan sevimli tovarlaringizni tanlang va savatga qo'shing.</p>
+                    <button class="empty-action-btn" onclick="navigateTo('home')">Katalogga o'tish</button>
+                </div>
+            `;
+        }
+        if (paymentBox) paymentBox.style.display = 'none';
+        if (summaryBox) summaryBox.style.display = 'none';
+        const totalEl = document.getElementById('bill-total');
+        if (totalEl) totalEl.innerText = '0 so\'m';
         return;
     }
 
+    if (paymentBox) paymentBox.style.display = 'block';
+    if (summaryBox) summaryBox.style.display = 'block';
+
     let subtotal = 0;
-    let totalDiscount = 0;
 
     list.innerHTML = entries.map(([key, entry]) => {
         const item = entry.item;
@@ -916,37 +923,38 @@ function renderCheckout() {
             else if (entry.weight === 1.0) weightText = ' (1 kg)';
             else if (entry.weight === 2.0) weightText = ' (2 kg)';
             else weightText = ` (${entry.weight} kg)`;
+        } else {
+            weightText = ` (${entry.qty} dona)`;
         }
 
         const multiplier = isWeight ? (entry.weight || 1.0) : 1.0;
         const itemPrice = Math.round((item.price || 0) * multiplier);
-        const itemOldPrice = item.old_price ? Math.round(item.old_price * multiplier) : itemPrice;
-
         const rowTotal = itemPrice * entry.qty;
         subtotal += rowTotal;
-        totalDiscount += (itemOldPrice - itemPrice) * entry.qty;
 
         return `
             <div class="cart-item-row">
                 <img src="${item.image_url}" alt="${item.name}" class="cart-item-thumb" onerror="this.src='https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60'">
                 <div class="cart-item-meta">
-                    <h4>${item.name}${weightText}</h4>
-                    <span>${rowTotal.toLocaleString('uz-UZ')} so'm</span>
+                    <h4>${item.name}</h4>
+                    <div class="cart-item-submeta">
+                        <span class="cart-item-unit">${weightText}</span>
+                        <span class="cart-item-price">${rowTotal.toLocaleString('uz-UZ')} so'm</span>
+                    </div>
                 </div>
                 <div class="qty-stepper">
-                    <button class="qty-btn" onclick="updateCartItemQty('${key}', -1)">-</button>
+                    <button class="qty-btn qty-btn-minus" onclick="updateCartItemQty('${key}', -1)" title="Kamaytirish">${entry.qty === 1 ? '🗑' : '-'}</button>
                     <span class="qty-val">${entry.qty}</span>
-                    <button class="qty-btn" onclick="updateCartItemQty('${key}', 1)">+</button>
+                    <button class="qty-btn qty-btn-plus" onclick="updateCartItemQty('${key}', 1)" title="Ko'paytirish">+</button>
                 </div>
             </div>
         `;
     }).join('');
 
-    const finalTotal = subtotal;
-
-    document.getElementById('bill-subtotal').innerText = (subtotal + totalDiscount).toLocaleString('uz-UZ') + " so'm";
-    document.getElementById('bill-discount').innerText = `-${totalDiscount.toLocaleString('uz-UZ')} so'm`;
-    document.getElementById('bill-total').innerText = finalTotal.toLocaleString('uz-UZ') + " so'm";
+    const totalEl = document.getElementById('bill-total');
+    if (totalEl) {
+        totalEl.innerText = subtotal.toLocaleString('uz-UZ') + " so'm";
+    }
 }
 
 function updateCartItemQty(cartKey, delta) {
@@ -958,85 +966,15 @@ function updateCartItemQty(cartKey, delta) {
         delete cart[cartKey];
     }
 
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('light');
+    }
+
     updateNavCartBadge();
     renderCheckout();
     if (pid) {
         updateProductCardCounter(pid);
     }
-}
-
-function selectTimeSlot(element) {
-    document.querySelectorAll('.slot-pill').forEach(p => p.classList.remove('active'));
-    element.classList.add('active');
-}
-
-function showAddressPicker() {
-    alert("Manzil tanlash: Toshkent shahar, Chilonzor 9-kvartal 14-uy");
-}
-
-// ----------------- "SLIDE TO PAY" INTERACTIVE COMPONENT -----------------
-function initSlideToPay() {
-    const track = document.getElementById('slide-track');
-    const thumb = document.getElementById('slide-thumb');
-    const fill = document.getElementById('slide-fill');
-
-    if (!track || !thumb) return;
-
-    let isDragging = false;
-    let startX = 0;
-    let maxDrag = 0;
-
-    function onStart(clientX) {
-        if (Object.keys(cart).length === 0) {
-            alert("Savatchangiz bo'sh!");
-            return;
-        }
-        isDragging = true;
-        startX = clientX;
-        maxDrag = track.offsetWidth - thumb.offsetWidth - 8;
-        thumb.style.cursor = 'grabbing';
-    }
-
-    function onMove(clientX) {
-        if (!isDragging) return;
-        let delta = clientX - startX;
-        if (delta < 0) delta = 0;
-        if (delta > maxDrag) delta = maxDrag;
-
-        thumb.style.transform = `translateX(${delta}px)`;
-        const percentage = (delta / maxDrag) * 100;
-        fill.style.width = `${percentage}%`;
-
-        if (percentage >= 90) {
-            isDragging = false;
-            triggerPaymentSuccess();
-        }
-    }
-
-    function onEnd() {
-        if (!isDragging) return;
-        isDragging = false;
-        thumb.style.cursor = 'grab';
-        thumb.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-        fill.style.transition = 'width 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-        thumb.style.transform = 'translateX(0px)';
-        fill.style.width = '0%';
-
-        setTimeout(() => {
-            thumb.style.transition = '';
-            fill.style.transition = '';
-        }, 300);
-    }
-
-    // Touch Events
-    thumb.addEventListener('touchstart', e => onStart(e.touches[0].clientX));
-    window.addEventListener('touchmove', e => onMove(e.touches[0].clientX));
-    window.addEventListener('touchend', onEnd);
-
-    // Mouse Events
-    thumb.addEventListener('mousedown', e => onStart(e.clientX));
-    window.addEventListener('mousemove', e => onMove(e.clientX));
-    window.addEventListener('mouseup', onEnd);
 }
 
 function selectPaymentMethod(method) {
@@ -1048,18 +986,14 @@ function selectPaymentMethod(method) {
     const cashCard = document.getElementById('payment-method-cash');
     const clickCard = document.getElementById('payment-method-click');
     const labelEl = document.getElementById('selected-payment-label');
-    const slideLabel = document.getElementById('slide-pay-label');
-    const thumbIcon = document.getElementById('slide-thumb-icon');
 
     if (method === 'click') {
         cashCard?.classList.remove('active');
         clickCard?.classList.add('active');
         if (labelEl) {
-            labelEl.innerText = '⚡️ Click';
+            labelEl.innerText = '⚡️ Click / Payme';
             labelEl.className = 'payment-active-pill click-badge';
         }
-        if (slideLabel) slideLabel.innerText = 'Click orqali to\'lash ➔';
-        if (thumbIcon) thumbIcon.innerText = '⚡️';
     } else {
         clickCard?.classList.remove('active');
         cashCard?.classList.add('active');
@@ -1067,8 +1001,33 @@ function selectPaymentMethod(method) {
             labelEl.innerText = '💵 Naqd pul';
             labelEl.className = 'payment-active-pill cash-badge';
         }
-        if (slideLabel) slideLabel.innerText = 'Naqd to\'lov uchun suring ➔';
-        if (thumbIcon) thumbIcon.innerText = '💵';
+    }
+}
+
+async function submitOrder() {
+    const entries = Object.entries(cart);
+    if (entries.length === 0) {
+        if (tg?.showAlert) {
+            tg.showAlert("Savatchangiz bo'sh!");
+        } else {
+            alert("Savatchangiz bo'sh!");
+        }
+        return;
+    }
+
+    const submitBtn = document.getElementById('btn-submit-order');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span>Buyurtma berilmoqda...</span>`;
+    }
+
+    try {
+        await triggerPaymentSuccess();
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<span>Buyurtmani tasdiqlash</span><span class="btn-arrow">→</span>`;
+        }
     }
 }
 
@@ -1080,19 +1039,19 @@ async function triggerPaymentSuccess() {
     // Calculate total amount
     let subtotal = 0;
     Object.values(cart).forEach(entry => {
-        const itemPrice = Math.round(entry.item.price * entry.weight);
+        const item = entry.item;
+        const isWeight = entry.is_weight !== undefined ? entry.is_weight : isProductWeightBased(item);
+        const multiplier = isWeight ? (entry.weight || 1.0) : 1.0;
+        const itemPrice = Math.round((item.price || 0) * multiplier);
         subtotal += itemPrice * entry.qty;
     });
 
-    const activeSlot = document.querySelector('.slot-pill.active .slot-title')?.innerText || '15 - 25 daqiqa';
     const user = tg?.initDataUnsafe?.user;
 
     const orderPayload = {
         cart: cart,
         total_amount: subtotal,
         payment_type: selectedPaymentMethod,
-        address: "Chilonzor 9-kvartal, 14-uy",
-        delivery_time: activeSlot,
         user_info: user ? { id: user.id, first_name: user.first_name, username: user.username } : {}
     };
 
@@ -1120,8 +1079,8 @@ async function triggerPaymentSuccess() {
             cart: cart,
             total_amount: subtotal,
             payment_type: selectedPaymentMethod,
-            payment_method_name: selectedPaymentMethod === 'click' ? 'Click' : 'Naqd pul',
-            status: selectedPaymentMethod === 'click' ? "To'langan (Click)" : "Kutilmoqda (Naqd)",
+            payment_method_name: selectedPaymentMethod === 'click' ? 'Click / Payme' : 'Naqd pul',
+            status: selectedPaymentMethod === 'click' ? "To'langan (Onlayn)" : "Kutilmoqda (Naqd)",
             click_url: `https://my.click.uz/services/pay?service_id=32514&merchant_id=21458&amount=${subtotal}&transaction_param=${fallbackId}`
         };
     }
@@ -1135,7 +1094,7 @@ async function triggerPaymentSuccess() {
                 order_id: createdOrder.id,
                 total: subtotal,
                 payment_type: selectedPaymentMethod,
-                payment_method_name: selectedPaymentMethod === 'click' ? 'Click' : 'Naqd pul',
+                payment_method_name: selectedPaymentMethod === 'click' ? 'Click / Payme' : 'Naqd pul',
                 status: createdOrder.status,
                 cart: cart
             }));
@@ -1153,7 +1112,7 @@ async function triggerPaymentSuccess() {
     const trackingPayBadge = document.getElementById('tracking-payment-badge');
     if (trackingPayBadge) {
         if (selectedPaymentMethod === 'click') {
-            trackingPayBadge.innerText = '⚡️ Click';
+            trackingPayBadge.innerText = '⚡️ Click / Payme';
             trackingPayBadge.className = 'status-live-chip payment-live-chip';
         } else {
             trackingPayBadge.innerText = '💵 Naqd pul';
@@ -1168,7 +1127,7 @@ async function triggerPaymentSuccess() {
 
     const trackingStatus = document.getElementById('tracking-order-status');
     if (trackingStatus) {
-        const orderStatus = createdOrder.status || (selectedPaymentMethod === 'click' ? "To'langan (Click)" : "Kutilmoqda (Naqd)");
+        const orderStatus = createdOrder.status || (selectedPaymentMethod === 'click' ? "To'langan (Onlayn)" : "Kutilmoqda (Naqd)");
         trackingStatus.innerText = orderStatus;
         if (selectedPaymentMethod === 'click') {
             trackingStatus.className = 'summary-status-badge status-paid';

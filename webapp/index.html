@@ -205,51 +205,18 @@
         <section id="screen-checkout" class="screen">
             <header class="sub-screen-header">
                 <button class="back-circle-btn" onclick="navigateTo('home')">←</button>
-                <h2>Savatcha va Buyurtma</h2>
+                <h2>Savatcha</h2>
                 <div style="width: 36px;"></div>
             </header>
 
             <div class="checkout-scroll-body">
-                <!-- Cart Items List -->
+                <!-- 1. Savatdagi mahsulotlar ro'yxati -->
                 <div id="checkout-items-list" class="checkout-items-container">
                     <!-- Rendered cart item cards with +/- controls -->
                 </div>
 
-                <!-- Delivery Address with Mini Map Preview -->
-                <div class="checkout-card glass-card">
-                    <div class="card-title-row">
-                        <span>📍 Yetkazib berish manzili</span>
-                        <span class="edit-text-btn" onclick="showAddressPicker()">O'zgartirish</span>
-                    </div>
-                    <div class="mini-map-preview">
-                        <img src="assets/courier_tracking.png" alt="Map Preview" class="mini-map-img">
-                        <div class="map-overlay-badge">
-                            <span>Chilonzor 9-kvartal, 14-uy</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Delivery Time Slot Selector -->
-                <div class="checkout-card glass-card">
-                    <span class="card-title">⏰ Yetkazish vaqti</span>
-                    <div class="time-slot-pills">
-                        <div class="slot-pill active" onclick="selectTimeSlot(this)">
-                            <span class="slot-title">⚡️ Tezkor</span>
-                            <span class="slot-time">15 - 25 daqiqa</span>
-                        </div>
-                        <div class="slot-pill" onclick="selectTimeSlot(this)">
-                            <span class="slot-title">🌅 Bugun kechki</span>
-                            <span class="slot-time">18:00 - 20:00</span>
-                        </div>
-                        <div class="slot-pill" onclick="selectTimeSlot(this)">
-                            <span class="slot-title">📅 Ertaga</span>
-                            <span class="slot-time">09:00 - 11:00</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Payment Method Selector (Cash & Click) -->
-                <div class="checkout-card glass-card">
+                <!-- 2. To'lov usulini tanlash (Payment Method) -->
+                <div id="checkout-payment-box" class="checkout-card glass-card">
                     <div class="card-title-row">
                         <span class="card-title">💳 To'lov usuli</span>
                         <span id="selected-payment-label" class="payment-active-pill">💵 Naqd pul</span>
@@ -263,10 +230,9 @@
                                 <span class="payment-icon">💵</span>
                                 <div class="payment-info">
                                     <div class="payment-name">Naqd pul</div>
-                                    <div class="payment-desc">Kuryerga yetkazilganda to'lash</div>
+                                    <div class="payment-desc">Yetkazilganda to'lash</div>
                                 </div>
                             </div>
-                            <span class="payment-badge cash-badge">Qulay</span>
                         </div>
 
                         <div id="payment-method-click" class="payment-method-card" onclick="selectPaymentMethod('click')">
@@ -276,46 +242,24 @@
                                 </div>
                                 <span class="payment-icon">⚡️</span>
                                 <div class="payment-info">
-                                    <div class="payment-name">Click</div>
-                                    <div class="payment-desc">Click orqali to'lash</div>
+                                    <div class="payment-name">Click / Payme</div>
+                                    <div class="payment-desc">Onlayn to'lov</div>
                                 </div>
                             </div>
-                            <span class="payment-badge click-badge">Onlayn</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Payment Summary -->
-                <div class="checkout-card glass-card">
-                    <span class="card-title">🧾 To'lov hisoboti</span>
-                    <div class="bill-row">
-                        <span>Tovarlar qiymati:</span>
-                        <span id="bill-subtotal">0 so'm</span>
-                    </div>
-                    <div class="bill-row">
-                        <span>Tezkor yetkazish:</span>
-                        <span class="text-green">Bepul (0 so'm)</span>
-                    </div>
-                    <div class="bill-row">
-                        <span>Chegirma tejamkorligi:</span>
-                        <span id="bill-discount" class="text-green">-0 so'm</span>
-                    </div>
-                    <div class="bill-divider"></div>
+                <!-- 3. Umumiy hisob-kitob va Tasdiqlash -->
+                <div id="checkout-summary-box" class="checkout-card glass-card checkout-summary-card">
                     <div class="bill-row total-row">
                         <span>Jami to'lov:</span>
                         <span id="bill-total" class="total-amount">0 so'm</span>
                     </div>
-                </div>
-
-                <!-- Interactive "Slide to Pay" Component -->
-                <div class="slide-to-pay-wrapper">
-                    <div id="slide-track" class="slide-track">
-                        <div id="slide-fill" class="slide-fill"></div>
-                        <span id="slide-pay-label" class="slide-label">To'lov uchun suring ➔</span>
-                        <div id="slide-thumb" class="slide-thumb">
-                            <span class="thumb-icon" id="slide-thumb-icon">💳</span>
-                        </div>
-                    </div>
+                    <button id="btn-submit-order" class="primary-checkout-btn" onclick="submitOrder()">
+                        <span>Buyurtmani tasdiqlash</span>
+                        <span class="btn-arrow">→</span>
+                    </button>
                 </div>
             </div>
         </section>
