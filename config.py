@@ -18,6 +18,9 @@ if raw_webapp_url.startswith("http://"):
 else:
     WEBAPP_URL = raw_webapp_url
 
+# Database Connection URL (Local PostgreSQL / Cloud)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres@localhost:5433/bozorcha_db").strip()
+
 # 1C Enterprise Integration Settings (Ngrok / Public IP / Local)
 CACHE_TTL = int(os.getenv("CACHE_TTL", "300"))
 PAGE_SIZE = int(os.getenv("PAGE_SIZE", "10"))
@@ -25,4 +28,5 @@ API_1C_URL = os.getenv("API_1C_URL", "").strip()
 API_1C_USER = os.getenv("API_1C_USER", "mobiles").strip()
 API_1C_PASS = os.getenv("API_1C_PASS", "123").strip()
 API_1C_TIMEOUT = int(os.getenv("API_1C_TIMEOUT", "20"))
+
 

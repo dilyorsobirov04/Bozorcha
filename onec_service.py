@@ -294,9 +294,10 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                             raw_text = await response.text()
                             raw_data = raw_text
 
-                        # Log raw response for debugging
-                        print("1C RAW RESPONSE:", raw_data)
-                        logger.info(f"1C RAW RESPONSE: {raw_data}")
+                        # Log raw response info safely
+                        sample_str = str(raw_data)[:300].encode('ascii', errors='replace').decode('ascii')
+                        print(f"1C RAW RESPONSE received ({len(str(raw_data))} bytes): {sample_str}...")
+                        logger.info(f"1C RAW RESPONSE received ({len(str(raw_data))} bytes)")
 
                         # Update in-memory cache
                         _cache_data = raw_data

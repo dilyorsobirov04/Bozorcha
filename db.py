@@ -2,7 +2,18 @@ import os
 import json
 import xml.etree.ElementTree as ET
 import urllib.parse
+import asyncio
+from typing import Optional, Any
 from datetime import datetime
+
+try:
+    import asyncpg
+except ImportError:
+    asyncpg = None
+
+# PostgreSQL Connection Pool & URL
+_pg_pool = None
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres@localhost:5433/bozorcha_db").strip()
 
 # System Settings Store (Dynamic settings, 1C Enterprise integration, etc.)
 SYSTEM_SETTINGS_DB = {
@@ -15,14 +26,187 @@ SYSTEM_SETTINGS_DB = {
 }
 
 
+async def get_pg_pool():
+    """Returns or creates an asyncpg Connection Pool for local PostgreSQL."""
+    global _pg_pool
+    if asyncpg is None:
+        return None
+
+    if _pg_pool is None:
+        urls_to_try = [
+            DATABASE_URL,
+            DATABASE_URL.replace(":5433", ":5432") if ":5433" in DATABASE_URL else DATABASE_URL.replace(":5432", ":5433"),
+            "postgresql://postgres@127.0.0.1:5433/bozorcha_db",
+            "postgresql://postgres@127.0.0.1:5432/bozorcha_db"
+        ]
+        for url in urls_to_try:
+            try:
+                _pg_pool = await asyncpg.create_pool(
+                    url,
+                    min_size=1,
+                    max_size=10,
+                    ssl=False,
+                    timeout=3.0
+                )
+                print(f"[POSTGRESQL] Connected pool to: {url}")
+                break
+            except Exception:
+                _pg_pool = None
+                continue
+    return _pg_pool
+
+
+async def init_postgres_db():
+    """Initializes local PostgreSQL database connection and creates required tables."""
+    if asyncpg is None:
+        return False
+
+    try:
+        pool = await get_pg_pool()
+        if not pool:
+            return False
+
+        async with pool.acquire() as conn:
+            # Create schema tables if not exist
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    key VARCHAR(128) PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS categories (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    icon VARCHAR(64),
+                    parent_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+                    image_url TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS products (
+                    id SERIAL PRIMARY KEY,
+                    sku VARCHAR(128) UNIQUE,
+                    category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+                    name VARCHAR(512) NOT NULL,
+                    unit VARCHAR(64) DEFAULT 'dona',
+                    price BIGINT NOT NULL DEFAULT 0,
+                    old_price BIGINT,
+                    discount_percent INTEGER DEFAULT 0,
+                    stock INTEGER DEFAULT 0,
+                    description TEXT,
+                    nutrition JSONB,
+                    photo_file_id VARCHAR(255),
+                    image_url TEXT,
+                    is_promo BOOLEAN DEFAULT FALSE,
+                    recommendation TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS users (
+                    id BIGINT PRIMARY KEY,
+                    username VARCHAR(255),
+                    first_name VARCHAR(255),
+                    last_name VARCHAR(255),
+                    phone_number VARCHAR(64),
+                    language_code VARCHAR(10) DEFAULT 'uz',
+                    is_admin BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS orders (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    items JSONB NOT NULL,
+                    total_price BIGINT NOT NULL,
+                    status VARCHAR(64) DEFAULT 'pending',
+                    delivery_address TEXT,
+                    delivery_location JSONB,
+                    contact_phone VARCHAR(64),
+                    payment_method VARCHAR(64),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Alter table migrations for backward compatibility
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS sku VARCHAR(128);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id INTEGER;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS name VARCHAR(512);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS unit VARCHAR(64) DEFAULT 'dona';
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS price BIGINT DEFAULT 0;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS old_price BIGINT;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent INTEGER DEFAULT 0;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INTEGER DEFAULT 0;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS description TEXT;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS nutrition JSONB;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS photo_file_id VARCHAR(255);
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS is_promo BOOLEAN DEFAULT FALSE;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS recommendation TEXT;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
+            """)
+
+            # Load system settings from DB to memory
+            rows = await conn.fetch("SELECT key, value FROM system_settings")
+            for r in rows:
+                k = r["key"]
+                v = r["value"]
+                SYSTEM_SETTINGS_DB[k] = v
+                if k == "API_1C_URL":
+                    SYSTEM_SETTINGS_DB["api_1c_url"] = v
+
+            # Upsert initial API_1C_URL if not already in DB
+            init_url = SYSTEM_SETTINGS_DB.get("api_1c_url", "")
+            if init_url:
+                await conn.execute("""
+                    INSERT INTO system_settings (key, value, updated_at)
+                    VALUES ('API_1C_URL', $1, CURRENT_TIMESTAMP)
+                    ON CONFLICT (key) DO NOTHING
+                """, init_url)
+
+        print("[POSTGRESQL] Local database connected and tables initialized successfully!")
+        return True
+    except Exception as e:
+        print(f"[POSTGRESQL] Database init info: {e}")
+        return False
+
+
+def _safe_bg_task(coro):
+    """Executes a coroutine in background without failing sync callers."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(coro)
+    except Exception:
+        pass
+
+
+async def _async_persist_system_setting(key: str, value: str):
+    """Asynchronously persists a system setting to the database."""
+    try:
+        pool = await get_pg_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO system_settings (key, value, updated_at)
+                    VALUES ($1, $2, CURRENT_TIMESTAMP)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+                """, str(key), str(value))
+    except Exception as e:
+        pass
+
+
 def get_system_setting(key: str, default: any = None) -> any:
     """Gets a setting value from the dynamic settings store."""
     return SYSTEM_SETTINGS_DB.get(key, default)
 
 
 def set_system_setting(key: str, value: any):
-    """Sets a setting value in the dynamic settings store."""
+    """Sets a setting value in the dynamic settings store and persists to DB."""
     SYSTEM_SETTINGS_DB[key] = value
+    _safe_bg_task(_async_persist_system_setting(key, str(value)))
 
 
 def get_1c_system_settings() -> dict:
@@ -37,14 +221,19 @@ def get_1c_system_settings() -> dict:
 
 
 def update_1c_system_settings(api_url: str = None, api_user: str = None, api_pass: str = None) -> dict:
-    """Updates 1C configuration settings dynamically."""
+    """Updates 1C configuration settings dynamically and persists to PostgreSQL."""
     if api_url is not None:
-        SYSTEM_SETTINGS_DB["api_1c_url"] = str(api_url).strip()
+        clean_url = str(api_url).strip()
+        SYSTEM_SETTINGS_DB["api_1c_url"] = clean_url
+        set_system_setting("API_1C_URL", clean_url)
     if api_user is not None:
         SYSTEM_SETTINGS_DB["api_1c_user"] = str(api_user).strip()
+        set_system_setting("API_1C_USER", str(api_user).strip())
     if api_pass is not None:
         SYSTEM_SETTINGS_DB["api_1c_pass"] = str(api_pass).strip()
+        set_system_setting("API_1C_PASS", str(api_pass).strip())
     return get_1c_system_settings()
+
 
 
 CATEGORIES_DB = {
@@ -463,7 +652,8 @@ def sync_1c_products(raw_data: any) -> dict:
     Accepts various field naming conventions and upserts into PRODUCTS_DB.
     Unmapped items get category_id = None.
     """
-    print("1C RAW RESPONSE:", raw_data)
+    sample = str(raw_data)[:200].encode('ascii', errors='replace').decode('ascii')
+    print(f"1C RAW RESPONSE received in sync_1c_products ({len(str(raw_data))} bytes): {sample}...")
 
     items_to_process = []
 
@@ -664,6 +854,9 @@ def sync_1c_products(raw_data: any) -> dict:
 
     uncategorized = [p for p in synced_products if p.get("category_id") is None or p.get("category_id") not in CATEGORIES_DB]
 
+    # Asynchronously persist synced products to local PostgreSQL database
+    _safe_bg_task(_async_persist_synced_products(synced_products))
+
     return {
         "success": True,
         "message": f"{len(synced_products)} ta mahsulot 1C dan muvaffaqiyatli sinxronizatsiya qilindi!",
@@ -674,6 +867,32 @@ def sync_1c_products(raw_data: any) -> dict:
         "products": synced_products,
         "uncategorized": uncategorized
     }
+
+
+async def _async_persist_synced_products(products_list: list):
+    """Persists synced products to the local PostgreSQL database."""
+    try:
+        pool = await get_pg_pool()
+        if not pool or not products_list:
+            return
+
+        async with pool.acquire() as conn:
+            for p in products_list:
+                nutrition_json = json.dumps(p.get("nutrition") or {})
+                await conn.execute("""
+                    INSERT INTO products (sku, category_id, name, unit, price, old_price, discount_percent, stock, description, nutrition, photo_file_id, image_url, is_promo, recommendation)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14)
+                    ON CONFLICT (sku) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        price = EXCLUDED.price,
+                        stock = EXCLUDED.stock,
+                        unit = EXCLUDED.unit,
+                        description = COALESCE(EXCLUDED.description, products.description),
+                        image_url = COALESCE(EXCLUDED.image_url, products.image_url),
+                        updated_at = CURRENT_TIMESTAMP
+                """, str(p.get("sku", "")), p.get("category_id"), str(p.get("name", "")), str(p.get("unit", "dona")), int(p.get("price", 0)), p.get("old_price"), int(p.get("discount_percent", 0)), int(p.get("stock", 0)), p.get("description"), nutrition_json, p.get("photo_file_id"), p.get("image_url"), bool(p.get("is_promo", False)), p.get("recommendation"))
+    except Exception as e:
+        print(f"[POSTGRESQL] Sync persistence warning: {e}")
 
 
 def get_uncategorized_products(search: str | None = None) -> list[dict]:

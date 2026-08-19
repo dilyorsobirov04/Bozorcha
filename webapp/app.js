@@ -2550,7 +2550,7 @@ async function save1CUrlSetting(btn = null) {
 
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success) {
-            showToast("1C HTTP xizmati manzili muvaffaqiyatli saqlandi! 💾", 'success');
+            showToast(data.message || "1C URL muvaffaqiyatli saqlandi!", 'success');
             await load1CConfigStatus();
             return true;
         } else {
