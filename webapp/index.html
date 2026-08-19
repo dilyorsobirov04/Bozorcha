@@ -415,9 +415,14 @@
                                 <p class="form-subtitle">1C dan import bo'lgan va toifalanmagan tovarlar (<span id="uncategorized-header-count">0</span> ta)</p>
                             </div>
                         </div>
-                        <button type="button" id="uncat-refresh-btn" class="analytics-refresh-btn" onclick="loadUncategorizedProducts('', this)">
-                            <span>🔄 Yangilash</span>
-                        </button>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <button type="button" id="uncat-sync-1c-btn" class="analytics-refresh-btn" onclick="trigger1CSync(this)" style="background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.35); color: #c084fc;" title="1C HTTP xizmatidan tovarlarni to'g'ridan-to'g'ri yuklab olish">
+                                <span>⚡️ 1C Sinxronlash</span>
+                            </button>
+                            <button type="button" id="uncat-refresh-btn" class="analytics-refresh-btn" onclick="loadUncategorizedProducts('', this)">
+                                <span>🔄 Yangilash</span>
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Search & Filter Bar with 1C SKU Support -->

@@ -491,7 +491,11 @@ def sync_1c_products(raw_data: any) -> dict:
         if sku_val is None or str(sku_val).strip() == "":
             invalid_count += 1
             continue
-        sku = str(sku_val).strip()
+        sku = str(sku_val).replace("\xa0", " ").strip()
+
+        # Extract Barcode (if provided)
+        barcode_val = item.get("barcode") or item.get("Barcode") or item.get("Штрихкод") or item.get("штрихкод")
+        barcode = str(barcode_val).replace("\xa0", "").strip() if barcode_val else None
 
         # Extract Name / Title
         name_val = (
@@ -505,7 +509,7 @@ def sync_1c_products(raw_data: any) -> dict:
         if name_val is None or str(name_val).strip() == "":
             invalid_count += 1
             continue
-        name = str(name_val).strip()
+        name = str(name_val).replace("\xa0", " ").strip()
 
         # Extract Price
         price_val = (
@@ -515,7 +519,7 @@ def sync_1c_products(raw_data: any) -> dict:
             item.get("amount") or item.get("Amount") or 0
         )
         try:
-            price = int(round(float(str(price_val).replace(" ", "").replace(",", "."))))
+            price = int(round(float(str(price_val).replace("\xa0", "").replace(" ", "").replace(",", "."))))
             if price < 0:
                 price = 0
         except (ValueError, TypeError):
@@ -530,7 +534,7 @@ def sync_1c_products(raw_data: any) -> dict:
             item.get("Остаток") or item.get("остаток") or 0
         )
         try:
-            stock = int(round(float(str(stock_val).replace(" ", "").replace(",", "."))))
+            stock = int(round(float(str(stock_val).replace("\xa0", "").replace(" ", "").replace(",", "."))))
             if stock < 0:
                 stock = 0
         except (ValueError, TypeError):
@@ -543,14 +547,14 @@ def sync_1c_products(raw_data: any) -> dict:
             item.get("БазоваяЕдиница") or item.get("ЕдиницаИзмерения") or
             item.get("unit_name") or "dona"
         )
-        unit = str(unit_val).strip() or "dona"
+        unit = str(unit_val).replace("\xa0", " ").strip() or "dona"
 
         # Extract Description
         desc_val = (
             item.get("Description") or item.get("description") or
             item.get("Описание") or item.get("описание") or ""
         )
-        description = str(desc_val).strip()
+        description = str(desc_val).replace("\xa0", " ").strip()
 
         # Extract Image URL
         image_url = (

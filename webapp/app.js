@@ -2756,6 +2756,50 @@ async function assignProductCategory(productId) {
     }
 }
 
+async function trigger1CSync(btn = null) {
+    if (!isCurrentUserAdmin()) {
+        showToast('Ruxsat berilmadi: Siz admin emassiz ⛔️', 'error');
+        return;
+    }
+
+    const syncBtn = btn || document.getElementById('uncat-sync-1c-btn');
+    if (syncBtn) {
+        syncBtn.disabled = true;
+        syncBtn.classList.add('loading');
+        syncBtn.innerHTML = `<span class="uncat-btn-spinner" style="margin-right: 6px;"></span><span>Sinxronlanmoqda...</span>`;
+    }
+
+    try {
+        const res = await fetch(`/api/admin/sync-1c?user_id=${ALLOWED_ADMIN_ID}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            }
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+            const countMsg = data.synced_count != null ? ` (${data.synced_count} ta tovar)` : '';
+            showToast(`1C dan tovarlar muvaffaqiyatli yuklandi! 🎉${countMsg}`, 'success');
+            await loadUncategorizedProducts();
+            await loadProducts();
+        } else {
+            const msg = data.message || data.detail || "1C serveriga ulanib bo'lmadi yoki tovarlar topilmadi";
+            showToast(msg, 'error');
+        }
+    } catch (e) {
+        console.error('trigger1CSync error:', e);
+        showToast("1C serveriga ulanishda tarmoq xatoligi yuz berdi!", 'error');
+    } finally {
+        if (syncBtn) {
+            syncBtn.disabled = false;
+            syncBtn.classList.remove('loading');
+            syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
+        }
+    }
+}
+
 function loadAdminCards(filteredList = null) {
     const grid = document.getElementById('admin-products-grid');
     const countEl = document.getElementById('admin-prod-count');
@@ -3746,3 +3790,5 @@ window.loadUncategorizedProducts = loadUncategorizedProducts;
 window.handleUncategorizedSearch = handleUncategorizedSearch;
 window.clearUncategorizedSearch = clearUncategorizedSearch;
 window.assignProductCategory = assignProductCategory;
+window.trigger1CSync = trigger1CSync;
+

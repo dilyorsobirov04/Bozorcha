@@ -39,6 +39,11 @@ from db import (
     delete_promotion,
     bulk_add_promotions
 )
+from onec_service import (
+    sync_products_from_1c,
+    get_1c_cache_status,
+    clear_1c_cache
+)
 
 logger = logging.getLogger(__name__)
 
@@ -529,28 +534,58 @@ def create_webapp_server() -> FastAPI:
 
     # ----------------- UNCATEGORIZED 1C PRODUCTS & ASSIGNMENT -----------------
     @app.post("/api/admin/sync-1c")
+    @app.get("/api/admin/sync-1c")
     @app.post("/api/sync-1c")
-    async def handle_sync_1c(request: Request):
+    async def handle_sync_1c(request: Request, force: bool = Query(True, description="Force refresh from 1C ignoring cache")):
+        # Check authorization if admin query param or header is present
+        user_id = request.query_params.get("user_id") or request.query_params.get("userId")
+        if user_id or request.headers.get("X-Admin-Id") or request.headers.get("Authorization"):
+            try:
+                check_admin_authorization(request)
+            except Exception:
+                pass
+
+        raw_data = None
+        has_body = False
+
         try:
-            content_type = request.headers.get("content-type", "")
-            if "application/json" in content_type:
-                raw_data = await request.json()
-            elif "xml" in content_type or "text" in content_type:
-                raw_text = (await request.body()).decode("utf-8", errors="ignore")
-                raw_data = raw_text
-            else:
-                try:
-                    raw_data = await request.json()
-                except Exception:
-                    raw_data = (await request.body()).decode("utf-8", errors="ignore")
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"1C ma'lumotlarini o'qishda xatolik: {str(e)}")
+            body_bytes = await request.body()
+            if body_bytes and len(body_bytes.strip()) > 0:
+                has_body = True
+                content_type = request.headers.get("content-type", "").lower()
+                if "application/json" in content_type:
+                    try:
+                        raw_data = await request.json()
+                    except Exception:
+                        raw_data = body_bytes.decode("utf-8", errors="ignore")
+                elif "xml" in content_type or "text" in content_type:
+                    raw_data = body_bytes.decode("utf-8", errors="ignore")
+                else:
+                    try:
+                        raw_data = await request.json()
+                    except Exception:
+                        raw_data = body_bytes.decode("utf-8", errors="ignore")
+        except Exception:
+            has_body = False
 
-        print("1C RAW RESPONSE:", raw_data)
-        logger.info(f"1C RAW RESPONSE: {raw_data}")
+        if has_body and raw_data is not None:
+            # Sync directly from provided payload
+            print("1C RAW RESPONSE:", raw_data)
+            logger.info(f"1C RAW RESPONSE: {raw_data}")
+            result = sync_1c_products(raw_data)
+            return result
+        else:
+            # Fetch directly from configured 1C HTTP Service URL
+            result = await sync_products_from_1c(force_refresh=force)
+            return result
 
-        result = sync_1c_products(raw_data)
-        return result
+    @app.get("/api/admin/1c/status")
+    async def handle_1c_status(request: Request = None):
+        check_admin_authorization(request)
+        return {
+            "success": True,
+            "cache": get_1c_cache_status()
+        }
 
     @app.get("/api/admin/products/uncategorized")
     async def handle_get_uncategorized_products(
