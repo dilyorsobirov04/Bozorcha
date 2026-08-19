@@ -2476,8 +2476,42 @@ function getCategoryHierarchyName(categoryId) {
 let uncategorizedProducts = [];
 let uncategorizedSearchTimeout = null;
 
+async function load1CConfigStatus() {
+    if (!isCurrentUserAdmin()) return;
+    const urlEl = document.getElementById('onec-active-url-display');
+    const badgeEl = document.getElementById('onec-banner-badge');
+    if (!urlEl || !badgeEl) return;
+
+    try {
+        const res = await fetch(`/api/admin/1c/config?user_id=${ALLOWED_ADMIN_ID}`, {
+            headers: { 'X-Admin-Id': String(ALLOWED_ADMIN_ID) }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const url = data.api_url || '';
+            urlEl.innerText = url || "Ko'rsatilmagan (.env faylida API_1C_URL ni sozlang)";
+
+            if (!url) {
+                badgeEl.className = 'onec-badge err';
+                badgeEl.innerText = '❌ Manzil kiritilmagan';
+            } else if (data.is_localhost) {
+                badgeEl.className = 'onec-badge warn';
+                badgeEl.innerText = '⚠️ Localhost (Ngrok kerak)';
+            } else {
+                badgeEl.className = 'onec-badge ok';
+                badgeEl.innerText = '🟢 Sozlangan';
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to load 1C config status:', e);
+    }
+}
+
 async function loadUncategorizedProducts(searchQuery = '', triggerBtn = null) {
     if (!isCurrentUserAdmin()) return;
+
+    // Refresh 1C config diagnostic banner
+    load1CConfigStatus();
 
     const container = document.getElementById('uncategorized-products-container');
     const countEl = document.getElementById('admin-uncategorized-count');
@@ -2785,8 +2819,15 @@ async function trigger1CSync(btn = null) {
             await loadUncategorizedProducts();
             await loadProducts();
         } else {
-            const msg = data.message || data.error || data.detail || "1C serverining tashqi IP/Ngrok manzili noto'g'ri ko'rsatilgan. .env dagi API_1C_URL ni tekshiring.";
-            showToast(msg, 'error');
+            let errorMsg = data.message || data.error || data.detail;
+            if (res.status === 404 || data.status_code === 404) {
+                errorMsg = "1C HTTP xizmati manzili xato (404). 1C-da nashr qilingan (published) xizmat nomi va URL yo'lini tekshiring.";
+            } else if (res.status === 401 || res.status === 403 || data.status_code === 401) {
+                errorMsg = "1C logini yoki paroli xato (401 Basic Auth).";
+            } else if (!errorMsg) {
+                errorMsg = "1C serverining tashqi IP/Ngrok manzili noto'g'ri ko'rsatilgan. .env dagi API_1C_URL ni tekshiring.";
+            }
+            showToast(errorMsg, 'error');
         }
     } catch (e) {
         console.error('trigger1CSync error:', e);
@@ -2797,6 +2838,7 @@ async function trigger1CSync(btn = null) {
             syncBtn.classList.remove('loading');
             syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
         }
+        await load1CConfigStatus();
     }
 }
 
@@ -3791,4 +3833,6 @@ window.handleUncategorizedSearch = handleUncategorizedSearch;
 window.clearUncategorizedSearch = clearUncategorizedSearch;
 window.assignProductCategory = assignProductCategory;
 window.trigger1CSync = trigger1CSync;
+window.load1CConfigStatus = load1CConfigStatus;
+
 

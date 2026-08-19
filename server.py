@@ -42,6 +42,7 @@ from db import (
 from onec_service import (
     sync_products_from_1c,
     get_1c_cache_status,
+    get_1c_config_status,
     clear_1c_cache
 )
 
@@ -579,12 +580,13 @@ def create_webapp_server() -> FastAPI:
             result = await sync_products_from_1c(force_refresh=force)
             return result
 
+    @app.get("/api/admin/1c/config")
     @app.get("/api/admin/1c/status")
     async def handle_1c_status(request: Request = None):
         check_admin_authorization(request)
         return {
             "success": True,
-            "cache": get_1c_cache_status()
+            **get_1c_config_status()
         }
 
     @app.get("/api/admin/products/uncategorized")
