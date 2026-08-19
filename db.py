@@ -706,6 +706,11 @@ def sync_1c_products(raw_data: any) -> dict:
     sample = str(raw_data)[:200].encode('ascii', errors='replace').decode('ascii')
     print(f"1C RAW RESPONSE received in sync_1c_products ({len(str(raw_data))} bytes): {sample}...")
 
+    if isinstance(raw_data, dict):
+        print(f"1C Raw Returned Items: {len(raw_data.get('data', []))}")
+    elif isinstance(raw_data, list):
+        print(f"1C Raw Returned Items: {len(raw_data)}")
+
     items_to_process = []
 
     # 1. Parse raw_data to list of dicts
@@ -718,8 +723,6 @@ def sync_1c_products(raw_data: any) -> dict:
                 items_to_process = raw_data[key]
                 found_list = True
                 break
-        if not found_list:
-            items_to_process = [raw_data]
     elif isinstance(raw_data, str):
         trimmed = raw_data.strip()
         if trimmed.startswith("{") or trimmed.startswith("["):
@@ -752,6 +755,8 @@ def sync_1c_products(raw_data: any) -> dict:
                         items_to_process.append(item_dict)
             except Exception as e:
                 print("1C XML parse error:", e)
+
+    print(f"1C Items to process in sync_1c_products: {len(items_to_process)}")
 
     synced_products = []
     invalid_count = 0
