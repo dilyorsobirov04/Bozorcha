@@ -13,11 +13,11 @@ except ImportError:
 
 # PostgreSQL Connection Pool & URL
 _pg_pool = None
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres@localhost:5433/bozorcha_db").strip()
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:dilyor1234@127.0.0.1:5433/bozorcha_db").strip()
 
 # System Settings Store (Dynamic settings, 1C Enterprise integration, etc.)
 SYSTEM_SETTINGS_DB = {
-    "api_1c_url": (os.getenv("API_1C_URL", "").strip() or "http://127.0.0.1:8080/Bozorcham/hs/Bozorcham/GetTovarList"),
+    "api_1c_url": (os.getenv("API_1C_URL", "").strip() or "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"),
     "api_1c_user": os.getenv("API_1C_USER", "mobiles").strip(),
     "api_1c_pass": os.getenv("API_1C_PASS", "123").strip(),
     "cache_ttl": int(os.getenv("CACHE_TTL", "300")),
@@ -35,8 +35,9 @@ async def get_pg_pool():
     if _pg_pool is None:
         urls_to_try = [
             DATABASE_URL,
-            DATABASE_URL.replace(":5433", ":5432") if ":5433" in DATABASE_URL else DATABASE_URL.replace(":5432", ":5433"),
+            "postgresql://postgres:dilyor1234@127.0.0.1:5433/bozorcha_db",
             "postgresql://postgres@127.0.0.1:5433/bozorcha_db",
+            "postgresql://postgres:dilyor1234@127.0.0.1:5432/bozorcha_db",
             "postgresql://postgres@127.0.0.1:5432/bozorcha_db"
         ]
         for url in urls_to_try:
@@ -157,24 +158,20 @@ async def init_postgres_db():
                 if k == "API_1C_URL":
                     SYSTEM_SETTINGS_DB["api_1c_url"] = v
 
-            # Ensure API_1C_URL is clean and sanitized to 127.0.0.1
+            # Ensure API_1C_URL is clean and persisted with active target URL
+            target_url = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
             init_url = SYSTEM_SETTINGS_DB.get("api_1c_url", "").strip()
-            if not init_url or "abcd-123" in init_url or "xxxx" in init_url or "localhost:8080" in init_url:
-                init_url = "http://127.0.0.1:8080/Bozorcham/hs/Bozorcham/GetTovarList"
-                SYSTEM_SETTINGS_DB["api_1c_url"] = init_url
-                await conn.execute("""
-                    INSERT INTO system_settings (key, value, updated_at)
-                    VALUES ('API_1C_URL', $1, CURRENT_TIMESTAMP)
-                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
-                """, init_url)
-            else:
-                await conn.execute("""
-                    INSERT INTO system_settings (key, value, updated_at)
-                    VALUES ('API_1C_URL', $1, CURRENT_TIMESTAMP)
-                    ON CONFLICT (key) DO NOTHING
-                """, init_url)
+            if not init_url or "abcd-123" in init_url or "xxxx" in init_url or "127.0.0.1" in init_url or "localhost" in init_url:
+                init_url = target_url
 
-        print("[POSTGRESQL] Local database connected and tables initialized successfully!")
+            SYSTEM_SETTINGS_DB["api_1c_url"] = init_url
+            await conn.execute("""
+                INSERT INTO system_settings (key, value, updated_at)
+                VALUES ('API_1C_URL', $1, CURRENT_TIMESTAMP)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+            """, init_url)
+
+        print(f"[POSTGRESQL] Local database connected successfully to bozorcha_db on port 5433! Tables verified.")
         return True
     except Exception as e:
         print(f"[POSTGRESQL] Database init info: {e}")

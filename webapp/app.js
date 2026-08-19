@@ -2476,7 +2476,7 @@ function getCategoryHierarchyName(categoryId) {
 let uncategorizedProducts = [];
 let uncategorizedSearchTimeout = null;
 
-const DEFAULT_LOCAL_1C_URL = "http://127.0.0.1:8080/Bozorcham/hs/Bozorcham/GetTovarList";
+const DEFAULT_1C_URL = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList";
 
 async function load1CConfigStatus() {
     if (!isCurrentUserAdmin()) return;
@@ -2492,7 +2492,7 @@ async function load1CConfigStatus() {
             const data = await res.json();
             let url = (data.api_url || '').trim();
             if (!url || url.includes('abcd-123') || url.includes('xxxx')) {
-                url = DEFAULT_LOCAL_1C_URL;
+                url = DEFAULT_1C_URL;
             }
             if (urlInput) {
                 urlInput.value = url;
@@ -2506,13 +2506,13 @@ async function load1CConfigStatus() {
                 badgeEl.innerText = '🟢 Localhost (127.0.0.1)';
             } else {
                 badgeEl.className = 'onec-badge ok';
-                badgeEl.innerText = '🟢 Faol (Active)';
+                badgeEl.innerText = '🟢 Faol (Ngrok 1C)';
             }
         }
     } catch (e) {
         console.warn('Failed to load 1C config status:', e);
         if (urlInput) {
-            urlInput.value = DEFAULT_LOCAL_1C_URL;
+            urlInput.value = DEFAULT_1C_URL;
         }
     }
 }
@@ -2867,7 +2867,7 @@ async function trigger1CSync(btn = null) {
     const urlInput = document.getElementById('onec-url-input');
     let effectiveUrl = urlInput ? urlInput.value.trim() : '';
     if (!effectiveUrl || effectiveUrl.includes('abcd-123') || effectiveUrl.includes('xxxx')) {
-        effectiveUrl = DEFAULT_LOCAL_1C_URL;
+        effectiveUrl = DEFAULT_1C_URL;
         if (urlInput) urlInput.value = effectiveUrl;
     }
 

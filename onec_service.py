@@ -43,7 +43,7 @@ Shuningdek, 1C da nashr qilingan (published) baza nomi va servis yo'li registrga
 """
 
 
-DEFAULT_1C_URL = "http://127.0.0.1:8080/Bozorcham/hs/Bozorcham/GetTovarList"
+DEFAULT_1C_URL = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
 
 
 def is_localhost_url(url: str) -> bool:
@@ -62,10 +62,10 @@ def clean_1c_url(raw_url: Optional[str]) -> str:
 
 
 def get_active_1c_url() -> str:
-    """Returns currently active 1C URL from dynamic system settings, defaulting to local 1C HTTP service."""
+    """Returns currently active 1C URL from dynamic system settings, defaulting to active target URL."""
     val = get_system_setting("api_1c_url", DEFAULT_1C_URL)
     cleaned = clean_1c_url(val)
-    if not cleaned or "abcd-123" in cleaned or "xxxx" in cleaned or "localhost:8080" in cleaned:
+    if not cleaned or "abcd-123" in cleaned or "xxxx" in cleaned:
         return DEFAULT_1C_URL
     return cleaned
 
