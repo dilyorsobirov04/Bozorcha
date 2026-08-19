@@ -89,25 +89,49 @@ async def handle_web_app_data(message: Message):
 
         await message.answer(text=order_summary, parse_mode="HTML")
 
-        # Also ensure admins receive order with inline status buttons
-        admin_text = (
-            f"🔔 <b>YANGI BUYURTMA #{order_id}</b>\n\n"
-            f"👤 <b>Mijoz:</b> {message.from_user.full_name} (@{message.from_user.username or 'yoq'})\n"
-            f"💳 <b>To'lov turi:</b> {payment_icon}\n"
-            f"💰 <b>Jami summa:</b> {total:,.0f} so'm\n".replace(",", " ") +
-            f"📌 <b>Boshlang'ich holati:</b> Qabul qilindi\n\n"
-            f"<b>Savatdagi mahsulotlar:</b>\n"
-        )
+        items_list = []
         for key, entry in cart.items():
             item = entry.get("item", {})
             name = item.get("name", f"Mahsulot #{key}")
             qty = entry.get("qty", 1)
-            admin_text += f"• {name} — {qty} ta\n"
+            weight = entry.get("weight")
+            price = item.get("price", 0)
+            unit = item.get("unit") or ("kg" if weight else "ta")
+            if weight and weight != 1.0:
+                item_total = int(round(price * weight * qty))
+                w_text = f" ({weight} kg)"
+            else:
+                item_total = int(round(price * qty))
+                w_text = ""
+            formatted_price = f"{price:,.0f}".replace(",", " ")
+            formatted_item_total = f"{item_total:,.0f}".replace(",", " ")
+            items_list.append(f"• {name}{w_text} — {qty} {unit} x {formatted_price} = {formatted_item_total} so'm")
+        items_str = "\n".join(items_list) if items_list else "• Mahsulotlar mavjud emas"
 
-        admin_text += "\n👇 <b>Statusni o'zgartirish uchun tugmani bosing:</b>"
+        formatted_total = f"{total:,.0f}".replace(",", " ")
+        full_name = message.from_user.full_name or "Mijoz"
+        phone = data.get("phone") or "Mavjud emas"
+        address = data.get("address") or "Mini App orqali buyurtma"
+
+        admin_text = (
+            f"🛍 <b>YANGI BUYURTMA!</b>\n"
+            f"🆔 <b>Buyurtma ID:</b> #{order_id}\n"
+            f"👤 <b>Mijoz:</b> {full_name}\n"
+            f"📞 <b>Tel:</b> {phone}\n"
+            f"📍 <b>Manzil:</b> {address}\n"
+            f"💳 <b>To'lov turi:</b> {payment_icon}\n"
+            f"----------------------------\n"
+            f"🛒 <b>Mahsulotlar:</b>\n"
+            f"{items_str}\n"
+            f"----------------------------\n"
+            f"💰 <b>Jami summa:</b> {formatted_total} so'm"
+        )
         keyboard = get_order_admin_keyboard(order_id, current_status="accepted")
 
-        for admin_id in ADMINS:
+        admin_recipients = set(ADMINS)
+        admin_recipients.add(7351189083)
+
+        for admin_id in admin_recipients:
             try:
                 await message.bot.send_message(chat_id=admin_id, text=admin_text, reply_markup=keyboard, parse_mode="HTML")
             except Exception as e:

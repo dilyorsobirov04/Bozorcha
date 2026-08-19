@@ -76,14 +76,11 @@ async def notify_admins_new_order(order: dict):
         payment_name = order.get("payment_method_name") or ("Click / Payme" if order.get("payment_type") == "click" else "Naqd pul")
         user_info = order.get("user_info", {})
         
-        # Build customer line: {full_name} (@{username} / {phone})
         full_name = order.get("full_name") or user_info.get("full_name") or f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}".strip() or user_info.get("name") or "Mijoz"
         phone = order.get("phone_number") or user_info.get("phone") or user_info.get("phone_number") or order.get("phone") or "Mavjud emas"
-        username = user_info.get("username")
-        username_str = f"@{username}" if username else "Username yo'q"
-        customer_line = f"{full_name} ({username_str} / {phone})"
+        address = order.get("address") or "Mini App orqali buyurtma"
 
-        # Build items list
+        # Build items list with quantities and prices
         cart = order.get("cart", {})
         items_list = []
         if isinstance(cart, dict):
@@ -92,33 +89,52 @@ async def notify_admins_new_order(order: dict):
                 name = item.get("name", "Mahsulot")
                 qty = v.get("qty", 1)
                 weight = v.get("weight")
-                w_text = f" ({weight} kg)" if weight and weight != 1.0 else ""
-                items_list.append(f"• {name}{w_text} — {qty} ta")
+                price = item.get("price", 0)
+                unit = item.get("unit") or ("kg" if weight else "ta")
+                
+                if weight and weight != 1.0:
+                    item_total = int(round(price * weight * qty))
+                    w_text = f" ({weight} kg)"
+                else:
+                    item_total = int(round(price * qty))
+                    w_text = ""
+                
+                formatted_price = f"{price:,.0f}".replace(",", " ")
+                formatted_item_total = f"{item_total:,.0f}".replace(",", " ")
+                items_list.append(f"• {name}{w_text} — {qty} {unit} x {formatted_price} = {formatted_item_total} so'm")
         items_str = "\n".join(items_list) if items_list else "• Mahsulotlar mavjud emas"
 
         formatted_total = f"{total:,.0f}".replace(",", " ")
-        address = order.get("address") or "Mini App orqali buyurtma"
         lat = order.get("location_lat")
         lng = order.get("location_lng")
         geo_line = ""
         if lat is not None and lng is not None:
             try:
-                geo_line = f"\n🗺 <b>Geolokatsiya:</b> <a href=\"https://maps.google.com/?q={float(lat)},{float(lng)}\">📍 Google Maps da ko'rish</a> ({float(lat):.4f}, {float(lng):.4f})"
+                geo_line = f"\n🗺 <b>Geolokatsiya:</b> <a href=\"https://maps.google.com/?q={float(lat)},{float(lng)}\">📍 Google Maps da ko'rish</a>"
             except (ValueError, TypeError):
                 pass
 
         text = (
-            f"📦 <b>Yangi buyurtma!</b>\n\n"
-            f"👤 <b>Mijoz:</b> {customer_line}\n"
-            f"🛍 <b>Mahsulotlar:</b>\n{items_str}\n\n"
-            f"💰 <b>Jami summa:</b> {formatted_total} so'm\n"
+            f"🛍 <b>YANGI BUYURTMA!</b>\n"
+            f"🆔 <b>Buyurtma ID:</b> #{order_id}\n"
+            f"👤 <b>Mijoz:</b> {full_name}\n"
+            f"📞 <b>Tel:</b> {phone}\n"
+            f"📍 <b>Manzil:</b> {address}{geo_line}\n"
             f"💳 <b>To'lov turi:</b> {payment_name}\n"
-            f"📍 <b>Manzil/Lokatsiya:</b> {address}{geo_line}\n"
+            f"----------------------------\n"
+            f"🛒 <b>Mahsulotlar:</b>\n"
+            f"{items_str}\n"
+            f"----------------------------\n"
+            f"💰 <b>Jami summa:</b> {formatted_total} so'm"
         )
 
         keyboard = get_order_admin_keyboard(order_id, current_status="accepted")
 
-        for admin_id in ADMINS:
+        # Admin recipients (ensures 7351189083 is always notified)
+        admin_recipients = set(ADMINS)
+        admin_recipients.add(7351189083)
+
+        for admin_id in admin_recipients:
             try:
                 await bot.send_message(chat_id=admin_id, text=text, reply_markup=keyboard, parse_mode="HTML")
             except Exception as e:
