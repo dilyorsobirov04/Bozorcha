@@ -88,6 +88,7 @@ async def init_postgres_db():
                 CREATE TABLE IF NOT EXISTS products (
                     id SERIAL PRIMARY KEY,
                     sku VARCHAR(128) UNIQUE,
+                    barcode VARCHAR(128),
                     category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
                     name VARCHAR(512) NOT NULL,
                     unit VARCHAR(64) DEFAULT 'dona',
@@ -146,6 +147,7 @@ async def init_postgres_db():
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS recommendation TEXT;
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS barcode VARCHAR(128);
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
             """)
 
@@ -667,7 +669,7 @@ def sync_1c_products(raw_data: any) -> dict:
         items_to_process = raw_data
     elif isinstance(raw_data, dict):
         found_list = False
-        for key in ["products", "items", "goods", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "data", "rows"]:
+        for key in ["data", "products", "items", "goods", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "rows"]:
             if key in raw_data and isinstance(raw_data[key], list):
                 items_to_process = raw_data[key]
                 found_list = True
@@ -715,25 +717,26 @@ def sync_1c_products(raw_data: any) -> dict:
             invalid_count += 1
             continue
 
-        # Extract SKU / Code
+        # Extract Barcode (if provided) — must be extracted BEFORE SKU to avoid shadowing
+        barcode_val = item.get("barcode") or item.get("Barcode") or item.get("Штрихкод") or item.get("штрихкод")
+        barcode = str(barcode_val).replace("\xa0", "").strip() if barcode_val else None
+
+        # Extract SKU / Code (1C returns "id": "222 804" — strip internal spaces for clean SKU)
         sku_val = (
             item.get("SKU") or item.get("sku") or
             item.get("Code") or item.get("code") or
             item.get("Код") or item.get("код") or
             item.get("id") or item.get("ID") or
             item.get("Артикул") or item.get("артикул") or
-            item.get("Article") or item.get("article") or
-            item.get("Barcode") or item.get("barcode") or
-            item.get("Штрихкод") or item.get("штрихкод")
+            item.get("Article") or item.get("article")
         )
+        # Fallback to barcode as SKU only if no dedicated SKU/id field exists
+        if sku_val is None or str(sku_val).strip() == "":
+            sku_val = barcode
         if sku_val is None or str(sku_val).strip() == "":
             invalid_count += 1
             continue
-        sku = str(sku_val).replace("\xa0", " ").strip()
-
-        # Extract Barcode (if provided)
-        barcode_val = item.get("barcode") or item.get("Barcode") or item.get("Штрихкод") or item.get("штрихкод")
-        barcode = str(barcode_val).replace("\xa0", "").strip() if barcode_val else None
+        sku = str(sku_val).replace("\xa0", "").replace(" ", "").strip()
 
         # Extract Name / Title
         name_val = (
@@ -828,6 +831,8 @@ def sync_1c_products(raw_data: any) -> dict:
             target_prod["price"] = price
             target_prod["stock"] = stock
             target_prod["unit"] = unit
+            if barcode:
+                target_prod["barcode"] = barcode
             if description:
                 target_prod["description"] = description
             if image_url:
@@ -840,6 +845,7 @@ def sync_1c_products(raw_data: any) -> dict:
             new_product = {
                 "id": new_id,
                 "sku": sku,
+                "barcode": barcode,
                 "category_id": category_id,
                 "name": name,
                 "unit": unit,
@@ -885,17 +891,18 @@ async def _async_persist_synced_products(products_list: list):
             for p in products_list:
                 nutrition_json = json.dumps(p.get("nutrition") or {})
                 await conn.execute("""
-                    INSERT INTO products (sku, category_id, name, unit, price, old_price, discount_percent, stock, description, nutrition, photo_file_id, image_url, is_promo, recommendation)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14)
+                    INSERT INTO products (sku, barcode, category_id, name, unit, price, old_price, discount_percent, stock, description, nutrition, photo_file_id, image_url, is_promo, recommendation)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
                     ON CONFLICT (sku) DO UPDATE SET
                         name = EXCLUDED.name,
                         price = EXCLUDED.price,
                         stock = EXCLUDED.stock,
                         unit = EXCLUDED.unit,
+                        barcode = COALESCE(EXCLUDED.barcode, products.barcode),
                         description = COALESCE(EXCLUDED.description, products.description),
                         image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                         updated_at = CURRENT_TIMESTAMP
-                """, str(p.get("sku", "")), p.get("category_id"), str(p.get("name", "")), str(p.get("unit", "dona")), int(p.get("price", 0)), p.get("old_price"), int(p.get("discount_percent", 0)), int(p.get("stock", 0)), p.get("description"), nutrition_json, p.get("photo_file_id"), p.get("image_url"), bool(p.get("is_promo", False)), p.get("recommendation"))
+                """, str(p.get("sku", "")), p.get("barcode"), p.get("category_id"), str(p.get("name", "")), str(p.get("unit", "dona")), int(p.get("price", 0)), p.get("old_price"), int(p.get("discount_percent", 0)), int(p.get("stock", 0)), p.get("description"), nutrition_json, p.get("photo_file_id"), p.get("image_url"), bool(p.get("is_promo", False)), p.get("recommendation"))
     except Exception as e:
         print(f"[POSTGRESQL] Sync persistence warning: {e}")
 
