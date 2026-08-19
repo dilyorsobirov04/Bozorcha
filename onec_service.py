@@ -51,9 +51,34 @@ def is_localhost_url(url: str) -> bool:
     return "localhost" in u or "127.0.0.1" in u or "0.0.0.0" in u or "::1" in u
 
 
+def clean_1c_url(raw_url: Optional[str]) -> str:
+    """Strips whitespace, surrounding quotes, and cleans the URL."""
+    if not raw_url:
+        return ""
+    u = str(raw_url).strip().strip("'\"").strip()
+    return u
+
+
+def is_placeholder_template_url(url: str) -> bool:
+    """Checks if the URL is an unreplaced template placeholder like abcd-123 or xxxx."""
+    if not url:
+        return False
+    u = url.lower()
+    placeholders = [
+        "abcd-123",
+        "your-ngrok",
+        "xxxx-xx-xx",
+        "xxxx.ngrok",
+        "xyz.ngrok",
+        "<ngrok-host>",
+        "your-server-domain"
+    ]
+    return any(p in u for p in placeholders)
+
+
 def get_active_1c_url() -> str:
     """Returns currently active 1C URL from dynamic system settings."""
-    return str(get_system_setting("api_1c_url", "")).strip()
+    return clean_1c_url(get_system_setting("api_1c_url", ""))
 
 
 def get_active_1c_user() -> str:
@@ -107,7 +132,8 @@ def persist_1c_settings_to_env(api_url: str, api_user: str = "", api_pass: str =
 
 def update_1c_config(api_url: Optional[str] = None, api_user: Optional[str] = None, api_pass: Optional[str] = None) -> dict:
     """Updates dynamic 1C settings in DB and memory without requiring server restart."""
-    update_1c_system_settings(api_url=api_url, api_user=api_user, api_pass=api_pass)
+    cleaned_url = clean_1c_url(api_url) if api_url is not None else None
+    update_1c_system_settings(api_url=cleaned_url, api_user=api_user, api_pass=api_pass)
     clear_1c_cache()
 
     active_url = get_active_1c_url()
@@ -135,7 +161,8 @@ def get_1c_cache_status() -> dict:
         "remaining_ttl_seconds": max(0, int(ttl - age)) if is_valid else 0,
         "cache_ttl": ttl,
         "api_url_configured": bool(active_url),
-        "is_localhost": is_localhost_url(active_url)
+        "is_localhost": is_localhost_url(active_url),
+        "is_placeholder": is_placeholder_template_url(active_url)
     }
 
 
@@ -149,6 +176,7 @@ def get_1c_config_status() -> dict:
         "api_user": active_user,
         "has_password": bool(active_pass),
         "is_localhost": is_localhost_url(active_url),
+        "is_placeholder": is_placeholder_template_url(active_url),
         "is_configured": bool(active_url),
         "cache": get_1c_cache_status()
     }
@@ -191,6 +219,17 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     if not active_url:
         warning_msg = "1C serverining tashqi IP/Ngrok manzili ko'rsatilmagan. Admin panelida yoki .env faylida API_1C_URL ni sozlang (masalan: https://xxxx.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList)."
         print(NGROK_INSTRUCTION_GUIDE)
+        logger.warning(warning_msg)
+        return {
+            "success": False,
+            "error": warning_msg,
+            "instruction": NGROK_INSTRUCTION_GUIDE,
+            "data": None
+        }
+
+    if is_placeholder_template_url(active_url):
+        warning_msg = "Iltimos, namunaviy 'abcd-123' o'rniga Ngrok bergan haqiqiy HTTPS havolangizni kiriting (masalan: https://8a2b-95-214-211-12.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList)!"
+        print(f"[1C VALIDATION] Template placeholder detected in URL: {active_url}")
         logger.warning(warning_msg)
         return {
             "success": False,

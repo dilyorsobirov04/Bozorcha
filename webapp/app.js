@@ -2525,6 +2525,12 @@ async function save1CUrlSetting(btn = null) {
         return false;
     }
 
+    if (newUrl.includes('abcd-123') || newUrl.includes('xxxx') || newUrl.includes('your-ngrok') || newUrl.includes('<ngrok-host>')) {
+        showToast("Iltimos, namunaviy 'abcd-123' o'rniga Ngrok bergan haqiqiy HTTPS havolangizni kiriting!", 'warning');
+        urlInput.focus();
+        return false;
+    }
+
     const saveBtn = btn || document.getElementById('onec-save-url-btn');
     if (saveBtn) {
         saveBtn.disabled = true;
@@ -2884,8 +2890,8 @@ async function trigger1CSync(btn = null) {
 
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success) {
-            const countMsg = data.synced_count != null ? ` (${data.synced_count} ta tovar)` : '';
-            showToast(`1C dan tovarlar muvaffaqiyatli yuklandi! 🎉${countMsg}`, 'success');
+            const count = data.synced_count != null ? data.synced_count : 0;
+            showToast(`1C dan ${count} ta tovar muvaffaqiyatli import qilindi! 🎉`, 'success');
 
             // Instantly render fresh uncategorized items from sync response
             if (data.uncategorized_products && Array.isArray(data.uncategorized_products)) {
