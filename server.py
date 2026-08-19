@@ -24,6 +24,7 @@ from db import (
     get_no_photo_products_api,
     get_uncategorized_products,
     assign_product_category,
+    bulk_assign_product_categories,
     sync_1c_products,
     get_products_counts,
     query_postgres_product_counts,
@@ -657,6 +658,7 @@ def create_webapp_server() -> FastAPI:
             **counts
         }
 
+    @app.put("/api/admin/products/{product_id}/assign-category")
     @app.patch("/api/admin/products/{product_id}/assign-category")
     @app.post("/api/admin/products/{product_id}/assign-category")
     async def handle_assign_product_category(
@@ -689,6 +691,34 @@ def create_webapp_server() -> FastAPI:
             "message": f"'{updated_prod.get('name')}' muvaffaqiyatli '{cat_name}' bo'limiga biriktirildi! 🎉",
             "product": updated_prod,
             "category": cat
+        }
+
+    @app.put("/api/admin/products/bulk-assign-category")
+    @app.post("/api/admin/products/bulk-assign-category")
+    async def handle_bulk_assign_product_category(request: Request):
+        check_admin_authorization(request)
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        product_ids = body.get("product_ids") or body.get("productIds") or []
+        category_id = body.get("category_id") or body.get("categoryId")
+
+        if not category_id:
+            raise HTTPException(status_code=400, detail="category_id parametri talab qilinadi")
+        if not product_ids or not isinstance(product_ids, list):
+            raise HTTPException(status_code=400, detail="product_ids ro'yxati talab qilinadi")
+
+        updated_list = bulk_assign_product_categories(product_ids, category_id)
+        cat = get_category(category_id) or {}
+        cat_name = cat.get("name", f"Kategoriya #{category_id}")
+
+        return {
+            "success": True,
+            "message": f"{len(updated_list)} ta mahsulot '{cat_name}' bo'limiga biriktirildi! 🎉",
+            "count": len(updated_list),
+            "updated_products": updated_list
         }
 
     @app.post("/api/products/update-photo")

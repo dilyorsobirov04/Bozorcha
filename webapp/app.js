@@ -2633,6 +2633,11 @@ async function loadProductCounts() {
 async function loadUncategorizedProducts(searchQuery = '', triggerBtn = null) {
     if (!isCurrentUserAdmin()) return;
 
+    // Ensure categories are loaded from /api/categories for dynamic dropdowns
+    if (!categories || categories.length === 0) {
+        await loadCategories();
+    }
+
     // Refresh live stats & 1C config diagnostic banner
     loadProductCounts();
     load1CConfigStatus();
@@ -2859,7 +2864,7 @@ async function assignProductCategory(productId) {
 
     try {
         const res = await fetch(`/api/admin/products/${productId}/assign-category`, {
-            method: 'PATCH',
+            method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Admin-Id': String(ALLOWED_ADMIN_ID)
@@ -2872,12 +2877,27 @@ async function assignProductCategory(productId) {
             const msg = data.message || `Mahsulot muvaffaqiyatli kategoriyaga biriktirildi! 🎉`;
             showToast(msg, 'success');
 
-            // Instantly remove from uncategorized products array & update badge counters
+            // Instantly remove from uncategorized products array
             uncategorizedProducts = uncategorizedProducts.filter(p => p.id !== productId);
+
+            // Real-time counter updates:
+            // Decrement Kategoriyasiz (-1) and increment Toifalangan (+1)
             const countEl = document.getElementById('admin-uncategorized-count');
             const headerCountEl = document.getElementById('uncategorized-header-count');
+            const uncatStatEl = document.getElementById('stats-uncategorized-products');
+            const catStatEl = document.getElementById('stats-categorized-products');
+
             if (countEl) countEl.innerText = uncategorizedProducts.length;
             if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
+
+            if (uncatStatEl) {
+                const currentUncat = parseInt(uncatStatEl.innerText.replace(/\s+/g, '')) || 0;
+                uncatStatEl.innerText = Math.max(0, currentUncat - 1).toLocaleString('uz-UZ');
+            }
+            if (catStatEl) {
+                const currentCat = parseInt(catStatEl.innerText.replace(/\s+/g, '')) || 0;
+                catStatEl.innerText = (currentCat + 1).toLocaleString('uz-UZ');
+            }
 
             // Animate card removal
             if (card) {
@@ -2904,7 +2924,7 @@ async function assignProductCategory(productId) {
                 }, 550);
             }
 
-            // Also refresh main product list & stats so the product now appears under its category in the shop
+            // Also refresh main product list & live stats
             await loadProducts();
             await loadProductCounts();
         } else {
@@ -2919,6 +2939,45 @@ async function assignProductCategory(productId) {
             saveBtn.disabled = false;
             saveBtn.innerHTML = `<span>💾 Saqlash</span>`;
         }
+    }
+}
+
+async function bulkAssignCategory(categoryId, productIds = []) {
+    if (!isCurrentUserAdmin()) {
+        showToast('Ruxsat berilmadi: Siz admin emassiz ⛔️', 'error');
+        return;
+    }
+    if (!categoryId) {
+        showToast('Iltimos, kategoriyani tanlang! ⚠️', 'error');
+        return;
+    }
+    if (!productIds || productIds.length === 0) {
+        showToast('Biriktirish uchun tovarlar tanlanmadi! ⚠️', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/admin/products/bulk-assign-category', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
+            body: JSON.stringify({ category_id: parseInt(categoryId), product_ids: productIds })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            showToast(data.message || `${productIds.length} ta mahsulot kategoriyaga biriktirildi! 🎉`, 'success');
+            await loadUncategorizedProducts();
+            await loadProducts();
+            await loadProductCounts();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.detail || "Biriktirishda xatolik yuz berdi", 'error');
+        }
+    } catch (e) {
+        console.error('bulkAssignCategory error:', e);
+        showToast("Server bilan bog'lanishda xatolik!", 'error');
     }
 }
 
@@ -4039,6 +4098,7 @@ window.loadUncategorizedProducts = loadUncategorizedProducts;
 window.handleUncategorizedSearch = handleUncategorizedSearch;
 window.clearUncategorizedSearch = clearUncategorizedSearch;
 window.assignProductCategory = assignProductCategory;
+window.bulkAssignCategory = bulkAssignCategory;
 window.trigger1CSync = trigger1CSync;
 window.load1CConfigStatus = load1CConfigStatus;
 window.save1CUrlSetting = save1CUrlSetting;

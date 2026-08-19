@@ -1056,6 +1056,47 @@ def assign_product_category(product_id: int | str, category_id: int | str) -> di
         return None
 
 
+async def _async_persist_bulk_product_category(product_ids: list[int], category_id: int):
+    """Persists bulk category assignment to PostgreSQL database."""
+    try:
+        pool = await get_pg_pool()
+        if pool and product_ids:
+            async with pool.acquire() as conn:
+                await conn.execute("""
+                    UPDATE products 
+                    SET category_id = $1, updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = ANY($2::int[])
+                """, category_id, product_ids)
+    except Exception as e:
+        print(f"[POSTGRESQL] Bulk category assign persistence warning: {e}")
+
+
+def bulk_assign_product_categories(product_ids: list[int | str], category_id: int | str) -> list[dict]:
+    """
+    Assigns category_id to multiple products at once and persists to PostgreSQL.
+    """
+    try:
+        cid = int(category_id)
+        if cid not in CATEGORIES_DB:
+            return []
+
+        updated = []
+        for pid_raw in product_ids:
+            try:
+                pid = int(pid_raw)
+                if pid in PRODUCTS_DB:
+                    PRODUCTS_DB[pid]["category_id"] = cid
+                    updated.append(PRODUCTS_DB[pid])
+            except (ValueError, TypeError):
+                pass
+
+        if updated:
+            _safe_bg_task(_async_persist_bulk_product_category([p["id"] for p in updated], cid))
+        return updated
+    except (ValueError, TypeError):
+        return []
+
+
 def add_product(
     name: str,
     price: int | float,
