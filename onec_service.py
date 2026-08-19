@@ -260,7 +260,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     active_user = get_active_1c_user()
     active_pass = get_active_1c_pass()
     ttl = int(get_system_setting("cache_ttl", 300))
-    eff_timeout = timeout_seconds or int(get_system_setting("api_1c_timeout", 20)) or 20
+    eff_timeout = timeout_seconds or int(get_system_setting("api_1c_timeout", 60)) or 60
 
     # 1. Check in-memory cache if not forcing refresh
     now = time.time()
@@ -298,7 +298,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
         "X-Requested-With": "XMLHttpRequest"
     }
 
-    timeout = aiohttp.ClientTimeout(total=eff_timeout)
+    timeout = aiohttp.ClientTimeout(total=eff_timeout, sock_read=eff_timeout, connect=20.0)
     connector = aiohttp.TCPConnector(ssl=False)
 
     async with _cache_lock:

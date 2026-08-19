@@ -179,6 +179,31 @@ async def init_postgres_db():
                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
             """, init_url)
 
+            # Load all products from PostgreSQL database into memory
+            rows = await conn.fetch("SELECT * FROM products ORDER BY id ASC")
+            if rows:
+                for r in rows:
+                    pid = r["id"]
+                    PRODUCTS_DB[pid] = {
+                        "id": pid,
+                        "sku": r["sku"] or f"SKU-{pid}",
+                        "barcode": r.get("barcode"),
+                        "category_id": r["category_id"],
+                        "name": r["name"],
+                        "unit": r["unit"] or "dona",
+                        "price": int(r["price"] or 0),
+                        "old_price": r["old_price"],
+                        "discount_percent": r["discount_percent"] or 0,
+                        "stock": r["stock"] or 0,
+                        "description": r["description"] or "",
+                        "nutrition": json.loads(r["nutrition"]) if r.get("nutrition") else {},
+                        "photo_file_id": r["photo_file_id"],
+                        "image_url": r["image_url"],
+                        "is_promo": bool(r["is_promo"]),
+                        "recommendation": r["recommendation"]
+                    }
+                print(f"[POSTGRESQL] Loaded {len(rows)} products from database into memory.")
+
         print(f"[POSTGRESQL] Local database connected successfully to bozorcha_db on port 5433! Tables verified.")
         return True
     except Exception as e:
@@ -718,6 +743,9 @@ def sync_1c_products(raw_data: any) -> dict:
     synced_products = []
     invalid_count = 0
 
+    # Precompute SKU index for O(1) fast lookup across 13,000+ items
+    sku_to_pid = {str(prod.get("sku", "")).strip().lower(): pid for pid, prod in PRODUCTS_DB.items() if prod.get("sku")}
+
     for item in items_to_process:
         if not isinstance(item, dict):
             invalid_count += 1
@@ -772,7 +800,7 @@ def sync_1c_products(raw_data: any) -> dict:
         except (ValueError, TypeError):
             price = 0
 
-        # Extract Stock / Quantity
+        # Extract Stock / Quantity (do not discard zero quantity)
         stock_val = (
             item.get("Quantity") or item.get("quantity") or
             item.get("Количество") or item.get("количество") or
@@ -824,14 +852,10 @@ def sync_1c_products(raw_data: any) -> dict:
             except (ValueError, TypeError):
                 category_id = None
 
-        # Upsert: check if product with same sku already exists in PRODUCTS_DB
-        existing_pid = None
-        for pid, prod in PRODUCTS_DB.items():
-            if str(prod.get("sku", "")).strip().lower() == sku.lower():
-                existing_pid = pid
-                break
+        # Upsert: check if product with same sku already exists in PRODUCTS_DB (O(1))
+        existing_pid = sku_to_pid.get(sku.lower())
 
-        if existing_pid is not None:
+        if existing_pid is not None and existing_pid in PRODUCTS_DB:
             target_prod = PRODUCTS_DB[existing_pid]
             target_prod["name"] = name
             target_prod["price"] = price
@@ -867,6 +891,7 @@ def sync_1c_products(raw_data: any) -> dict:
                 "recommendation": None
             }
             PRODUCTS_DB[new_id] = new_product
+            sku_to_pid[sku.lower()] = new_id
             synced_products.append(new_product)
 
     uncategorized = [p for p in synced_products if p.get("category_id") is None or p.get("category_id") not in CATEGORIES_DB]
@@ -888,30 +913,77 @@ def sync_1c_products(raw_data: any) -> dict:
 
 
 async def _async_persist_synced_products(products_list: list):
-    """Persists synced products to the local PostgreSQL database."""
+    """Persists synced products to the local PostgreSQL database in efficient batches."""
     try:
         pool = await get_pg_pool()
         if not pool or not products_list:
             return
 
         async with pool.acquire() as conn:
-            for p in products_list:
-                nutrition_json = json.dumps(p.get("nutrition") or {})
-                await conn.execute("""
-                    INSERT INTO products (sku, barcode, category_id, name, unit, price, old_price, discount_percent, stock, description, nutrition, photo_file_id, image_url, is_promo, recommendation)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
-                    ON CONFLICT (sku) DO UPDATE SET
-                        name = EXCLUDED.name,
-                        price = EXCLUDED.price,
-                        stock = EXCLUDED.stock,
-                        unit = EXCLUDED.unit,
-                        barcode = COALESCE(EXCLUDED.barcode, products.barcode),
-                        description = COALESCE(EXCLUDED.description, products.description),
-                        image_url = COALESCE(EXCLUDED.image_url, products.image_url),
-                        updated_at = CURRENT_TIMESTAMP
-                """, str(p.get("sku", "")), p.get("barcode"), p.get("category_id"), str(p.get("name", "")), str(p.get("unit", "dona")), int(p.get("price", 0)), p.get("old_price"), int(p.get("discount_percent", 0)), int(p.get("stock", 0)), p.get("description"), nutrition_json, p.get("photo_file_id"), p.get("image_url"), bool(p.get("is_promo", False)), p.get("recommendation"))
+            batch_size = 500
+            for i in range(0, len(products_list), batch_size):
+                chunk = products_list[i:i + batch_size]
+                async with conn.transaction():
+                    for p in chunk:
+                        nutrition_json = json.dumps(p.get("nutrition") or {})
+                        await conn.execute("""
+                            INSERT INTO products (sku, barcode, category_id, name, unit, price, old_price, discount_percent, stock, description, nutrition, photo_file_id, image_url, is_promo, recommendation)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
+                            ON CONFLICT (sku) DO UPDATE SET
+                                name = EXCLUDED.name,
+                                price = EXCLUDED.price,
+                                stock = EXCLUDED.stock,
+                                unit = EXCLUDED.unit,
+                                barcode = COALESCE(EXCLUDED.barcode, products.barcode),
+                                description = COALESCE(EXCLUDED.description, products.description),
+                                image_url = COALESCE(EXCLUDED.image_url, products.image_url),
+                                updated_at = CURRENT_TIMESTAMP
+                        """, str(p.get("sku", "")), p.get("barcode"), p.get("category_id"), str(p.get("name", "")), str(p.get("unit", "dona")), int(p.get("price", 0)), p.get("old_price"), int(p.get("discount_percent", 0)), int(p.get("stock", 0)), p.get("description"), nutrition_json, p.get("photo_file_id"), p.get("image_url"), bool(p.get("is_promo", False)), p.get("recommendation"))
     except Exception as e:
         print(f"[POSTGRESQL] Sync persistence warning: {e}")
+
+
+def get_products_counts() -> dict:
+    """Returns memory-based product statistics."""
+    total = len(PRODUCTS_DB)
+    uncategorized = sum(
+        1 for p in PRODUCTS_DB.values()
+        if p.get("category_id") is None
+        or p.get("category_id") == 0
+        or str(p.get("category_id")).strip() == ""
+        or (p.get("category_id") not in CATEGORIES_DB)
+    )
+    categorized = max(0, total - uncategorized)
+    return {
+        "total": total,
+        "uncategorized": uncategorized,
+        "categorized": categorized
+    }
+
+
+async def query_postgres_product_counts() -> dict:
+    """Queries live PostgreSQL table for exact counts of total, uncategorized, and categorized products."""
+    pool = await get_pg_pool()
+    if not pool:
+        return get_products_counts()
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("""
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE category_id IS NULL OR category_id = 0) as uncategorized,
+                    COUNT(*) FILTER (WHERE category_id IS NOT NULL AND category_id > 0) as categorized
+                FROM products
+            """)
+            if row:
+                return {
+                    "total": int(row["total"] or 0),
+                    "uncategorized": int(row["uncategorized"] or 0),
+                    "categorized": int(row["categorized"] or 0)
+                }
+    except Exception as e:
+        print(f"[POSTGRESQL] Error querying product counts: {e}")
+    return get_products_counts()
 
 
 def get_uncategorized_products(search: str | None = None) -> list[dict]:
@@ -938,9 +1010,23 @@ def get_uncategorized_products(search: str | None = None) -> list[dict]:
     return uncategorized
 
 
+async def _async_persist_product_category(product_id: int, category_id: int, sku: str | None = None):
+    """Persists category assignment to PostgreSQL database."""
+    try:
+        pool = await get_pg_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                if sku:
+                    await conn.execute("UPDATE products SET category_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 OR sku = $3", category_id, product_id, str(sku))
+                else:
+                    await conn.execute("UPDATE products SET category_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", category_id, product_id)
+    except Exception as e:
+        print(f"[POSTGRESQL] Category assign persistence warning: {e}")
+
+
 def assign_product_category(product_id: int | str, category_id: int | str) -> dict | None:
     """
-    Assigns category_id to an uncategorized or existing product in the database.
+    Assigns category_id to an uncategorized or existing product in the database and persists to PostgreSQL.
     """
     try:
         pid = int(product_id)
@@ -951,6 +1037,7 @@ def assign_product_category(product_id: int | str, category_id: int | str) -> di
             return None
 
         PRODUCTS_DB[pid]["category_id"] = cid
+        _safe_bg_task(_async_persist_product_category(pid, cid, PRODUCTS_DB[pid].get("sku")))
         return PRODUCTS_DB[pid]
     except (ValueError, TypeError):
         return None

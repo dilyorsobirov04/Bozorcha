@@ -25,6 +25,8 @@ from db import (
     get_uncategorized_products,
     assign_product_category,
     sync_1c_products,
+    get_products_counts,
+    query_postgres_product_counts,
     update_product_photo_and_stock,
     add_product,
     delete_product,
@@ -642,6 +644,15 @@ def create_webapp_server() -> FastAPI:
             "success": True,
             "total": len(items),
             "products": items
+        }
+
+    @app.get("/api/admin/products/counts")
+    @app.get("/api/products/counts")
+    async def handle_get_products_counts():
+        counts = await query_postgres_product_counts()
+        return {
+            "success": True,
+            **counts
         }
 
     @app.patch("/api/admin/products/{product_id}/assign-category")

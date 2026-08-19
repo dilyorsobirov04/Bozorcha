@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Automatic initial load & background sync for 1C products
     if (isCurrentUserAdmin()) {
+        loadProductCounts();
         loadUncategorizedProducts();
         load1CConfigStatus();
         triggerSilent1CSync();
@@ -473,7 +474,7 @@ function setupCarouselTouchEvents() {
 // ----------------- PRODUCTS FETCHING & RENDERING -----------------
 async function loadProducts() {
     try {
-        const res = await fetch('/api/products?limit=50');
+        const res = await fetch('/api/products?limit=1000');
         if (res.ok) {
             const data = await res.json();
             products = data.items || data;
@@ -2604,10 +2605,35 @@ async function save1CUrlSetting(btn = null) {
     }
 }
 
+async function loadProductCounts() {
+    try {
+        const res = await fetch('/api/admin/products/counts');
+        if (res.ok) {
+            const data = await res.json();
+            const totalEl = document.getElementById('stats-total-products');
+            const catEl = document.getElementById('stats-categorized-products');
+            const uncatEl = document.getElementById('stats-uncategorized-products');
+            const adminProdCount = document.getElementById('admin-prod-count');
+            const adminUncatCount = document.getElementById('admin-uncategorized-count');
+            const headerCount = document.getElementById('uncategorized-header-count');
+
+            if (totalEl) totalEl.innerText = (data.total || 0).toLocaleString('uz-UZ');
+            if (catEl) catEl.innerText = (data.categorized || 0).toLocaleString('uz-UZ');
+            if (uncatEl) uncatEl.innerText = (data.uncategorized || 0).toLocaleString('uz-UZ');
+            if (adminProdCount) adminProdCount.innerText = (data.total || 0).toLocaleString('uz-UZ');
+            if (adminUncatCount) adminUncatCount.innerText = data.uncategorized || 0;
+            if (headerCount) headerCount.innerText = (data.uncategorized || 0).toLocaleString('uz-UZ');
+        }
+    } catch (e) {
+        console.debug('Failed to load product counts:', e);
+    }
+}
+
 async function loadUncategorizedProducts(searchQuery = '', triggerBtn = null) {
     if (!isCurrentUserAdmin()) return;
 
-    // Refresh 1C config diagnostic banner
+    // Refresh live stats & 1C config diagnostic banner
+    loadProductCounts();
     load1CConfigStatus();
 
     const container = document.getElementById('uncategorized-products-container');
@@ -2877,8 +2903,9 @@ async function assignProductCategory(productId) {
                 }, 550);
             }
 
-            // Also refresh main product list so the product now appears under its category in the shop
+            // Also refresh main product list & stats so the product now appears under its category in the shop
             await loadProducts();
+            await loadProductCounts();
         } else {
             const errData = await res.json().catch(() => ({}));
             showToast(errData.detail || "Kategoriyaga biriktirishda xatolik yuz berdi!", 'error');
@@ -2946,6 +2973,7 @@ async function trigger1CSync(btn = null) {
             }
             await loadUncategorizedProducts();
             await loadProducts();
+            await loadProductCounts();
             return;
         }
 
@@ -2997,6 +3025,7 @@ async function triggerSilent1CSync() {
                 await loadUncategorizedProducts();
             }
             await loadProducts();
+            await loadProductCounts();
         }
     } catch (e) {
         console.debug('Silent background 1C sync completed/skipped:', e);
@@ -4012,6 +4041,7 @@ window.assignProductCategory = assignProductCategory;
 window.trigger1CSync = trigger1CSync;
 window.load1CConfigStatus = load1CConfigStatus;
 window.save1CUrlSetting = save1CUrlSetting;
+window.loadProductCounts = loadProductCounts;
 window.fetchUncategorizedProducts = loadUncategorizedProducts;
 window.renderUncategorizedGrid = renderUncategorizedGrid;
 window.renderUncategorizedProducts = renderUncategorizedProducts;
