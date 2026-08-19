@@ -45,7 +45,8 @@ from onec_service import (
     get_1c_cache_status,
     get_1c_config_status,
     update_1c_config,
-    clear_1c_cache
+    clear_1c_cache,
+    clean_1c_url
 )
 
 logger = logging.getLogger(__name__)
@@ -611,7 +612,7 @@ def create_webapp_server() -> FastAPI:
         if api_url is None:
             raise HTTPException(status_code=400, detail="api_url parametri talab qilinadi")
 
-        clean_url = str(api_url).strip()
+        clean_url = clean_1c_url(api_url)
         updated_config = update_1c_config(api_url=clean_url, api_user=api_user, api_pass=api_pass)
         return {
             "success": True,

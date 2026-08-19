@@ -2517,6 +2517,28 @@ async function load1CConfigStatus() {
     }
 }
 
+function sanitize1CUrl(rawUrl) {
+    if (!rawUrl) return "";
+    let s = String(rawUrl).trim().replace(/^['"]|['"]$/g, '');
+
+    // 1. If Markdown format [text](url), extract URL from parentheses
+    const mdMatch = s.match(/\((https?:\/\/[^\s\)]+)\)/);
+    if (mdMatch) {
+        s = mdMatch[1].trim();
+    } else if (s.startsWith('[') && s.endsWith(']')) {
+        s = s.slice(1, -1).trim();
+    }
+
+    // 2. Extract valid http/https URL if embedded or duplicated
+    const urlMatch = s.match(/(https?:\/\/[^\s\[\]\(\)\<\>\"']+)/);
+    if (urlMatch) {
+        s = urlMatch[1].trim();
+    }
+
+    // 3. Remove trailing brackets/punctuation
+    return s.replace(/[\]\)>.,;"'\s]+$/, '');
+}
+
 async function save1CUrlSetting(btn = null) {
     if (!isCurrentUserAdmin()) {
         showToast('Ruxsat berilmadi: Siz admin emassiz ⛔️', 'error');
@@ -2526,12 +2548,15 @@ async function save1CUrlSetting(btn = null) {
     const urlInput = document.getElementById('onec-url-input');
     if (!urlInput) return false;
 
-    const newUrl = urlInput.value.trim();
+    let rawVal = urlInput.value.trim();
+    let newUrl = sanitize1CUrl(rawVal);
     if (!newUrl) {
         showToast("Iltimos, 1C HTTP servis URL manzilini kiriting!", 'error');
         urlInput.focus();
         return false;
     }
+
+    urlInput.value = newUrl;
 
     const saveBtn = btn || document.getElementById('onec-save-url-btn');
     if (saveBtn) {
