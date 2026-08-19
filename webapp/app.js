@@ -2861,18 +2861,24 @@ async function trigger1CSync(btn = null) {
         return;
     }
 
+    clearAllToasts();
+
     // Auto-save URL if user typed in input before pressing sync
     const urlInput = document.getElementById('onec-url-input');
-    if (urlInput && urlInput.value.trim()) {
-        await fetch(`/api/admin/1c/config?user_id=${ALLOWED_ADMIN_ID}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
-            },
-            body: JSON.stringify({ api_url: urlInput.value.trim() })
-        }).catch(() => {});
+    let effectiveUrl = urlInput ? urlInput.value.trim() : '';
+    if (!effectiveUrl || effectiveUrl.includes('abcd-123') || effectiveUrl.includes('xxxx')) {
+        effectiveUrl = DEFAULT_LOCAL_1C_URL;
+        if (urlInput) urlInput.value = effectiveUrl;
     }
+
+    await fetch(`/api/admin/1c/config?user_id=${ALLOWED_ADMIN_ID}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+        },
+        body: JSON.stringify({ api_url: effectiveUrl })
+    }).catch(() => {});
 
     clearAllToasts();
 
@@ -2895,7 +2901,12 @@ async function trigger1CSync(btn = null) {
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success) {
             clearAllToasts();
-            showToast("1C tovarlari muvaffaqiyatli yuklandi! 🎉", 'success');
+            const syncedCount = data.synced_count != null ? data.synced_count : (data.products ? data.products.length : 0);
+            if (syncedCount > 0) {
+                showToast("1C tovarlari muvaffaqiyatli yuklandi!", 'success');
+            } else {
+                showToast("1C serveri bilan aloqa bor, lekin yangi tovarlar topilmadi.", 'info');
+            }
 
             // Instantly render fresh uncategorized items from sync response
             if (data.uncategorized_products && Array.isArray(data.uncategorized_products)) {
@@ -2905,9 +2916,8 @@ async function trigger1CSync(btn = null) {
                 const headerCountEl = document.getElementById('uncategorized-header-count');
                 if (countEl) countEl.innerText = uncategorizedProducts.length;
                 if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
-            } else {
-                await loadUncategorizedProducts();
             }
+            await loadUncategorizedProducts();
             await loadProducts();
         } else {
             let errorMsg = data.message || data.error || data.detail;
@@ -3839,6 +3849,17 @@ function confirmDeletePromotion(promoId, promoTitle) {
     if (modal) modal.classList.remove('hidden');
 }
 
+function getOrCreateToastContainer() {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
 function clearAllToasts() {
     const container = document.getElementById('toast-container');
     if (container) {
@@ -3847,12 +3868,10 @@ function clearAllToasts() {
 }
 
 function showToast(message, type = "success") {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-
+    const container = getOrCreateToastContainer();
     const toast = document.createElement('div');
     toast.className = `toast-message toast-${type}`;
-    const icon = type === 'success' ? '✅' : '⚠️';
+    const icon = type === 'success' ? '✅' : (type === 'info' ? 'ℹ️' : '⚠️');
     toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
 
     container.appendChild(toast);
@@ -3861,7 +3880,7 @@ function showToast(message, type = "success") {
         toast.style.opacity = '0';
         toast.style.transform = 'translateY(10px)';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, 3200);
 }
 
 // Explicit window bindings for Telegram WebApp compatibility
