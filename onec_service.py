@@ -43,6 +43,9 @@ Shuningdek, 1C da nashr qilingan (published) baza nomi va servis yo'li registrga
 """
 
 
+DEFAULT_1C_URL = "http://127.0.0.1:8080/Bozorcham/hs/Bozorcham/GetTovarList"
+
+
 def is_localhost_url(url: str) -> bool:
     """Checks if the given URL points to a local loopback address."""
     if not url:
@@ -52,33 +55,17 @@ def is_localhost_url(url: str) -> bool:
 
 
 def clean_1c_url(raw_url: Optional[str]) -> str:
-    """Strips whitespace, surrounding quotes, and cleans the URL."""
+    """Strips whitespace and surrounding quotes."""
     if not raw_url:
         return ""
-    u = str(raw_url).strip().strip("'\"").strip()
-    return u
-
-
-def is_placeholder_template_url(url: str) -> bool:
-    """Checks if the URL is an unreplaced template placeholder like abcd-123 or xxxx."""
-    if not url:
-        return False
-    u = url.lower()
-    placeholders = [
-        "abcd-123",
-        "your-ngrok",
-        "xxxx-xx-xx",
-        "xxxx.ngrok",
-        "xyz.ngrok",
-        "<ngrok-host>",
-        "your-server-domain"
-    ]
-    return any(p in u for p in placeholders)
+    return str(raw_url).strip().strip("'\"").strip()
 
 
 def get_active_1c_url() -> str:
-    """Returns currently active 1C URL from dynamic system settings."""
-    return clean_1c_url(get_system_setting("api_1c_url", ""))
+    """Returns currently active 1C URL from dynamic system settings, defaulting to local 1C HTTP service."""
+    val = get_system_setting("api_1c_url", DEFAULT_1C_URL)
+    cleaned = clean_1c_url(val)
+    return cleaned if cleaned else DEFAULT_1C_URL
 
 
 def get_active_1c_user() -> str:
@@ -161,8 +148,7 @@ def get_1c_cache_status() -> dict:
         "remaining_ttl_seconds": max(0, int(ttl - age)) if is_valid else 0,
         "cache_ttl": ttl,
         "api_url_configured": bool(active_url),
-        "is_localhost": is_localhost_url(active_url),
-        "is_placeholder": is_placeholder_template_url(active_url)
+        "is_localhost": is_localhost_url(active_url)
     }
 
 
@@ -176,7 +162,6 @@ def get_1c_config_status() -> dict:
         "api_user": active_user,
         "has_password": bool(active_pass),
         "is_localhost": is_localhost_url(active_url),
-        "is_placeholder": is_placeholder_template_url(active_url),
         "is_configured": bool(active_url),
         "cache": get_1c_cache_status()
     }
@@ -192,8 +177,8 @@ def clear_1c_cache():
 async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Optional[int] = None) -> dict:
     """
     Asynchronously fetches product catalog from 1C HTTP Service.
-    Uses dynamic URL configuration from DB/system settings, Basic Auth,
-    and HTTP headers to bypass tunnel warning pages.
+    Supports direct local connection (http://127.0.0.1:8080/...) or external tunnel URLs.
+    Uses Basic Auth and standard headers.
     """
     global _cache_data, _cache_time
 
@@ -217,24 +202,11 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
     # 2. Check 1C URL configuration
     if not active_url:
-        warning_msg = "1C serverining tashqi IP/Ngrok manzili ko'rsatilmagan. Admin panelida yoki .env faylida API_1C_URL ni sozlang (masalan: https://xxxx.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList)."
-        print(NGROK_INSTRUCTION_GUIDE)
+        warning_msg = "1C server manzili ko'rsatilmagan. Admin panelida yoki .env faylida API_1C_URL ni sozlang."
         logger.warning(warning_msg)
         return {
             "success": False,
             "error": warning_msg,
-            "instruction": NGROK_INSTRUCTION_GUIDE,
-            "data": None
-        }
-
-    if is_placeholder_template_url(active_url):
-        warning_msg = "Iltimos, namunaviy 'abcd-123' o'rniga Ngrok bergan haqiqiy HTTPS havolangizni kiriting (masalan: https://8a2b-95-214-211-12.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList)!"
-        print(f"[1C VALIDATION] Template placeholder detected in URL: {active_url}")
-        logger.warning(warning_msg)
-        return {
-            "success": False,
-            "error": warning_msg,
-            "instruction": NGROK_INSTRUCTION_GUIDE,
             "data": None
         }
 

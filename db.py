@@ -17,7 +17,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres@localhost:5433/b
 
 # System Settings Store (Dynamic settings, 1C Enterprise integration, etc.)
 SYSTEM_SETTINGS_DB = {
-    "api_1c_url": os.getenv("API_1C_URL", "").strip(),
+    "api_1c_url": (os.getenv("API_1C_URL", "").strip() or "http://127.0.0.1:8080/Bozorcham/hs/Bozorcham/GetTovarList"),
     "api_1c_user": os.getenv("API_1C_USER", "mobiles").strip(),
     "api_1c_pass": os.getenv("API_1C_PASS", "123").strip(),
     "cache_ttl": int(os.getenv("CACHE_TTL", "300")),

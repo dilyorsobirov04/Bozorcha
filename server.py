@@ -612,9 +612,6 @@ def create_webapp_server() -> FastAPI:
             raise HTTPException(status_code=400, detail="api_url parametri talab qilinadi")
 
         clean_url = str(api_url).strip()
-        if any(p in clean_url.lower() for p in ["abcd-123", "xxxx", "your-ngrok", "<ngrok-host>"]):
-            raise HTTPException(status_code=400, detail="Iltimos, namunaviy 'abcd-123' o'rniga Ngrok bergan haqiqiy HTTPS havolangizni kiriting!")
-
         updated_config = update_1c_config(api_url=clean_url, api_user=api_user, api_pass=api_pass)
         return {
             "success": True,

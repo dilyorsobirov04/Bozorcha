@@ -2497,8 +2497,8 @@ async function load1CConfigStatus() {
                 badgeEl.className = 'onec-badge err';
                 badgeEl.innerText = '❌ Manzil kiritilmagan';
             } else if (data.is_localhost) {
-                badgeEl.className = 'onec-badge warn';
-                badgeEl.innerText = '⚠️ Localhost (Ngrok kerak)';
+                badgeEl.className = 'onec-badge ok';
+                badgeEl.innerText = '🟢 Localhost (127.0.0.1)';
             } else {
                 badgeEl.className = 'onec-badge ok';
                 badgeEl.innerText = '🟢 Faol (Active)';
@@ -2521,12 +2521,6 @@ async function save1CUrlSetting(btn = null) {
     const newUrl = urlInput.value.trim();
     if (!newUrl) {
         showToast("Iltimos, 1C HTTP servis URL manzilini kiriting!", 'error');
-        urlInput.focus();
-        return false;
-    }
-
-    if (newUrl.includes('abcd-123') || newUrl.includes('xxxx') || newUrl.includes('your-ngrok') || newUrl.includes('<ngrok-host>')) {
-        showToast("Iltimos, namunaviy 'abcd-123' o'rniga Ngrok bergan haqiqiy HTTPS havolangizni kiriting!", 'warning');
         urlInput.focus();
         return false;
     }
