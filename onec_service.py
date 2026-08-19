@@ -315,42 +315,34 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
         try:
             # Diagnostics request log
-            print(f"[1C REQUEST] Calling 1C URL: {active_url}")
+            print(f"=== 1C FETCH DEBUG ===")
+            print(f"Target URL: {active_url}")
             logger.info(f"[1C REQUEST] Calling 1C URL: {active_url}")
 
             async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
                 async with session.get(active_url, auth=auth, headers=headers) as response:
                     status = response.status
-
-                    # Diagnostics response log
-                    print(f"[1C RESPONSE] Target URL: {active_url} | HTTP Status Code: {status}")
-                    logger.info(f"[1C RESPONSE] Target URL: {active_url} | HTTP Status Code: {status}")
+                    print(f"Status Code: {status}")
 
                     if status == 200:
+                        raw_text = await response.text()
+                        print(f"Response Raw: {raw_text[:300]}")
                         raw_data = None
-                        try:
-                            raw_data = await response.json()
-                        except (aiohttp.ContentTypeError, json.JSONDecodeError, Exception):
-                            raw_text = await response.text()
-                            if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
-                                warning_msg = "Ngrok HTML ogohlantirish sahifasini qaytardi. ngrok-skip-browser-warning sarlavhasi bilan qayta urinib ko'ring."
-                                logger.warning(warning_msg)
-                                print(f"1C API Error Response: {status} - {raw_text[:300]}")
-                                return {
-                                    "success": False,
-                                    "error": warning_msg,
-                                    "status_code": 200,
-                                    "data": None
-                                }
-                            try:
-                                raw_data = json.loads(raw_text)
-                            except (json.JSONDecodeError, Exception):
-                                raw_data = raw_text
 
-                        # Log raw response info safely
-                        sample_str = str(raw_data)[:300].encode('ascii', errors='replace').decode('ascii')
-                        print(f"1C RAW RESPONSE received ({len(str(raw_data))} bytes): {sample_str}...")
-                        logger.info(f"1C RAW RESPONSE received ({len(str(raw_data))} bytes)")
+                        if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
+                            warning_msg = "Ngrok HTML ogohlantirish sahifasini qaytardi. ngrok-skip-browser-warning sarlavhasi talab qilinadi."
+                            logger.warning(warning_msg)
+                            return {
+                                "success": False,
+                                "error": warning_msg,
+                                "status_code": 200,
+                                "data": None
+                            }
+
+                        try:
+                            raw_data = json.loads(raw_text)
+                        except (json.JSONDecodeError, Exception) as json_err:
+                            raw_data = raw_text
 
                         # Update in-memory cache
                         _cache_data = raw_data
@@ -364,79 +356,73 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         }
                     elif status in (401, 403):
                         err_text = await response.text()
-                        print(f"1C API Error Response: {status} - {err_text}")
-                        warning_msg = "1C login yoki paroli noto'g'ri"
+                        print(f"Response Raw: {err_text[:300]}")
+                        warning_msg = "1C login yoki paroli noto'g'ri (401/403 Basic Auth)"
                         logger.warning(f"1C Auth Error ({status}) at {active_url}: {warning_msg}")
                         return {
                             "success": False,
                             "error": warning_msg,
-                            "detail": err_text[:200],
+                            "detail": err_text[:300],
                             "status_code": status,
                             "data": None
                         }
                     elif status == 404:
                         err_text = await response.text()
-                        print(f"1C API Error Response: {status} - {err_text}")
-                        warning_msg = "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C nashr qilingan xizmat yo'lini tekshiring."
+                        print(f"Response Raw: {err_text[:300]}")
+                        warning_msg = "1C HTTP xizmati topilmadi (404 Not Found). Nashr qilingan xizmat yo'lini tekshiring."
                         logger.warning(f"1C 404 Not Found at {active_url}: {warning_msg}")
-                        print(NGROK_INSTRUCTION_GUIDE)
                         return {
                             "success": False,
                             "error": warning_msg,
                             "url": active_url,
-                            "detail": err_text[:200],
+                            "detail": err_text[:300],
                             "status_code": 404,
-                            "instruction": NGROK_INSTRUCTION_GUIDE,
                             "data": None
                         }
                     else:
                         err_text = await response.text()
-                        print(f"1C API Error Response: {status} - {err_text}")
+                        print(f"Response Raw: {err_text[:300]}")
                         warning_msg = f"1C serveridan xato javob qaytdi (HTTP {status}): {err_text[:200]}"
                         logger.warning(f"1C Error ({status}) at {active_url}: {warning_msg}")
                         return {
                             "success": False,
                             "error": warning_msg,
                             "status_code": status,
+                            "detail": err_text[:300],
                             "data": None
                         }
 
         except aiohttp.ClientConnectorError as e:
-            if is_localhost_url(active_url):
-                error_msg = "1C serverining tashqi IP/Ngrok manzili noto'g'ri ko'rsatilgan. Cloud server (Render/Vercel) localhost ga ulana olmaydi. Admin panelida Ngrok tunnel manzilini yozing (masalan: https://xyz.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList)."
-                print(NGROK_INSTRUCTION_GUIDE)
-            else:
-                error_msg = f"1C serveriga ({active_url}) ulanib bo'lmadi. Ngrok tunnel yoniqligini va 1C dasturi ishlayotganini tekshiring."
-
-            logger.warning(f"1C Connection Error at {active_url}: {error_msg} | Detail: {str(e)}")
+            print(f"=== 1C FETCH EXCEPTION ===")
+            print(f"Connection Error: {str(e)}")
+            error_msg = f"1C serveriga ({active_url}) ulanib bo'lmadi: {str(e)}"
+            logger.warning(error_msg)
             return {
                 "success": False,
                 "error": error_msg,
                 "detail": str(e),
-                "instruction": NGROK_INSTRUCTION_GUIDE,
                 "data": None
             }
-        except asyncio.TimeoutError:
-            if is_localhost_url(active_url):
-                error_msg = "1C serverining tashqi IP/Ngrok manzili noto'g'ri ko'rsatilgan. Cloud server (Render/Vercel) localhost ga ulana olmaydi. Admin panelida Ngrok tunnel manzilini yozing (masalan: https://xyz.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList)."
-                print(NGROK_INSTRUCTION_GUIDE)
-            else:
-                error_msg = f"1C serveridan javob kelishi vaqti tugadi ({eff_timeout}s). 1C kompyuteri yoki Ngrok tunnel tezligini tekshiring."
-
-            logger.warning(f"1C Timeout at {active_url}: {error_msg}")
+        except asyncio.TimeoutError as e:
+            print(f"=== 1C FETCH EXCEPTION ===")
+            print(f"Timeout Error after {eff_timeout}s")
+            error_msg = f"1C serveridan javob kelishi vaqti tugadi ({eff_timeout}s)."
+            logger.warning(error_msg)
             return {
                 "success": False,
                 "error": error_msg,
-                "instruction": NGROK_INSTRUCTION_GUIDE,
+                "detail": "TimeoutError",
                 "data": None
             }
         except Exception as e:
-            error_msg = f"1C HTTP xizmati bilan aloqada kutilmagan xatolik: {str(e)}"
-            logger.error(f"1C Unexpected error at {active_url}: {error_msg}", exc_info=True)
+            print(f"=== 1C FETCH EXCEPTION ===")
+            print(f"Unexpected Exception: {type(e).__name__}: {str(e)}")
+            error_msg = f"1C bilan aloqada xatolik ({type(e).__name__}): {str(e)}"
+            logger.error(error_msg, exc_info=True)
             return {
                 "success": False,
                 "error": error_msg,
-                "instruction": NGROK_INSTRUCTION_GUIDE,
+                "detail": str(e),
                 "data": None
             }
 

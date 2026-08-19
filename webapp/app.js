@@ -2949,7 +2949,7 @@ async function trigger1CSync(btn = null) {
     } catch (e) {
         console.error('trigger1CSync error:', e);
         clearAllToasts();
-        showToast("1C serveriga ulanib bo'lmadi. Ngrok va 1C ishlayotganini tekshiring.", 'error');
+        showToast(e.message ? `Xatolik: ${e.message}` : "1C serveriga ulanib bo'lmadi", 'error');
     } finally {
         if (syncBtn) {
             syncBtn.disabled = false;
