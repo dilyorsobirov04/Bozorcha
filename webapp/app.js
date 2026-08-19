@@ -2905,7 +2905,7 @@ async function trigger1CSync(btn = null) {
             if (syncedCount > 0) {
                 showToast("1C tovarlari muvaffaqiyatli yuklandi!", 'success');
             } else {
-                showToast("1C serveri bilan aloqa bor, lekin yangi tovarlar topilmadi.", 'info');
+                showToast("1C serveri bilan aloqa o'rnatildi, lekin yangi tovarlar topilmadi.", 'info');
             }
 
             // Instantly render fresh uncategorized items from sync response
@@ -3952,5 +3952,9 @@ window.assignProductCategory = assignProductCategory;
 window.trigger1CSync = trigger1CSync;
 window.load1CConfigStatus = load1CConfigStatus;
 window.save1CUrlSetting = save1CUrlSetting;
+window.fetchUncategorizedProducts = loadUncategorizedProducts;
+window.clearAllToasts = clearAllToasts;
+window.showToast = showToast;
+
 
 
