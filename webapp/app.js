@@ -2886,12 +2886,23 @@ async function trigger1CSync(btn = null) {
         if (res.ok && data.success) {
             const countMsg = data.synced_count != null ? ` (${data.synced_count} ta tovar)` : '';
             showToast(`1C dan tovarlar muvaffaqiyatli yuklandi! 🎉${countMsg}`, 'success');
-            await loadUncategorizedProducts();
+
+            // Instantly render fresh uncategorized items from sync response
+            if (data.uncategorized_products && Array.isArray(data.uncategorized_products)) {
+                uncategorizedProducts = data.uncategorized_products;
+                renderUncategorizedGrid(uncategorizedProducts);
+                const countEl = document.getElementById('admin-uncategorized-count');
+                const headerCountEl = document.getElementById('uncategorized-header-count');
+                if (countEl) countEl.innerText = uncategorizedProducts.length;
+                if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
+            } else {
+                await loadUncategorizedProducts();
+            }
             await loadProducts();
         } else {
             let errorMsg = data.message || data.error || data.detail;
             if (res.status === 404 || data.status_code === 404) {
-                errorMsg = "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C Nashr qilingan xizmat nomini (Case-Sensitive) tekshiring.";
+                errorMsg = "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C nashr qilingan xizmat yo'lini tekshiring.";
             } else if (res.status === 401 || res.status === 403 || data.status_code === 401) {
                 errorMsg = "1C logini yoki paroli xato (401 Basic Auth).";
             } else if (!errorMsg) {

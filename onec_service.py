@@ -5,26 +5,16 @@ import logging
 import aiohttp
 from typing import Optional, Any
 
-from config import (
-    API_1C_URL,
-    API_1C_USER,
-    API_1C_PASS,
-    CACHE_TTL,
-    PAGE_SIZE,
-    API_1C_TIMEOUT
+from db import (
+    sync_1c_products,
+    get_uncategorized_products,
+    get_system_setting,
+    set_system_setting,
+    get_1c_system_settings,
+    update_1c_system_settings
 )
-from db import sync_1c_products
 
 logger = logging.getLogger(__name__)
-
-# Mutable runtime configuration (initialized from config.py / environment variables)
-_runtime_config = {
-    "api_1c_url": API_1C_URL,
-    "api_1c_user": API_1C_USER,
-    "api_1c_pass": API_1C_PASS,
-    "cache_ttl": CACHE_TTL,
-    "timeout": API_1C_TIMEOUT
-}
 
 # In-memory cache storage for 1C responses
 _cache_data: Optional[Any] = None
@@ -62,16 +52,16 @@ def is_localhost_url(url: str) -> bool:
 
 
 def get_active_1c_url() -> str:
-    """Returns currently active 1C URL from runtime config."""
-    return _runtime_config.get("api_1c_url", "").strip()
+    """Returns currently active 1C URL from dynamic system settings."""
+    return str(get_system_setting("api_1c_url", "")).strip()
 
 
 def get_active_1c_user() -> str:
-    return _runtime_config.get("api_1c_user", "mobiles").strip()
+    return str(get_system_setting("api_1c_user", "mobiles")).strip()
 
 
 def get_active_1c_pass() -> str:
-    return _runtime_config.get("api_1c_pass", "123").strip()
+    return str(get_system_setting("api_1c_pass", "123")).strip()
 
 
 def persist_1c_settings_to_env(api_url: str, api_user: str = "", api_pass: str = ""):
@@ -116,22 +106,16 @@ def persist_1c_settings_to_env(api_url: str, api_user: str = "", api_pass: str =
 
 
 def update_1c_config(api_url: Optional[str] = None, api_user: Optional[str] = None, api_pass: Optional[str] = None) -> dict:
-    """Updates runtime 1C settings dynamically without requiring backend restart."""
-    global _runtime_config
-    if api_url is not None:
-        _runtime_config["api_1c_url"] = str(api_url).strip()
-        clear_1c_cache()
-    if api_user is not None:
-        _runtime_config["api_1c_user"] = str(api_user).strip()
-    if api_pass is not None:
-        _runtime_config["api_1c_pass"] = str(api_pass).strip()
+    """Updates dynamic 1C settings in DB and memory without requiring server restart."""
+    update_1c_system_settings(api_url=api_url, api_user=api_user, api_pass=api_pass)
+    clear_1c_cache()
 
-    # Persist to .env
-    persist_1c_settings_to_env(
-        _runtime_config["api_1c_url"],
-        _runtime_config["api_1c_user"],
-        _runtime_config["api_1c_pass"]
-    )
+    active_url = get_active_1c_url()
+    active_user = get_active_1c_user()
+    active_pass = get_active_1c_pass()
+
+    # Persist to .env file for continuity across restarts
+    persist_1c_settings_to_env(active_url, active_user, active_pass)
 
     return get_1c_config_status()
 
@@ -141,7 +125,7 @@ def get_1c_cache_status() -> dict:
     global _cache_data, _cache_time
     now = time.time()
     age = now - _cache_time
-    ttl = _runtime_config.get("cache_ttl", CACHE_TTL)
+    ttl = int(get_system_setting("cache_ttl", 300))
     is_valid = (_cache_data is not None) and (age < ttl)
     active_url = get_active_1c_url()
     return {
@@ -156,7 +140,7 @@ def get_1c_cache_status() -> dict:
 
 
 def get_1c_config_status() -> dict:
-    """Returns active 1C configuration status for Admin Panel display and editing."""
+    """Returns active 1C configuration status for the Admin Panel display & editor."""
     active_url = get_active_1c_url()
     active_user = get_active_1c_user()
     active_pass = get_active_1c_pass()
@@ -180,17 +164,16 @@ def clear_1c_cache():
 async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Optional[int] = None) -> dict:
     """
     Asynchronously fetches product catalog from 1C HTTP Service.
-    Uses HTTP Basic Authentication, SSL bypass for local/ngrok tunnels,
-    ngrok warning bypass headers, User-Agent Mozilla/5.0, Accept application/json,
-    and in-memory TTL caching.
+    Uses dynamic URL configuration from DB/system settings, Basic Auth,
+    and HTTP headers to bypass tunnel warning pages.
     """
     global _cache_data, _cache_time
 
     active_url = get_active_1c_url()
     active_user = get_active_1c_user()
     active_pass = get_active_1c_pass()
-    ttl = _runtime_config.get("cache_ttl", CACHE_TTL)
-    eff_timeout = timeout_seconds or _runtime_config.get("timeout", API_1C_TIMEOUT) or 20
+    ttl = int(get_system_setting("cache_ttl", 300))
+    eff_timeout = timeout_seconds or int(get_system_setting("api_1c_timeout", 20)) or 20
 
     # 1. Check in-memory cache if not forcing refresh
     now = time.time()
@@ -224,7 +207,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     # 4. Required headers
     headers = {
         "ngrok-skip-browser-warning": "true",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "User-Agent": "Mozilla/5.0",
         "Accept": "application/json",
         "Bypass-Tunnel-Reminder": "true",
         "X-Requested-With": "XMLHttpRequest"
@@ -246,13 +229,17 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                 }
 
         try:
-            # Diagnostics log
-            print(f"Requesting 1C URL: {active_url}")
-            logger.info(f"Requesting 1C URL: {active_url}")
+            # Diagnostics request log
+            print(f"[1C REQUEST] Calling 1C URL: {active_url}")
+            logger.info(f"[1C REQUEST] Calling 1C URL: {active_url}")
 
             async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
                 async with session.get(active_url, auth=auth, headers=headers) as response:
                     status = response.status
+
+                    # Diagnostics response log
+                    print(f"[1C RESPONSE] Target URL: {active_url} | HTTP Status Code: {status}")
+                    logger.info(f"[1C RESPONSE] Target URL: {active_url} | HTTP Status Code: {status}")
 
                     if status == 200:
                         content_type = response.headers.get("Content-Type", "").lower()
@@ -284,8 +271,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         }
                     elif status in (401, 403):
                         err_text = await response.text()
-                        warning_msg = "1C logini yoki paroli xato (401 Basic Auth). API_1C_USER va API_1C_PASS ni tekshiring."
-                        print(f"1C Auth Error at: {active_url}")
+                        warning_msg = "1C logini yoki paroli xato (401 Basic Auth)."
                         logger.warning(f"1C Auth Error ({status}) at {active_url}: {warning_msg}")
                         return {
                             "success": False,
@@ -296,9 +282,8 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         }
                     elif status == 404:
                         err_text = await response.text()
-                        warning_msg = "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C Nashr qilingan xizmat nomini (Case-Sensitive) tekshiring."
-                        print(f"1C 404 Not Found at URL: {active_url}")
-                        logger.warning(f"1C 404 Not Found at URL: {active_url}")
+                        warning_msg = "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C nashr qilingan xizmat yo'lini tekshiring."
+                        logger.warning(f"1C 404 Not Found at {active_url}: {warning_msg}")
                         print(NGROK_INSTRUCTION_GUIDE)
                         return {
                             "success": False,
@@ -364,6 +349,7 @@ async def sync_products_from_1c(force_refresh: bool = True) -> dict:
     """
     Fetches latest products from 1C and upserts into local database.
     Uncategorized items receive category_id = None.
+    Returns fresh list of uncategorized products instantly.
     """
     fetch_res = await fetch_1c_products(force_refresh=force_refresh)
 
@@ -381,5 +367,8 @@ async def sync_products_from_1c(force_refresh: bool = True) -> dict:
     sync_result["cached"] = fetch_res.get("cached", False)
     if "cache_age" in fetch_res:
         sync_result["cache_age"] = fetch_res["cache_age"]
+
+    # Instantly include fresh uncategorized products list
+    sync_result["uncategorized_products"] = get_uncategorized_products()
 
     return sync_result

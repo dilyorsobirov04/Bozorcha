@@ -4,6 +4,49 @@ import xml.etree.ElementTree as ET
 import urllib.parse
 from datetime import datetime
 
+# System Settings Store (Dynamic settings, 1C Enterprise integration, etc.)
+SYSTEM_SETTINGS_DB = {
+    "api_1c_url": os.getenv("API_1C_URL", "").strip(),
+    "api_1c_user": os.getenv("API_1C_USER", "mobiles").strip(),
+    "api_1c_pass": os.getenv("API_1C_PASS", "123").strip(),
+    "cache_ttl": int(os.getenv("CACHE_TTL", "300")),
+    "page_size": int(os.getenv("PAGE_SIZE", "10")),
+    "api_1c_timeout": int(os.getenv("API_1C_TIMEOUT", "20")),
+}
+
+
+def get_system_setting(key: str, default: any = None) -> any:
+    """Gets a setting value from the dynamic settings store."""
+    return SYSTEM_SETTINGS_DB.get(key, default)
+
+
+def set_system_setting(key: str, value: any):
+    """Sets a setting value in the dynamic settings store."""
+    SYSTEM_SETTINGS_DB[key] = value
+
+
+def get_1c_system_settings() -> dict:
+    """Returns the current active 1C configuration dictionary."""
+    return {
+        "api_url": SYSTEM_SETTINGS_DB.get("api_1c_url", ""),
+        "api_user": SYSTEM_SETTINGS_DB.get("api_1c_user", "mobiles"),
+        "has_password": bool(SYSTEM_SETTINGS_DB.get("api_1c_pass")),
+        "cache_ttl": SYSTEM_SETTINGS_DB.get("cache_ttl", 300),
+        "timeout": SYSTEM_SETTINGS_DB.get("api_1c_timeout", 20)
+    }
+
+
+def update_1c_system_settings(api_url: str = None, api_user: str = None, api_pass: str = None) -> dict:
+    """Updates 1C configuration settings dynamically."""
+    if api_url is not None:
+        SYSTEM_SETTINGS_DB["api_1c_url"] = str(api_url).strip()
+    if api_user is not None:
+        SYSTEM_SETTINGS_DB["api_1c_user"] = str(api_user).strip()
+    if api_pass is not None:
+        SYSTEM_SETTINGS_DB["api_1c_pass"] = str(api_pass).strip()
+    return get_1c_system_settings()
+
+
 CATEGORIES_DB = {
     # Top-Level Main Categories (parent_id: None)
     1: {"id": 1, "name": "Meva & Sabzavotlar", "icon": "🍎", "parent_id": None, "image_url": "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200&auto=format&fit=crop&q=60"},
