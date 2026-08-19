@@ -9,7 +9,8 @@ from config import (
     API_1C_USER,
     API_1C_PASS,
     CACHE_TTL,
-    PAGE_SIZE
+    PAGE_SIZE,
+    API_1C_TIMEOUT
 )
 from db import sync_1c_products
 
@@ -19,6 +20,33 @@ logger = logging.getLogger(__name__)
 _cache_data: Optional[Any] = None
 _cache_time: float = 0.0
 _cache_lock = asyncio.Lock()
+
+NGROK_INSTRUCTION_GUIDE = """
+========================================================================
+[1C INTEGRATION GUIDE - NGROK / EXTERNAL TUNNEL SETUP]
+Server 1C ning localhost:8080 manziliga ulana olmadi.
+Sababi: Backend bulutli serverda (Render, Vercel, VPS) ishlayotgan bo'lsa,
+'localhost' bulut serverining o'zini bildiradi (1C o'rnatilgan kompyuterni emas).
+
+1C ni ulash bo'yicha qo'llanma:
+1. 1C dasturi ishlayotgan kompyuterda terminal ochib Ngrok ni ishga tushiring:
+   ngrok http 8080
+2. Ngrok taqdim etgan HTTPS manzilni nusxalang (masalan: https://xxxx.ngrok-free.app).
+3. .env fayliga yoki Render/Vercel Environment Variables ga quyidagicha yozing:
+   API_1C_URL=https://xxxx.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList
+   API_1C_USER=mobiles
+   API_1C_PASS=123
+4. Mini App Admin panelida '⚡️ 1C Sinxronlash' tugmasini bosing.
+========================================================================
+"""
+
+
+def is_localhost_url(url: str) -> bool:
+    """Checks if the given URL points to a local loopback address."""
+    if not url:
+        return False
+    u = url.lower().strip()
+    return "localhost" in u or "127.0.0.1" in u or "0.0.0.0" in u or "::1" in u
 
 
 def get_1c_cache_status() -> dict:
@@ -32,7 +60,9 @@ def get_1c_cache_status() -> dict:
         "is_valid": is_valid,
         "cache_age_seconds": int(age) if _cache_data is not None else None,
         "remaining_ttl_seconds": max(0, int(CACHE_TTL - age)) if is_valid else 0,
-        "cache_ttl": CACHE_TTL
+        "cache_ttl": CACHE_TTL,
+        "api_url_configured": bool(API_1C_URL),
+        "is_localhost": is_localhost_url(API_1C_URL)
     }
 
 
@@ -43,13 +73,16 @@ def clear_1c_cache():
     _cache_time = 0.0
 
 
-async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: int = 10) -> dict:
+async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Optional[int] = None) -> dict:
     """
     Asynchronously fetches product catalog from 1C HTTP Service.
-    Uses HTTP Basic Authentication and in-memory TTL caching.
-    Returns graceful error dictionary instead of crashing if 1C is offline.
+    Uses HTTP Basic Authentication, SSL bypass for local/ngrok tunnels,
+    realistic browser headers, and in-memory TTL caching.
+    Returns graceful error dictionary with helpful instructions instead of crashing.
     """
     global _cache_data, _cache_time
+
+    eff_timeout = timeout_seconds or API_1C_TIMEOUT or 20
 
     # 1. Check in-memory cache if not forcing refresh
     now = time.time()
@@ -65,11 +98,13 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: int = 
 
     # 2. Check 1C URL configuration
     if not API_1C_URL or not API_1C_URL.strip():
-        warning_msg = "API_1C_URL konfiguratsiyada ko'rsatilmagan (.env faylini tekshiring)"
+        warning_msg = "1C serverining tashqi IP/Ngrok manzili ko'rsatilmagan. .env faylida API_1C_URL ni sozlang (masalan: https://xxxx.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList)."
+        print(NGROK_INSTRUCTION_GUIDE)
         logger.warning(warning_msg)
         return {
             "success": False,
             "error": warning_msg,
+            "instruction": NGROK_INSTRUCTION_GUIDE,
             "data": None
         }
 
@@ -78,12 +113,18 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: int = 
     if API_1C_USER and API_1C_PASS:
         auth = aiohttp.BasicAuth(login=API_1C_USER, password=API_1C_PASS)
 
+    # 4. Headers with ngrok / tunnel warning bypass
     headers = {
         "Accept": "application/json, application/xml, text/plain, */*",
-        "User-Agent": "Bozorcha-App/1.0"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "ngrok-skip-browser-warning": "true",
+        "Bypass-Tunnel-Reminder": "true",
+        "X-Requested-With": "XMLHttpRequest"
     }
 
-    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+    timeout = aiohttp.ClientTimeout(total=eff_timeout)
+    # Allow self-signed certificates or HTTPS tunnels without strict SSL rejection
+    connector = aiohttp.TCPConnector(ssl=False)
 
     async with _cache_lock:
         # Double-check cache after acquiring lock
@@ -99,7 +140,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: int = 
 
         try:
             logger.info(f"Connecting to 1C HTTP Service at: {API_1C_URL}")
-            async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
                 async with session.get(API_1C_URL, auth=auth, headers=headers) as response:
                     status = response.status
 
@@ -117,7 +158,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: int = 
                             raw_text = await response.text()
                             raw_data = raw_text
 
-                        # Log raw response for debugging as requested
+                        # Log raw response for debugging
                         print("1C RAW RESPONSE:", raw_data)
                         logger.info(f"1C RAW RESPONSE: {raw_data}")
 
@@ -131,6 +172,28 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: int = 
                             "data": raw_data,
                             "status_code": status
                         }
+                    elif status in (401, 403):
+                        err_text = await response.text()
+                        warning_msg = f"1C avtorizatsiyasida xatolik (HTTP {status}). API_1C_USER va API_1C_PASS ni tekshiring."
+                        logger.warning(warning_msg)
+                        return {
+                            "success": False,
+                            "error": warning_msg,
+                            "detail": err_text[:200],
+                            "status_code": status,
+                            "data": None
+                        }
+                    elif status == 404:
+                        err_text = await response.text()
+                        warning_msg = f"1C HTTP xizmati topilmadi (HTTP 404). API_1C_URL manzilini tekshiring: {API_1C_URL}"
+                        logger.warning(warning_msg)
+                        return {
+                            "success": False,
+                            "error": warning_msg,
+                            "detail": err_text[:200],
+                            "status_code": status,
+                            "data": None
+                        }
                     else:
                         err_text = await response.text()
                         warning_msg = f"1C serveridan xato javob qaytdi (HTTP {status}): {err_text[:200]}"
@@ -143,19 +206,32 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: int = 
                         }
 
         except aiohttp.ClientConnectorError as e:
-            error_msg = f"1C serveriga ulanib bo'lmadi ({API_1C_URL}): Server o'chiq yoki tarmoqda xatolik ({str(e)})"
-            logger.warning(error_msg)
+            if is_localhost_url(API_1C_URL):
+                error_msg = "1C serverining tashqi IP/Ngrok manzili noto'g'ri ko'rsatilgan. Cloud server (Render/Vercel) localhost ga ulana olmaydi. .env fayliga Ngrok tunnel manzilini yozing (masalan: API_1C_URL=https://xyz.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList)."
+                print(NGROK_INSTRUCTION_GUIDE)
+            else:
+                error_msg = f"1C serveriga ({API_1C_URL}) ulanib bo'lmadi. Ngrok tunnel yoniqligini va 1C dasturi ishlayotganini tekshiring."
+
+            logger.warning(f"1C Connection Error: {error_msg} | Detail: {str(e)}")
             return {
                 "success": False,
                 "error": error_msg,
+                "detail": str(e),
+                "instruction": NGROK_INSTRUCTION_GUIDE,
                 "data": None
             }
         except asyncio.TimeoutError:
-            error_msg = f"1C serveriga ulanish vaqti tugadi (Timeout {timeout_seconds}s)"
+            if is_localhost_url(API_1C_URL):
+                error_msg = "1C serverining tashqi IP/Ngrok manzili noto'g'ri ko'rsatilgan. Cloud server (Render/Vercel) localhost ga ulana olmaydi. .env fayliga Ngrok tunnel manzilini yozing (masalan: API_1C_URL=https://xyz.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList)."
+                print(NGROK_INSTRUCTION_GUIDE)
+            else:
+                error_msg = f"1C serveridan javob kelishi vaqti tugadi ({eff_timeout}s). 1C kompyuteri yoki Ngrok tunnel tezligini tekshiring."
+
             logger.warning(error_msg)
             return {
                 "success": False,
                 "error": error_msg,
+                "instruction": NGROK_INSTRUCTION_GUIDE,
                 "data": None
             }
         except Exception as e:
@@ -164,6 +240,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: int = 
             return {
                 "success": False,
                 "error": error_msg,
+                "instruction": NGROK_INSTRUCTION_GUIDE,
                 "data": None
             }
 
@@ -179,7 +256,8 @@ async def sync_products_from_1c(force_refresh: bool = True) -> dict:
         return {
             "success": False,
             "message": fetch_res.get("error", "1C dan ma'lumot olib bo'lmadi"),
-            "detail": fetch_res.get("error"),
+            "detail": fetch_res.get("detail") or fetch_res.get("error"),
+            "instruction": fetch_res.get("instruction"),
             "status_code": fetch_res.get("status_code", 502)
         }
 

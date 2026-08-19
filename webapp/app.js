@@ -2785,12 +2785,12 @@ async function trigger1CSync(btn = null) {
             await loadUncategorizedProducts();
             await loadProducts();
         } else {
-            const msg = data.message || data.detail || "1C serveriga ulanib bo'lmadi yoki tovarlar topilmadi";
+            const msg = data.message || data.error || data.detail || "1C serverining tashqi IP/Ngrok manzili noto'g'ri ko'rsatilgan. .env dagi API_1C_URL ni tekshiring.";
             showToast(msg, 'error');
         }
     } catch (e) {
         console.error('trigger1CSync error:', e);
-        showToast("1C serveriga ulanishda tarmoq xatoligi yuz berdi!", 'error');
+        showToast("1C serveriga ulanishda tarmoq xatoligi yuz berdi. .env dagi API_1C_URL (Ngrok) manzilini tekshiring.", 'error');
     } finally {
         if (syncBtn) {
             syncBtn.disabled = false;
