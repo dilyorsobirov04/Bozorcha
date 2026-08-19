@@ -16,6 +16,7 @@ from db import (
     get_no_photo_products_api,
     get_uncategorized_products,
     assign_product_category,
+    sync_1c_products,
     update_product_photo_and_stock,
     add_product,
     delete_product,
@@ -527,6 +528,30 @@ def create_webapp_server() -> FastAPI:
         return no_photo_items
 
     # ----------------- UNCATEGORIZED 1C PRODUCTS & ASSIGNMENT -----------------
+    @app.post("/api/admin/sync-1c")
+    @app.post("/api/sync-1c")
+    async def handle_sync_1c(request: Request):
+        try:
+            content_type = request.headers.get("content-type", "")
+            if "application/json" in content_type:
+                raw_data = await request.json()
+            elif "xml" in content_type or "text" in content_type:
+                raw_text = (await request.body()).decode("utf-8", errors="ignore")
+                raw_data = raw_text
+            else:
+                try:
+                    raw_data = await request.json()
+                except Exception:
+                    raw_data = (await request.body()).decode("utf-8", errors="ignore")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"1C ma'lumotlarini o'qishda xatolik: {str(e)}")
+
+        print("1C RAW RESPONSE:", raw_data)
+        logger.info(f"1C RAW RESPONSE: {raw_data}")
+
+        result = sync_1c_products(raw_data)
+        return result
+
     @app.get("/api/admin/products/uncategorized")
     async def handle_get_uncategorized_products(
         search: Optional[str] = Query(None, description="Search by name or 1C SKU"),

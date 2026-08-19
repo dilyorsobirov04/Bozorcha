@@ -1,4 +1,6 @@
 import os
+import json
+import xml.etree.ElementTree as ET
 import urllib.parse
 from datetime import datetime
 
@@ -271,75 +273,6 @@ PRODUCTS_DB = {
         "image_url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&auto=format&fit=crop&q=60",
         "is_promo": False,
         "recommendation": "Salatlar uchun"
-    },
-    # Uncategorized 1C Synced Products (category_id is None)
-    109: {
-        "id": 109,
-        "sku": "1C-9901",
-        "category_id": None,
-        "name": "Alpen Gold Shokolad Max Fun",
-        "unit": "dona",
-        "price": 19000,
-        "old_price": None,
-        "discount_percent": 0,
-        "stock": 45,
-        "description": "1C orqali yangi import qilingan tovar. Portlovchi karamel va mevali shokolad.",
-        "nutrition": {"cal": "520 kcal", "protein": "5g", "fat": "28g"},
-        "photo_file_id": None,
-        "image_url": "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&auto=format&fit=crop&q=60",
-        "is_promo": False,
-        "recommendation": "Choy bilan"
-    },
-    110: {
-        "id": 110,
-        "sku": "1C-9902",
-        "category_id": None,
-        "name": "Lipton Sariq Qora Choy 100x2g",
-        "unit": "quti",
-        "price": 32000,
-        "old_price": None,
-        "discount_percent": 0,
-        "stock": 28,
-        "description": "1C orqali import qilingan paketli yuqori sifatli qora choy.",
-        "nutrition": {"cal": "1 kcal", "protein": "0g", "fat": "0g"},
-        "photo_file_id": None,
-        "image_url": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=60",
-        "is_promo": False,
-        "recommendation": "Issiq ichimlik"
-    },
-    111: {
-        "id": 111,
-        "sku": "1C-9903",
-        "category_id": None,
-        "name": "Barilla Spaghetti N.5 500g",
-        "unit": "dona",
-        "price": 24000,
-        "old_price": None,
-        "discount_percent": 0,
-        "stock": 50,
-        "description": "1C orqali import qilingan qattiq bug'doyli Italiya spagettisi.",
-        "nutrition": {"cal": "359 kcal", "protein": "12.5g", "fat": "2g"},
-        "photo_file_id": None,
-        "image_url": "https://images.unsplash.com/photo-1551462147-ff29053bfc14?w=500&auto=format&fit=crop&q=60",
-        "is_promo": False,
-        "recommendation": "Pomidor sousi bilan"
-    },
-    112: {
-        "id": 112,
-        "sku": "1C-9904",
-        "category_id": None,
-        "name": "Zaytun Moyi Extra Virgin 500ml",
-        "unit": "dona",
-        "price": 68000,
-        "old_price": None,
-        "discount_percent": 0,
-        "stock": 15,
-        "description": "1C orqali import qilingan birinchi sovuq siquv tabiiy zaytun yog'i.",
-        "nutrition": {"cal": "824 kcal", "protein": "0g", "fat": "91.6g"},
-        "photo_file_id": None,
-        "image_url": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=500&auto=format&fit=crop&q=60",
-        "is_promo": False,
-        "recommendation": "Salat va taomlar uchun"
     }
 }
 
@@ -479,6 +412,221 @@ def update_product_photo_and_stock(
         return product
     except (ValueError, TypeError):
         return None
+
+
+def sync_1c_products(raw_data: any) -> dict:
+    """
+    Parses and synchronizes products from 1C Enterprise (JSON, XML or dict/list).
+    Accepts various field naming conventions and upserts into PRODUCTS_DB.
+    Unmapped items get category_id = None.
+    """
+    print("1C RAW RESPONSE:", raw_data)
+
+    items_to_process = []
+
+    # 1. Parse raw_data to list of dicts
+    if isinstance(raw_data, list):
+        items_to_process = raw_data
+    elif isinstance(raw_data, dict):
+        found_list = False
+        for key in ["products", "items", "goods", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "data", "rows"]:
+            if key in raw_data and isinstance(raw_data[key], list):
+                items_to_process = raw_data[key]
+                found_list = True
+                break
+        if not found_list:
+            items_to_process = [raw_data]
+    elif isinstance(raw_data, str):
+        trimmed = raw_data.strip()
+        if trimmed.startswith("{") or trimmed.startswith("["):
+            try:
+                parsed_json = json.loads(trimmed)
+                return sync_1c_products(parsed_json)
+            except Exception as e:
+                print("1C JSON parse error:", e)
+
+        # Try XML parsing
+        if trimmed.startswith("<"):
+            try:
+                root = ET.fromstring(trimmed)
+                product_nodes = []
+                for tag in ["Товар", "Product", "Item", "Номенклатура", "Position", "Good", "товар", "product", "item"]:
+                    found = root.findall(f".//{tag}")
+                    if found:
+                        product_nodes = found
+                        break
+                if not product_nodes:
+                    product_nodes = list(root)
+
+                for node in product_nodes:
+                    item_dict = {}
+                    item_dict.update(node.attrib)
+                    for child in node:
+                        tag_name = child.tag.split("}")[-1]
+                        item_dict[tag_name] = (child.text or "").strip()
+                    if item_dict:
+                        items_to_process.append(item_dict)
+            except Exception as e:
+                print("1C XML parse error:", e)
+
+    synced_products = []
+    invalid_count = 0
+
+    for item in items_to_process:
+        if not isinstance(item, dict):
+            invalid_count += 1
+            continue
+
+        # Extract SKU / Code
+        sku_val = (
+            item.get("SKU") or item.get("sku") or
+            item.get("Code") or item.get("code") or
+            item.get("Код") or item.get("код") or
+            item.get("id") or item.get("ID") or
+            item.get("Артикул") or item.get("артикул") or
+            item.get("Article") or item.get("article") or
+            item.get("Barcode") or item.get("barcode") or
+            item.get("Штрихкод") or item.get("штрихкод")
+        )
+        if sku_val is None or str(sku_val).strip() == "":
+            invalid_count += 1
+            continue
+        sku = str(sku_val).strip()
+
+        # Extract Name / Title
+        name_val = (
+            item.get("Name") or item.get("name") or
+            item.get("Наименование") or item.get("наименование") or
+            item.get("title") or item.get("Title") or
+            item.get("Номенклатура") or item.get("номенклатура") or
+            item.get("product_name") or item.get("ProductName") or
+            item.get("Товар") or item.get("товар")
+        )
+        if name_val is None or str(name_val).strip() == "":
+            invalid_count += 1
+            continue
+        name = str(name_val).strip()
+
+        # Extract Price
+        price_val = (
+            item.get("Price") or item.get("price") or
+            item.get("Цена") or item.get("цена") or
+            item.get("Cost") or item.get("cost") or
+            item.get("amount") or item.get("Amount") or 0
+        )
+        try:
+            price = int(round(float(str(price_val).replace(" ", "").replace(",", "."))))
+            if price < 0:
+                price = 0
+        except (ValueError, TypeError):
+            price = 0
+
+        # Extract Stock / Quantity
+        stock_val = (
+            item.get("Quantity") or item.get("quantity") or
+            item.get("Количество") or item.get("количество") or
+            item.get("stock") or item.get("Stock") or
+            item.get("count") or item.get("Count") or
+            item.get("Остаток") or item.get("остаток") or 0
+        )
+        try:
+            stock = int(round(float(str(stock_val).replace(" ", "").replace(",", "."))))
+            if stock < 0:
+                stock = 0
+        except (ValueError, TypeError):
+            stock = 0
+
+        # Extract Unit
+        unit_val = (
+            item.get("Unit") or item.get("unit") or
+            item.get("ЕдИзм") or item.get("единица") or
+            item.get("БазоваяЕдиница") or item.get("ЕдиницаИзмерения") or
+            item.get("unit_name") or "dona"
+        )
+        unit = str(unit_val).strip() or "dona"
+
+        # Extract Description
+        desc_val = (
+            item.get("Description") or item.get("description") or
+            item.get("Описание") or item.get("описание") or ""
+        )
+        description = str(desc_val).strip()
+
+        # Extract Image URL
+        image_url = (
+            item.get("image_url") or item.get("imageUrl") or
+            item.get("Картинка") or item.get("Photo") or
+            item.get("photo") or item.get("Image") or
+            item.get("image") or item.get("Picture") or None
+        )
+        if image_url:
+            image_url = str(image_url).strip()
+
+        # Extract Category ID (if any)
+        cat_val = item.get("category_id") or item.get("categoryId") or item.get("КатегорияId") or item.get("category")
+        category_id = None
+        if cat_val is not None and str(cat_val).strip() != "" and str(cat_val).lower() != "null" and str(cat_val).lower() != "none":
+            try:
+                cid = int(cat_val)
+                if cid in CATEGORIES_DB:
+                    category_id = cid
+            except (ValueError, TypeError):
+                category_id = None
+
+        # Upsert: check if product with same sku already exists in PRODUCTS_DB
+        existing_pid = None
+        for pid, prod in PRODUCTS_DB.items():
+            if str(prod.get("sku", "")).strip().lower() == sku.lower():
+                existing_pid = pid
+                break
+
+        if existing_pid is not None:
+            target_prod = PRODUCTS_DB[existing_pid]
+            target_prod["name"] = name
+            target_prod["price"] = price
+            target_prod["stock"] = stock
+            target_prod["unit"] = unit
+            if description:
+                target_prod["description"] = description
+            if image_url:
+                target_prod["image_url"] = image_url
+            if category_id is not None:
+                target_prod["category_id"] = category_id
+            synced_products.append(target_prod)
+        else:
+            new_id = (max(PRODUCTS_DB.keys()) + 1) if PRODUCTS_DB else 101
+            new_product = {
+                "id": new_id,
+                "sku": sku,
+                "category_id": category_id,
+                "name": name,
+                "unit": unit,
+                "price": price,
+                "old_price": None,
+                "discount_percent": 0,
+                "stock": stock,
+                "description": description or f"1C orqali import qilingan tovar (SKU: {sku})",
+                "nutrition": {"cal": "—", "protein": "—", "fat": "—"},
+                "photo_file_id": None,
+                "image_url": image_url or "https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60",
+                "is_promo": False,
+                "recommendation": None
+            }
+            PRODUCTS_DB[new_id] = new_product
+            synced_products.append(new_product)
+
+    uncategorized = [p for p in synced_products if p.get("category_id") is None or p.get("category_id") not in CATEGORIES_DB]
+
+    return {
+        "success": True,
+        "message": f"{len(synced_products)} ta mahsulot 1C dan muvaffaqiyatli sinxronizatsiya qilindi!",
+        "total_received": len(items_to_process),
+        "synced_count": len(synced_products),
+        "invalid_count": invalid_count,
+        "uncategorized_count": len(uncategorized),
+        "products": synced_products,
+        "uncategorized": uncategorized
+    }
 
 
 def get_uncategorized_products(search: str | None = None) -> list[dict]:

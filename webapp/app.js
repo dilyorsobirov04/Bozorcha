@@ -2476,26 +2476,34 @@ function getCategoryHierarchyName(categoryId) {
 let uncategorizedProducts = [];
 let uncategorizedSearchTimeout = null;
 
-async function loadUncategorizedProducts(searchQuery = '') {
+async function loadUncategorizedProducts(searchQuery = '', triggerBtn = null) {
     if (!isCurrentUserAdmin()) return;
 
     const container = document.getElementById('uncategorized-products-container');
     const countEl = document.getElementById('admin-uncategorized-count');
     const headerCountEl = document.getElementById('uncategorized-header-count');
+    const refreshBtn = triggerBtn || document.getElementById('uncat-refresh-btn') || document.querySelector('#admin-view-uncategorized .analytics-refresh-btn');
 
-    // Show loading state
+    // Show loading state on refresh button
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.classList.add('loading');
+        refreshBtn.innerHTML = `<span class="uncat-btn-spinner" style="margin-right: 6px;"></span><span>Yuklanmoqda...</span>`;
+    }
+
+    // Show loading state in container
     if (container) {
         container.innerHTML = `
-            <div class="empty-admin-orders" style="padding: 40px 20px;">
+            <div class="empty-admin-orders" style="padding: 45px 20px;">
                 <div class="uncat-loading-spinner"></div>
-                <p style="color: var(--text-muted); margin-top: 12px;">Yuklanmoqda...</p>
+                <p style="color: var(--text-muted); margin-top: 14px; font-weight: 500;">1C tovarlari yuklanmoqda...</p>
             </div>
         `;
     }
 
     try {
         let url = `/api/admin/products/uncategorized?user_id=${ALLOWED_ADMIN_ID}`;
-        if (searchQuery && searchQuery.trim()) {
+        if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
             url += `&search=${encodeURIComponent(searchQuery.trim())}`;
         }
 
@@ -2522,11 +2530,17 @@ async function loadUncategorizedProducts(searchQuery = '') {
                     <span class="empty-icon">⚠️</span>
                     <h4>Ma'lumotlarni yuklashda xatolik</h4>
                     <p>Iltimos, qaytadan urinib ko'ring</p>
-                    <button type="button" class="analytics-refresh-btn" onclick="loadUncategorizedProducts()" style="margin-top: 10px;">
+                    <button type="button" class="analytics-refresh-btn" onclick="loadUncategorizedProducts()" style="margin-top: 12px;">
                         <span>🔄 Qayta yuklash</span>
                     </button>
                 </div>
             `;
+        }
+    } finally {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.classList.remove('loading');
+            refreshBtn.innerHTML = `<span>🔄 Yangilash</span>`;
         }
     }
 }
@@ -2535,15 +2549,19 @@ function renderUncategorizedProducts() {
     const container = document.getElementById('uncategorized-products-container');
     if (!container) return;
 
-    if (uncategorizedProducts.length === 0) {
-        const searchInput = document.getElementById('uncategorized-search-input');
-        const hasSearch = searchInput && searchInput.value.trim().length > 0;
+    const searchInput = document.getElementById('uncategorized-search-input');
+    const hasSearch = searchInput && searchInput.value.trim().length > 0;
 
+    if (uncategorizedProducts.length === 0) {
         container.innerHTML = `
-            <div class="empty-admin-orders">
-                <span class="empty-icon">${hasSearch ? '🔍' : '✅'}</span>
-                <h4>${hasSearch ? 'Qidiruv bo\'yicha natija topilmadi' : 'Barcha mahsulotlar toifalangan!'}</h4>
-                <p>${hasSearch ? 'Boshqa kalit so\'z bilan qidirib ko\'ring' : 'Hozircha kategoriyasiz mahsulotlar mavjud emas'}</p>
+            <div class="empty-admin-orders" style="padding: 40px 20px;">
+                <span class="empty-icon" style="font-size: 40px; display: block; margin-bottom: 8px;">${hasSearch ? '🔍' : '📦'}</span>
+                <h4 style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
+                    ${hasSearch ? 'Qidiruv bo\'yicha tovar topilmadi' : '1C dan integratsiya qilingan yangi tovarlar topilmadi'}
+                </h4>
+                <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+                    ${hasSearch ? 'Boshqa nom yoki 1C SKU kodi bilan qidirib ko\'ring' : 'Hozircha barcha tovarlar toifalarga biriktirilgan yoki yangi import qilinmagan.'}
+                </p>
             </div>
         `;
         return;
@@ -2552,8 +2570,8 @@ function renderUncategorizedProducts() {
     const categoryOptionsHtml = buildCategoryOptionsHtml();
 
     container.innerHTML = uncategorizedProducts.map(prod => {
-        const imgSrc = prod.image_url || prod.photo_file_id || 'https://via.placeholder.com/64x64/1a1f2e/666?text=📦';
-        const sku = prod.sku || prod.code_1c || '—';
+        const imgSrc = prod.image_url || prod.photo_file_id || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60';
+        const sku = prod.sku || prod.code_1c || prod.code || '—';
         const priceFormatted = (prod.price || 0).toLocaleString('uz-UZ');
         const stockText = prod.stock != null ? `${prod.stock} ta` : '—';
         const unitText = prod.unit || 'dona';
@@ -2562,7 +2580,7 @@ function renderUncategorizedProducts() {
             <div class="uncat-card" id="uncat-card-${prod.id}" data-product-id="${prod.id}">
                 <div class="uncat-card-main">
                     <div class="uncat-card-thumb-wrap">
-                        <img src="${imgSrc}" alt="${prod.name}" class="uncat-card-thumb" onerror="this.src='https://via.placeholder.com/64x64/1a1f2e/666?text=📦'" loading="lazy">
+                        <img src="${imgSrc}" alt="${prod.name}" class="uncat-card-thumb" onerror="this.src='https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60'" loading="lazy">
                     </div>
                     <div class="uncat-card-info">
                         <div class="uncat-card-title">${prod.name || 'Nomsiz mahsulot'}</div>
@@ -2606,7 +2624,6 @@ function buildCategoryOptionsHtml() {
     let html = '';
     topLevel.forEach(parent => {
         html += `<optgroup label="${parent.icon || '📁'} ${parent.name}">`;
-        // Allow assignment to parent category itself
         html += `<option value="${parent.id}">${parent.icon || '📁'} ${parent.name} (umumiy)</option>`;
         const subs = subMap[parent.id] || [];
         subs.forEach(sub => {
@@ -2660,7 +2677,6 @@ async function assignProductCategory(productId) {
     const selectEl = document.getElementById(`uncat-select-${productId}`);
     if (!selectEl || !selectEl.value) {
         showToast('Iltimos, avval kategoriyani tanlang! ⚠️', 'error');
-        // Shake animation on select element
         selectEl?.classList.add('shake-error');
         setTimeout(() => selectEl?.classList.remove('shake-error'), 600);
         return;
@@ -2691,11 +2707,18 @@ async function assignProductCategory(productId) {
             const msg = data.message || `Mahsulot muvaffaqiyatli kategoriyaga biriktirildi! 🎉`;
             showToast(msg, 'success');
 
+            // Instantly remove from uncategorized products array & update badge counters
+            uncategorizedProducts = uncategorizedProducts.filter(p => p.id !== productId);
+            const countEl = document.getElementById('admin-uncategorized-count');
+            const headerCountEl = document.getElementById('uncategorized-header-count');
+            if (countEl) countEl.innerText = uncategorizedProducts.length;
+            if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
+
             // Animate card removal
             if (card) {
-                card.style.transition = 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+                card.style.transition = 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)';
                 card.style.opacity = '0';
-                card.style.transform = 'translateX(60px) scale(0.95)';
+                card.style.transform = 'translateX(60px) scale(0.92)';
                 card.style.maxHeight = card.scrollHeight + 'px';
 
                 setTimeout(() => {
@@ -2704,26 +2727,19 @@ async function assignProductCategory(productId) {
                     card.style.marginBottom = '0';
                     card.style.borderWidth = '0';
                     card.style.overflow = 'hidden';
-                }, 300);
+                }, 250);
 
                 setTimeout(() => {
                     card.remove();
 
-                    // Update counts
-                    uncategorizedProducts = uncategorizedProducts.filter(p => p.id !== productId);
-                    const countEl = document.getElementById('admin-uncategorized-count');
-                    const headerCountEl = document.getElementById('uncategorized-header-count');
-                    if (countEl) countEl.innerText = uncategorizedProducts.length;
-                    if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
-
-                    // If no more products, show empty state
+                    // If no more products, show clean empty state
                     if (uncategorizedProducts.length === 0) {
                         renderUncategorizedProducts();
                     }
-                }, 650);
+                }, 550);
             }
 
-            // Also refresh main product list so the product now appears under its category
+            // Also refresh main product list so the product now appears under its category in the shop
             await loadProducts();
         } else {
             const errData = await res.json().catch(() => ({}));

@@ -4063,6 +4063,11 @@ body {
     font-size: 12px;
 }
 
+.analytics-refresh-btn.loading {
+    opacity: 0.8;
+    pointer-events: none;
+}
+
 .hidden {
     display: none !important;
 }

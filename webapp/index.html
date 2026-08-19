@@ -415,7 +415,7 @@
                                 <p class="form-subtitle">1C dan import bo'lgan va toifalanmagan tovarlar (<span id="uncategorized-header-count">0</span> ta)</p>
                             </div>
                         </div>
-                        <button type="button" class="analytics-refresh-btn" onclick="loadUncategorizedProducts()">
+                        <button type="button" id="uncat-refresh-btn" class="analytics-refresh-btn" onclick="loadUncategorizedProducts('', this)">
                             <span>🔄 Yangilash</span>
                         </button>
                     </div>
@@ -423,7 +423,7 @@
                     <!-- Search & Filter Bar with 1C SKU Support -->
                     <div class="admin-search-wrap" style="margin-bottom: 14px;">
                         <span class="admin-search-icon">🔍</span>
-                        <input type="text" id="uncategorized-search-input" class="admin-search-input" placeholder="Nomi yoki 1C SKU kodi bo'yicha qidirish (masalan: 1C-9901)..." oninput="handleUncategorizedSearch(this.value)">
+                        <input type="text" id="uncategorized-search-input" class="admin-search-input" placeholder="Nomi yoki 1C SKU kodi bo'yicha qidirish..." oninput="handleUncategorizedSearch(this.value)">
                         <button type="button" id="uncategorized-search-clear" class="admin-search-clear hidden" onclick="clearUncategorizedSearch()">✕</button>
                     </div>
 
