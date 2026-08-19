@@ -2476,6 +2476,8 @@ function getCategoryHierarchyName(categoryId) {
 let uncategorizedProducts = [];
 let uncategorizedSearchTimeout = null;
 
+const DEFAULT_LOCAL_1C_URL = "http://127.0.0.1:8080/Bozorcham/hs/Bozorcham/GetTovarList";
+
 async function load1CConfigStatus() {
     if (!isCurrentUserAdmin()) return;
     const urlInput = document.getElementById('onec-url-input');
@@ -2488,7 +2490,7 @@ async function load1CConfigStatus() {
         });
         if (res.ok) {
             const data = await res.json();
-            const url = data.api_url || '';
+            const url = (data.api_url || '').trim() || DEFAULT_LOCAL_1C_URL;
             if (urlInput && document.activeElement !== urlInput) {
                 urlInput.value = url;
             }
@@ -2496,7 +2498,7 @@ async function load1CConfigStatus() {
             if (!url) {
                 badgeEl.className = 'onec-badge err';
                 badgeEl.innerText = '❌ Manzil kiritilmagan';
-            } else if (data.is_localhost) {
+            } else if (data.is_localhost || url.includes('127.0.0.1') || url.includes('localhost')) {
                 badgeEl.className = 'onec-badge ok';
                 badgeEl.innerText = '🟢 Localhost (127.0.0.1)';
             } else {
@@ -2506,6 +2508,9 @@ async function load1CConfigStatus() {
         }
     } catch (e) {
         console.warn('Failed to load 1C config status:', e);
+        if (urlInput && !urlInput.value) {
+            urlInput.value = DEFAULT_LOCAL_1C_URL;
+        }
     }
 }
 
@@ -2884,7 +2889,7 @@ async function trigger1CSync(btn = null) {
 
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success) {
-            showToast("1C tovarlari muvaffaqiyatli yuklandi! 🎉", 'success');
+            showToast("1C dan tovarlar muvaffaqiyatli yuklandi! 🎉", 'success');
 
             // Instantly render fresh uncategorized items from sync response
             if (data.uncategorized_products && Array.isArray(data.uncategorized_products)) {
