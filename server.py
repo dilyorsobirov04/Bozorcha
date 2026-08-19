@@ -43,6 +43,7 @@ from onec_service import (
     sync_products_from_1c,
     get_1c_cache_status,
     get_1c_config_status,
+    update_1c_config,
     clear_1c_cache
 )
 
@@ -587,6 +588,29 @@ def create_webapp_server() -> FastAPI:
         return {
             "success": True,
             **get_1c_config_status()
+        }
+
+    @app.post("/api/admin/1c/config")
+    @app.put("/api/admin/1c/config")
+    async def handle_update_1c_config(request: Request):
+        check_admin_authorization(request)
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        api_url = body.get("api_url") if "api_url" in body else body.get("url")
+        api_user = body.get("api_user") if "api_user" in body else body.get("user")
+        api_pass = body.get("api_pass") if "api_pass" in body else body.get("password")
+
+        if api_url is None:
+            raise HTTPException(status_code=400, detail="api_url parametri talab qilinadi")
+
+        updated_config = update_1c_config(api_url=api_url, api_user=api_user, api_pass=api_pass)
+        return {
+            "success": True,
+            "message": "1C HTTP xizmati sozlamalari muvaffaqiyatli saqlandi! 💾",
+            **updated_config
         }
 
     @app.get("/api/admin/products/uncategorized")

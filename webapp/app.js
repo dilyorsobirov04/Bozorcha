@@ -2478,9 +2478,9 @@ let uncategorizedSearchTimeout = null;
 
 async function load1CConfigStatus() {
     if (!isCurrentUserAdmin()) return;
-    const urlEl = document.getElementById('onec-active-url-display');
+    const urlInput = document.getElementById('onec-url-input');
     const badgeEl = document.getElementById('onec-banner-badge');
-    if (!urlEl || !badgeEl) return;
+    if (!badgeEl) return;
 
     try {
         const res = await fetch(`/api/admin/1c/config?user_id=${ALLOWED_ADMIN_ID}`, {
@@ -2489,7 +2489,9 @@ async function load1CConfigStatus() {
         if (res.ok) {
             const data = await res.json();
             const url = data.api_url || '';
-            urlEl.innerText = url || "Ko'rsatilmagan (.env faylida API_1C_URL ni sozlang)";
+            if (urlInput && document.activeElement !== urlInput) {
+                urlInput.value = url;
+            }
 
             if (!url) {
                 badgeEl.className = 'onec-badge err';
@@ -2499,11 +2501,66 @@ async function load1CConfigStatus() {
                 badgeEl.innerText = '⚠️ Localhost (Ngrok kerak)';
             } else {
                 badgeEl.className = 'onec-badge ok';
-                badgeEl.innerText = '🟢 Sozlangan';
+                badgeEl.innerText = '🟢 Faol (Active)';
             }
         }
     } catch (e) {
         console.warn('Failed to load 1C config status:', e);
+    }
+}
+
+async function save1CUrlSetting(btn = null) {
+    if (!isCurrentUserAdmin()) {
+        showToast('Ruxsat berilmadi: Siz admin emassiz ⛔️', 'error');
+        return false;
+    }
+
+    const urlInput = document.getElementById('onec-url-input');
+    if (!urlInput) return false;
+
+    const newUrl = urlInput.value.trim();
+    if (!newUrl) {
+        showToast("Iltimos, 1C HTTP servis URL manzilini kiriting!", 'error');
+        urlInput.focus();
+        return false;
+    }
+
+    const saveBtn = btn || document.getElementById('onec-save-url-btn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.classList.add('loading');
+        saveBtn.innerHTML = `<span>Saqlanmoqda...</span>`;
+    }
+
+    try {
+        const res = await fetch(`/api/admin/1c/config?user_id=${ALLOWED_ADMIN_ID}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
+            body: JSON.stringify({ api_url: newUrl })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+            showToast("1C HTTP xizmati manzili muvaffaqiyatli saqlandi! 💾", 'success');
+            await load1CConfigStatus();
+            return true;
+        } else {
+            showToast(data.detail || data.message || "1C manzilini saqlashda xatolik yuz berdi", 'error');
+            return false;
+        }
+    } catch (e) {
+        console.error('save1CUrlSetting error:', e);
+        showToast("Server bilan aloqa xatosi!", 'error');
+        return false;
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('loading');
+            saveBtn.innerHTML = `<span>💾 Saqlash</span>`;
+        }
     }
 }
 
@@ -2796,6 +2853,19 @@ async function trigger1CSync(btn = null) {
         return;
     }
 
+    // Auto-save URL if user typed in input before pressing sync
+    const urlInput = document.getElementById('onec-url-input');
+    if (urlInput && urlInput.value.trim()) {
+        await fetch(`/api/admin/1c/config?user_id=${ALLOWED_ADMIN_ID}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
+            body: JSON.stringify({ api_url: urlInput.value.trim() })
+        }).catch(() => {});
+    }
+
     const syncBtn = btn || document.getElementById('uncat-sync-1c-btn');
     if (syncBtn) {
         syncBtn.disabled = true;
@@ -2821,7 +2891,7 @@ async function trigger1CSync(btn = null) {
         } else {
             let errorMsg = data.message || data.error || data.detail;
             if (res.status === 404 || data.status_code === 404) {
-                errorMsg = "1C HTTP xizmati manzili xato (404). 1C-da nashr qilingan (published) xizmat nomi va URL yo'lini tekshiring.";
+                errorMsg = "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C Nashr qilingan xizmat nomini (Case-Sensitive) tekshiring.";
             } else if (res.status === 401 || res.status === 403 || data.status_code === 401) {
                 errorMsg = "1C logini yoki paroli xato (401 Basic Auth).";
             } else if (!errorMsg) {
@@ -3834,5 +3904,6 @@ window.clearUncategorizedSearch = clearUncategorizedSearch;
 window.assignProductCategory = assignProductCategory;
 window.trigger1CSync = trigger1CSync;
 window.load1CConfigStatus = load1CConfigStatus;
+window.save1CUrlSetting = save1CUrlSetting;
 
 

@@ -425,20 +425,31 @@
                         </div>
                     </div>
 
-                    <!-- 1C HTTP Service Endpoint Diagnostic Banner -->
+                    <!-- Live 1C HTTP Service Endpoint Editor & Sync Bar -->
                     <div class="onec-endpoint-banner" id="onec-endpoint-banner">
                         <div class="onec-banner-top">
                             <div class="onec-banner-label">
                                 <span class="onec-dot"></span>
-                                <span>1C HTTP Servis Manzili:</span>
+                                <span>1C HTTP Servis Manzili (Live URL Sozlamasi)</span>
                             </div>
                             <span class="onec-badge" id="onec-banner-badge">Yuklanmoqda...</span>
                         </div>
-                        <div class="onec-banner-url-wrap">
-                            <code class="onec-banner-url" id="onec-active-url-display">Yuklanmoqda...</code>
+                        
+                        <div class="onec-editor-row">
+                            <div class="onec-input-wrap">
+                                <span class="onec-input-icon">🔗</span>
+                                <input type="url" id="onec-url-input" class="onec-url-input" placeholder="https://xxxx-xx-xx.ngrok-free.app/Bozorcham/hs/Bozorcham/GetTovarList" autocomplete="off" spellcheck="false">
+                            </div>
+                            <button type="button" id="onec-save-url-btn" class="onec-save-btn" onclick="save1CUrlSetting(this)" title="1C URL manzilini saqlash">
+                                <span>💾 Saqlash</span>
+                            </button>
+                            <button type="button" id="uncat-sync-1c-btn" class="onec-sync-btn" onclick="trigger1CSync(this)" title="1C HTTP xizmatidan tovarlarni yuklab olish">
+                                <span>⚡️ 1C Sinxronlash</span>
+                            </button>
                         </div>
+
                         <div class="onec-banner-hint" id="onec-banner-hint">
-                            💡 Format: <code>https://&lt;ngrok-host&gt;/Bozorcham/hs/Bozorcham/GetTovarList</code> (Registrga sezgir)
+                            💡 <b>Format:</b> <code>https://&lt;ngrok-host&gt;/Bozorcham/hs/Bozorcham/GetTovarList</code> (Registrga / Katta-kichik harflarga sezgir)
                         </div>
                     </div>
 
