@@ -230,13 +230,13 @@ def update_1c_system_settings(api_url: str = None, api_user: str = None, api_pas
     if api_url is not None:
         clean_url = str(api_url).strip()
         SYSTEM_SETTINGS_DB["api_1c_url"] = clean_url
-        set_system_setting("API_1C_URL", clean_url)
+        set_system_setting("api_1c_url", clean_url)
     if api_user is not None:
         SYSTEM_SETTINGS_DB["api_1c_user"] = str(api_user).strip()
-        set_system_setting("API_1C_USER", str(api_user).strip())
+        set_system_setting("api_1c_user", str(api_user).strip())
     if api_pass is not None:
         SYSTEM_SETTINGS_DB["api_1c_pass"] = str(api_pass).strip()
-        set_system_setting("API_1C_PASS", str(api_pass).strip())
+        set_system_setting("api_1c_pass", str(api_pass).strip())
     return get_1c_system_settings()
 
 
