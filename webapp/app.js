@@ -2936,11 +2936,11 @@ async function trigger1CSync(btn = null) {
         }
 
         clearAllToasts();
-        let errorMsg = data.message || data.error || data.detail;
-        if (res.status === 404 || data.status_code === 404) {
-            errorMsg = "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C nashr qilingan xizmat yo'lini tekshiring.";
-        } else if (res.status === 401 || res.status === 403 || data.status_code === 401) {
-            errorMsg = "1C logini yoki paroli xato (401 Basic Auth).";
+        let errorMsg = data.error || data.message || data.detail;
+        if (res.status === 401 || res.status === 403 || data.status_code === 401 || data.status_code === 403) {
+            errorMsg = data.error || "1C login yoki paroli noto'g'ri";
+        } else if (res.status === 404 || data.status_code === 404) {
+            errorMsg = data.error || "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C nashr qilingan xizmat yo'lini tekshiring.";
         } else if (!errorMsg) {
             errorMsg = "1C serveriga ulanib bo'lmadi. Ngrok va 1C ishlayotganini tekshiring.";
         }

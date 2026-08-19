@@ -289,11 +289,12 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         raw_data = None
                         try:
                             raw_data = await response.json()
-                        except Exception:
+                        except (aiohttp.ContentTypeError, json.JSONDecodeError, Exception):
                             raw_text = await response.text()
                             if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
                                 warning_msg = "Ngrok HTML ogohlantirish sahifasini qaytardi. ngrok-skip-browser-warning sarlavhasi bilan qayta urinib ko'ring."
                                 logger.warning(warning_msg)
+                                print(f"1C API Error Response: {status} - {raw_text[:300]}")
                                 return {
                                     "success": False,
                                     "error": warning_msg,
@@ -302,7 +303,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 }
                             try:
                                 raw_data = json.loads(raw_text)
-                            except Exception:
+                            except (json.JSONDecodeError, Exception):
                                 raw_data = raw_text
 
                         # Log raw response info safely
@@ -322,7 +323,8 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         }
                     elif status in (401, 403):
                         err_text = await response.text()
-                        warning_msg = "1C logini yoki paroli xato (401 Basic Auth)."
+                        print(f"1C API Error Response: {status} - {err_text}")
+                        warning_msg = "1C login yoki paroli noto'g'ri"
                         logger.warning(f"1C Auth Error ({status}) at {active_url}: {warning_msg}")
                         return {
                             "success": False,
@@ -333,6 +335,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         }
                     elif status == 404:
                         err_text = await response.text()
+                        print(f"1C API Error Response: {status} - {err_text}")
                         warning_msg = "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C nashr qilingan xizmat yo'lini tekshiring."
                         logger.warning(f"1C 404 Not Found at {active_url}: {warning_msg}")
                         print(NGROK_INSTRUCTION_GUIDE)
@@ -347,6 +350,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         }
                     else:
                         err_text = await response.text()
+                        print(f"1C API Error Response: {status} - {err_text}")
                         warning_msg = f"1C serveridan xato javob qaytdi (HTTP {status}): {err_text[:200]}"
                         logger.warning(f"1C Error ({status}) at {active_url}: {warning_msg}")
                         return {
