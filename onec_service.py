@@ -245,6 +245,10 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
     # 3. Setup HTTP Basic Authentication
     auth = None
+    if active_user and active_pass:
+        auth = aiohttp.BasicAuth(login=active_user, password=active_pass)
+
+    # 4. Mandatory Headers (Ngrok bypass & JSON accept)
     headers = {
         "ngrok-skip-browser-warning": "true",
         "User-Agent": "Mozilla/5.0",
@@ -252,11 +256,6 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
         "Bypass-Tunnel-Reminder": "true",
         "X-Requested-With": "XMLHttpRequest"
     }
-
-    if active_user and active_pass:
-        auth = aiohttp.BasicAuth(login=active_user, password=active_pass)
-        cred_str = f"{active_user}:{active_pass}"
-        headers["Authorization"] = f"Basic {base64.b64encode(cred_str.encode('utf-8')).decode('utf-8')}"
 
     timeout = aiohttp.ClientTimeout(total=eff_timeout)
     connector = aiohttp.TCPConnector(ssl=False)
