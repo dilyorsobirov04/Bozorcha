@@ -65,7 +65,9 @@ def get_active_1c_url() -> str:
     """Returns currently active 1C URL from dynamic system settings, defaulting to local 1C HTTP service."""
     val = get_system_setting("api_1c_url", DEFAULT_1C_URL)
     cleaned = clean_1c_url(val)
-    return cleaned if cleaned else DEFAULT_1C_URL
+    if not cleaned or "abcd-123" in cleaned or "xxxx" in cleaned or "localhost:8080" in cleaned:
+        return DEFAULT_1C_URL
+    return cleaned
 
 
 def get_active_1c_user() -> str:

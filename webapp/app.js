@@ -2490,8 +2490,11 @@ async function load1CConfigStatus() {
         });
         if (res.ok) {
             const data = await res.json();
-            const url = (data.api_url || '').trim() || DEFAULT_LOCAL_1C_URL;
-            if (urlInput && document.activeElement !== urlInput) {
+            let url = (data.api_url || '').trim();
+            if (!url || url.includes('abcd-123') || url.includes('xxxx')) {
+                url = DEFAULT_LOCAL_1C_URL;
+            }
+            if (urlInput) {
                 urlInput.value = url;
             }
 
@@ -2508,7 +2511,7 @@ async function load1CConfigStatus() {
         }
     } catch (e) {
         console.warn('Failed to load 1C config status:', e);
-        if (urlInput && !urlInput.value) {
+        if (urlInput) {
             urlInput.value = DEFAULT_LOCAL_1C_URL;
         }
     }
@@ -2871,6 +2874,8 @@ async function trigger1CSync(btn = null) {
         }).catch(() => {});
     }
 
+    clearAllToasts();
+
     const syncBtn = btn || document.getElementById('uncat-sync-1c-btn');
     if (syncBtn) {
         syncBtn.disabled = true;
@@ -2889,7 +2894,8 @@ async function trigger1CSync(btn = null) {
 
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success) {
-            showToast("1C dan tovarlar muvaffaqiyatli yuklandi! 🎉", 'success');
+            clearAllToasts();
+            showToast("1C tovarlari muvaffaqiyatli yuklandi! 🎉", 'success');
 
             // Instantly render fresh uncategorized items from sync response
             if (data.uncategorized_products && Array.isArray(data.uncategorized_products)) {
@@ -3831,6 +3837,13 @@ function confirmDeletePromotion(promoId, promoTitle) {
         desc.innerHTML = `Haqiqatan ham <strong>"${promoTitle}"</strong> aksiyasini o'chirmoqchimisiz?`;
     }
     if (modal) modal.classList.remove('hidden');
+}
+
+function clearAllToasts() {
+    const container = document.getElementById('toast-container');
+    if (container) {
+        container.innerHTML = '';
+    }
 }
 
 function showToast(message, type = "success") {

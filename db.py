@@ -157,9 +157,17 @@ async def init_postgres_db():
                 if k == "API_1C_URL":
                     SYSTEM_SETTINGS_DB["api_1c_url"] = v
 
-            # Upsert initial API_1C_URL if not already in DB
-            init_url = SYSTEM_SETTINGS_DB.get("api_1c_url", "")
-            if init_url:
+            # Ensure API_1C_URL is clean and sanitized to 127.0.0.1
+            init_url = SYSTEM_SETTINGS_DB.get("api_1c_url", "").strip()
+            if not init_url or "abcd-123" in init_url or "xxxx" in init_url or "localhost:8080" in init_url:
+                init_url = "http://127.0.0.1:8080/Bozorcham/hs/Bozorcham/GetTovarList"
+                SYSTEM_SETTINGS_DB["api_1c_url"] = init_url
+                await conn.execute("""
+                    INSERT INTO system_settings (key, value, updated_at)
+                    VALUES ('API_1C_URL', $1, CURRENT_TIMESTAMP)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+                """, init_url)
+            else:
                 await conn.execute("""
                     INSERT INTO system_settings (key, value, updated_at)
                     VALUES ('API_1C_URL', $1, CURRENT_TIMESTAMP)
