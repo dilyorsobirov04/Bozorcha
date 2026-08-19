@@ -768,3 +768,249 @@ def get_admin_analytics() -> dict:
         "top_products": top_products
     }
 
+
+# ================= PROMOTIONS & BANNER SLIDER DB =================
+PROMOTIONS_DB = {
+    1: {
+        "id": 1,
+        "title": "🔥 SUPER CHEGIRMA",
+        "subtitle": "Har kungi yangi hosil mevalar va sabzavotlarga 25% gacha arzon narxlar!",
+        "discount_price": 45000,
+        "discount_text": "-25%",
+        "image_url": "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=800&auto=format&fit=crop&q=80",
+        "product_id": 102,
+        "is_active": True,
+        "created_at": "2026-08-19 12:00:00"
+    },
+    2: {
+        "id": 2,
+        "title": "🥑 ORGANIK AVOKADO HASS",
+        "subtitle": "Meksika navli sara tabiiy avokadolar maxsus chegirma bilan!",
+        "discount_price": 68000,
+        "discount_text": "-20%",
+        "image_url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80",
+        "product_id": 101,
+        "is_active": True,
+        "created_at": "2026-08-19 12:05:00"
+    },
+    3: {
+        "id": 3,
+        "title": "🥩 RIBEYE STEYK SUPER AKSIYA",
+        "subtitle": "Marmar mol go'shti, mayin va suvli gril steyk uchun ajoyib taklif!",
+        "discount_price": 145000,
+        "discount_text": "-19%",
+        "image_url": "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=800&auto=format&fit=crop&q=80",
+        "product_id": 104,
+        "is_active": True,
+        "created_at": "2026-08-19 12:10:00"
+    },
+    4: {
+        "id": 4,
+        "title": "🥐 ISSIQ NONVOYXONA KRUASSAN",
+        "subtitle": "Haqiqiy sariyog'li fransuzcha kruassanlar har kuni tongda!",
+        "discount_price": 18000,
+        "discount_text": "18 000 so'm",
+        "image_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800&auto=format&fit=crop&q=80",
+        "product_id": 105,
+        "is_active": True,
+        "created_at": "2026-08-19 12:15:00"
+    }
+}
+
+
+def get_all_promotions(active_only: bool = False) -> list[dict]:
+    promos = list(PROMOTIONS_DB.values())
+    if active_only:
+        promos = [p for p in promos if p.get("is_active", True)]
+
+    # Enrich with linked product details if available
+    result = []
+    for promo in promos:
+        item = dict(promo)
+        pid = item.get("product_id")
+        if pid and int(pid) in PRODUCTS_DB:
+            linked_prod = PRODUCTS_DB[int(pid)]
+            item["product"] = {
+                "id": linked_prod["id"],
+                "name": linked_prod["name"],
+                "price": linked_prod["price"],
+                "old_price": linked_prod.get("old_price"),
+                "image_url": linked_prod.get("image_url"),
+                "unit": linked_prod.get("unit", "kg"),
+                "stock": linked_prod.get("stock", 0)
+            }
+        else:
+            item["product"] = None
+        result.append(item)
+    return result
+
+
+def get_promotion(promo_id: int | str) -> dict | None:
+    try:
+        pid = int(promo_id)
+        if pid not in PROMOTIONS_DB:
+            return None
+        promo = dict(PROMOTIONS_DB[pid])
+        prod_id = promo.get("product_id")
+        if prod_id and int(prod_id) in PRODUCTS_DB:
+            linked_prod = PRODUCTS_DB[int(prod_id)]
+            promo["product"] = {
+                "id": linked_prod["id"],
+                "name": linked_prod["name"],
+                "price": linked_prod["price"],
+                "old_price": linked_prod.get("old_price"),
+                "image_url": linked_prod.get("image_url"),
+                "unit": linked_prod.get("unit", "kg"),
+                "stock": linked_prod.get("stock", 0)
+            }
+        return promo
+    except (ValueError, TypeError):
+        return None
+
+
+def add_promotion(
+    title: str,
+    subtitle: str = "",
+    discount_price: int | float | None = None,
+    discount_text: str | None = None,
+    image_url: str | None = None,
+    product_id: int | str | None = None,
+    is_active: bool = True
+) -> dict:
+    new_id = (max(PROMOTIONS_DB.keys()) + 1) if PROMOTIONS_DB else 1
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Clean product ID
+    pid = None
+    if product_id is not None and str(product_id).strip() != "" and str(product_id).strip() != "0" and str(product_id).strip().lower() != "null":
+        try:
+            pid_int = int(product_id)
+            if pid_int in PRODUCTS_DB:
+                pid = pid_int
+        except (ValueError, TypeError):
+            pid = None
+
+    # Clean discount price
+    d_price = None
+    if discount_price is not None and str(discount_price).strip() != "":
+        try:
+            d_price = int(discount_price)
+        except (ValueError, TypeError):
+            d_price = None
+
+    # If linked to product and no custom price / image specified, auto fill
+    if pid and pid in PRODUCTS_DB:
+        prod = PRODUCTS_DB[pid]
+        if not image_url or not image_url.strip():
+            image_url = prod.get("image_url")
+        if d_price is None:
+            d_price = prod.get("price")
+        if not discount_text and prod.get("discount_percent"):
+            discount_text = f"-{prod.get('discount_percent')}%"
+
+    promo = {
+        "id": new_id,
+        "title": title.strip() if title else f"Aksiya #{new_id}",
+        "subtitle": subtitle.strip() if subtitle else "",
+        "discount_price": d_price,
+        "discount_text": discount_text.strip() if discount_text else (f"{d_price:,} so'm".replace(",", " ") if d_price else None),
+        "image_url": image_url.strip() if image_url else "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=800&auto=format&fit=crop&q=80",
+        "product_id": pid,
+        "is_active": bool(is_active),
+        "created_at": now_str
+    }
+
+    PROMOTIONS_DB[new_id] = promo
+
+    # Return with enriched product object
+    result = dict(promo)
+    if pid and pid in PRODUCTS_DB:
+        linked_prod = PRODUCTS_DB[pid]
+        result["product"] = {
+            "id": linked_prod["id"],
+            "name": linked_prod["name"],
+            "price": linked_prod["price"],
+            "old_price": linked_prod.get("old_price"),
+            "image_url": linked_prod.get("image_url"),
+            "unit": linked_prod.get("unit", "kg"),
+            "stock": linked_prod.get("stock", 0)
+        }
+    return result
+
+
+def update_promotion(
+    promo_id: int | str,
+    title: str | None = None,
+    subtitle: str | None = None,
+    discount_price: int | float | None = None,
+    discount_text: str | None = None,
+    image_url: str | None = None,
+    product_id: int | str | None = None,
+    is_active: bool | None = None
+) -> dict | None:
+    try:
+        pid = int(promo_id)
+        if pid not in PROMOTIONS_DB:
+            return None
+
+        promo = PROMOTIONS_DB[pid]
+
+        if title is not None:
+            promo["title"] = title.strip()
+        if subtitle is not None:
+            promo["subtitle"] = subtitle.strip()
+        if discount_price is not None:
+            try:
+                promo["discount_price"] = int(discount_price) if str(discount_price).strip() != "" else None
+            except (ValueError, TypeError):
+                pass
+        if discount_text is not None:
+            promo["discount_text"] = discount_text.strip() if discount_text else None
+        if image_url is not None:
+            promo["image_url"] = image_url.strip()
+        if product_id is not None:
+            if str(product_id).strip() in ("", "0", "null", "none"):
+                promo["product_id"] = None
+            else:
+                try:
+                    p_int = int(product_id)
+                    promo["product_id"] = p_int if p_int in PRODUCTS_DB else None
+                except (ValueError, TypeError):
+                    promo["product_id"] = None
+        if is_active is not None:
+            promo["is_active"] = bool(is_active)
+
+        return get_promotion(pid)
+    except (ValueError, TypeError):
+        return None
+
+
+def delete_promotion(promo_id: int | str) -> bool:
+    try:
+        pid = int(promo_id)
+        if pid in PROMOTIONS_DB:
+            del PROMOTIONS_DB[pid]
+            return True
+        return False
+    except (ValueError, TypeError):
+        return False
+
+
+def bulk_add_promotions(promotions_list: list[dict]) -> list[dict]:
+    created = []
+    for item in promotions_list:
+        if not isinstance(item, dict):
+            continue
+        p = add_promotion(
+            title=item.get("title", ""),
+            subtitle=item.get("subtitle", ""),
+            discount_price=item.get("discount_price"),
+            discount_text=item.get("discount_text"),
+            image_url=item.get("image_url"),
+            product_id=item.get("product_id"),
+            is_active=item.get("is_active", True)
+        )
+        created.append(p)
+    return created
+
+

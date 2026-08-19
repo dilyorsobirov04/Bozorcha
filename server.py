@@ -28,7 +28,13 @@ from db import (
     get_order,
     update_order_status,
     generate_click_url,
-    get_admin_analytics
+    get_admin_analytics,
+    get_all_promotions,
+    get_promotion,
+    add_promotion,
+    update_promotion,
+    delete_promotion,
+    bulk_add_promotions
 )
 
 logger = logging.getLogger(__name__)
@@ -302,6 +308,127 @@ def create_webapp_server() -> FastAPI:
                 pass
 
         raise HTTPException(status_code=400, detail="Fayl yoki rasm ma'lumoti topilmadi")
+
+    # ----------------- PROMOTIONS & BANNER SLIDER ENDPOINTS -----------------
+    @app.get("/api/promotions")
+    async def handle_get_promotions(
+        active_only: bool = Query(True, description="Filter only active promotions"),
+        user_id: Optional[str] = Query(None, description="Admin user ID")
+    ):
+        is_admin = str(user_id) == "7351189083"
+        # If admin requests with user_id, active_only can be bypassed if requested
+        promos = get_all_promotions(active_only=active_only and not is_admin)
+        return {
+            "success": True,
+            "promotions": promos,
+            "total": len(promos)
+        }
+
+    @app.get("/api/promotions/{promo_id}")
+    async def handle_get_promotion(promo_id: int):
+        promo = get_promotion(promo_id)
+        if not promo:
+            raise HTTPException(status_code=404, detail="Aksiya banneri topilmadi")
+        return {
+            "success": True,
+            "promotion": promo
+        }
+
+    @app.post("/api/admin/promotions")
+    @app.post("/api/promotions")
+    async def handle_create_promotions(request: Request):
+        try:
+            data = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        # Handle bulk dynamic promotions if 'promotions' list is provided
+        if "promotions" in data and isinstance(data["promotions"], list):
+            items = data["promotions"]
+            if not items:
+                raise HTTPException(status_code=400, detail="Aksiyalar ro'yxati bo'sh")
+            created_list = bulk_add_promotions(items)
+            return {
+                "success": True,
+                "message": f"{len(created_list)} ta aksiya muvaffaqiyatli saqlandi!",
+                "promotions": created_list
+            }
+
+        title = data.get("title") or data.get("name")
+        if not title or not str(title).strip():
+            raise HTTPException(status_code=400, detail="Aksiya sarlavhasi kiritilishi shart")
+
+        subtitle = data.get("subtitle") or data.get("description") or ""
+        discount_price = data.get("discount_price") or data.get("price")
+        discount_text = data.get("discount_text") or data.get("discount_badge")
+        image_url = data.get("image_url")
+        product_id = data.get("product_id")
+        is_active = data.get("is_active", True)
+
+        new_promo = add_promotion(
+            title=str(title).strip(),
+            subtitle=str(subtitle).strip(),
+            discount_price=discount_price,
+            discount_text=discount_text,
+            image_url=image_url,
+            product_id=product_id,
+            is_active=is_active
+        )
+
+        return {
+            "success": True,
+            "message": f"'{new_promo['title']}' aksiyasi muvaffaqiyatli qo'shildi!",
+            "promotion": new_promo
+        }
+
+    @app.put("/api/admin/promotions/{promo_id}")
+    @app.post("/api/admin/promotions/{promo_id}")
+    async def handle_update_promotion(promo_id: int, request: Request):
+        try:
+            data = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        title = data.get("title")
+        subtitle = data.get("subtitle")
+        discount_price = data.get("discount_price")
+        discount_text = data.get("discount_text")
+        image_url = data.get("image_url")
+        product_id = data.get("product_id")
+        is_active = data.get("is_active")
+
+        updated = update_promotion(
+            promo_id=promo_id,
+            title=title,
+            subtitle=subtitle,
+            discount_price=discount_price,
+            discount_text=discount_text,
+            image_url=image_url,
+            product_id=product_id,
+            is_active=is_active
+        )
+
+        if not updated:
+            raise HTTPException(status_code=404, detail="Aksiya topilmadi yoki yangilab bo'lmadi")
+
+        return {
+            "success": True,
+            "message": f"Aksiya #{promo_id} yangilandi!",
+            "promotion": updated
+        }
+
+    @app.delete("/api/admin/promotions/{promo_id}")
+    @app.delete("/api/promotions/{promo_id}")
+    async def handle_delete_promotion(promo_id: int):
+        success = delete_promotion(promo_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Aksiya topilmadi yoki allaqachon o'chirilgan")
+
+        return {
+            "success": True,
+            "message": f"Aksiya #{promo_id} muvaffaqiyatli o'chirildi!",
+            "promo_id": promo_id
+        }
 
     # ----------------- PRODUCT ENDPOINTS -----------------
     @app.get("/api/products")

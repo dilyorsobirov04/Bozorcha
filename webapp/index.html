@@ -80,13 +80,16 @@
                 </div>
             </div>
 
-            <!-- Featured Promo Banner -->
-            <div class="promo-slider">
-                <div class="promo-card-hero">
-                    <div class="promo-badge-tag">🔥 SUPER CHEGIRMA</div>
-                    <h2>Har kungi yangi hosil 25% gacha arzon</h2>
-                    <p>Yashil sabzavotlar va mevalarga maxsus narxlar!</p>
-                    <button class="banner-action-btn" onclick="filterByPromo()">Ko'rish</button>
+            <!-- Dynamic Carousel Banner Slider -->
+            <div class="promo-carousel-wrapper" id="promo-carousel-wrapper">
+                <div class="promo-carousel-viewport" id="promo-carousel-viewport">
+                    <div class="promo-carousel-track" id="promo-carousel-track">
+                        <!-- Dynamically populated promo slides -->
+                    </div>
+                </div>
+                <!-- Slide Pagination Dots -->
+                <div class="promo-carousel-pagination" id="promo-carousel-dots">
+                    <!-- Dynamically generated dots -->
                 </div>
             </div>
 
@@ -365,6 +368,9 @@
                     <button id="tab-btn-analytics" class="admin-tab-btn" onclick="switchAdminTab('analytics')">
                         <span>📊 Tahlil</span>
                     </button>
+                    <button id="tab-btn-promotions" class="admin-tab-btn" onclick="switchAdminTab('promotions')">
+                        <span>🔥 Aksiyalar (<span id="admin-promos-count">0</span>)</span>
+                    </button>
                     <button id="tab-btn-add-prod" class="admin-tab-btn" onclick="switchAdminTab('add-prod')">
                         <span>➕ Mahsulot</span>
                     </button>
@@ -444,6 +450,52 @@
                         <button type="button" class="analytics-refresh-btn" onclick="loadAdminStats()">
                             <span>🔄 Ma'lumotlarni yangilash</span>
                         </button>
+                    </div>
+                </div>
+
+                <!-- TAB 2: PROMOTIONS & BANNER MANAGEMENT -->
+                <div id="admin-view-promotions" class="admin-tab-pane hidden">
+                    <!-- Dynamic Multi-Product Promotion Creation Card -->
+                    <div class="admin-card-glass" style="margin-bottom: 20px;">
+                        <div class="form-title-wrap">
+                            <span class="form-title-icon">🔥</span>
+                            <div>
+                                <h3 class="form-title">Aksiya va Bannerlar Boshqaruvi</h3>
+                                <p class="form-subtitle">Asosiy sahifadagi karusel aksiyalarini yarating va boshqaring</p>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Multi-Product Promotion Rows Container -->
+                        <div id="admin-promo-dynamic-container" class="promo-dynamic-container">
+                            <!-- Dynamic promo item rows will be rendered here -->
+                        </div>
+
+                        <div class="promo-builder-actions-bar">
+                            <button type="button" class="promo-add-row-btn" onclick="addDynamicPromoRow()">
+                                <span>[+] Mahsulot qo'shish</span>
+                            </button>
+                            <button type="button" id="btn-submit-save-promos" class="admin-submit-btn" onclick="submitSavePromotions()">
+                                <span>🔥 Aksiyalarni Saqlash</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Active Promotions List -->
+                    <div class="admin-orders-header-row" style="margin-bottom: 12px;">
+                        <div class="form-title-wrap" style="margin-bottom: 0;">
+                            <span class="form-title-icon">✨</span>
+                            <div>
+                                <h3 class="form-title">Faol Aksiyalar Ro'yxati</h3>
+                                <p class="form-subtitle">Sliderda aylanayotgan bannerlar (<span id="admin-promos-active-count">0</span> ta)</p>
+                            </div>
+                        </div>
+                        <button type="button" class="analytics-refresh-btn" onclick="loadAdminPromotions()">
+                            <span>🔄 Yangilash</span>
+                        </button>
+                    </div>
+
+                    <div id="admin-promotions-list" class="admin-promotions-grid">
+                        <!-- Dynamically populated promo banner cards -->
                     </div>
                 </div>
 
@@ -683,6 +735,72 @@
                     <button type="button" class="modal-cancel-btn" onclick="closeDeleteConfirmModal()">Bekor qilish</button>
                     <button type="button" id="btn-confirm-delete" class="modal-danger-btn" onclick="executeDelete()">Ha, o'chirish</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- ================= EDIT PROMOTION MODAL ================= -->
+        <div id="modal-edit-promotion" class="modal-backdrop hidden" onclick="closeEditPromoModal(event)">
+            <div class="modal-edit-sheet" onclick="event.stopPropagation()">
+                <div class="modal-checkout-header">
+                    <div>
+                        <h3 class="modal-checkout-title">✏️ Aksiyani Tahrirlash</h3>
+                        <p class="modal-checkout-subtitle">Banner ma'lumotlarini o'zgartirish</p>
+                    </div>
+                    <button type="button" class="modal-close-btn" onclick="closeEditPromoModal()">✕</button>
+                </div>
+
+                <form id="form-edit-promotion" onsubmit="event.preventDefault(); submitUpdatePromotion();" class="modal-checkout-form">
+                    <input type="hidden" id="edit-promo-id">
+
+                    <div class="form-group">
+                        <label class="form-label" for="edit-promo-product">Bog'langan Mahsulot (Ixtiyoriy)</label>
+                        <select id="edit-promo-product" class="form-select" onchange="handleEditPromoProductSelect()">
+                            <option value="">-- Mahsulotga bog'lanmagan (Umumiy aksiya) --</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="edit-promo-title">Aksiya Sarlavhasi <span class="req-star">*</span></label>
+                        <input type="text" id="edit-promo-title" class="form-input" placeholder="Masalan: 🔥 SUPER CHEGIRMA" required>
+                    </div>
+
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label class="form-label" for="edit-promo-price">Aksiya Narxi (so'm)</label>
+                            <input type="number" id="edit-promo-price" class="form-input" placeholder="45000" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-promo-badge">Chegirma belgisi</label>
+                            <input type="text" id="edit-promo-badge" class="form-input" placeholder="-25% yoki SUPER NARX">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="edit-promo-subtitle">Qisqacha Tavsif</label>
+                        <textarea id="edit-promo-subtitle" class="form-textarea" rows="2" placeholder="Aksiya haqida qisqacha ma'lumot..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="label-with-action">
+                            <label class="form-label" for="edit-promo-image">Aksiya Rasmi (URL yoki Fayl)</label>
+                            <label class="upload-chip-btn">
+                                📁 Fayl tanlash
+                                <input type="file" id="edit-promo-file-input" accept="image/*" style="display:none;" onchange="handleEditPromoFilePicked(event)">
+                            </label>
+                        </div>
+                        <input type="text" id="edit-promo-image" class="form-input" placeholder="https://... yoki fayl yuklang" oninput="updateEditPromoImagePreview()">
+                        <div id="edit-promo-preview-wrap" class="admin-preview-wrap hidden">
+                            <img id="edit-promo-preview" src="" alt="Ko'rish" class="admin-preview-img">
+                        </div>
+                    </div>
+
+                    <div class="modal-checkout-actions">
+                        <button type="button" class="modal-cancel-btn" onclick="closeEditPromoModal()">Bekor qilish</button>
+                        <button type="submit" id="btn-save-edit-promo" class="modal-submit-order-btn">
+                            <span>💾 Saqlash</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
 

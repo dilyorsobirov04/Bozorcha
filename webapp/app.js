@@ -6,6 +6,15 @@ const ADMIN_ID = 7351189083;
 let currentScreen = 'onboarding';
 let products = [];
 let categories = [];
+let promotions = [];
+let currentCarouselIndex = 0;
+let carouselInterval = null;
+let touchStartX = 0;
+let touchEndX = 0;
+let isTouching = false;
+let dynamicPromoRowCount = 0;
+let adminPromosList = [];
+let currentEditingPromoId = null;
 let currentCategory = 'all';
 let currentSubcategory = 'all';
 let currentSort = 'default'; // 'default', 'price_asc', 'price_desc', 'discount_only'
@@ -24,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTelegramApp();
     loadCategories();
     loadProducts();
+    loadPromotions();
     setupNavigationListeners();
 
     // Check if returning user has already seen welcome onboarding
@@ -167,6 +177,11 @@ function navigateTo(screenId, shouldScrollToTop = true) {
         }
     });
 
+    if (screenId !== 'home' && carouselInterval) {
+        clearInterval(carouselInterval);
+        carouselInterval = null;
+    }
+
     if (screenId !== 'tracking' && trackingInterval) {
         clearInterval(trackingInterval);
         trackingInterval = null;
@@ -179,6 +194,7 @@ function navigateTo(screenId, shouldScrollToTop = true) {
 
     if (screenId === 'home') {
         renderHomeProducts();
+        renderPromoCarousel();
     } else if (screenId === 'checkout') {
         renderCheckout();
     } else if (screenId === 'tracking') {
@@ -186,6 +202,231 @@ function navigateTo(screenId, shouldScrollToTop = true) {
     } else if (screenId === 'admin') {
         switchAdminTab(currentAdminTab || 'orders');
     }
+}
+
+// ----------------- PROMOTIONS CAROUSEL BANNER -----------------
+async function loadPromotions() {
+    try {
+        const res = await fetch('/api/promotions?active_only=true');
+        if (res.ok) {
+            const data = await res.json();
+            promotions = data.promotions || [];
+            if (promotions.length > 0) {
+                renderPromoCarousel();
+                return;
+            }
+        }
+    } catch (e) {
+        console.warn("Could not fetch promotions from API", e);
+    }
+    useFallbackPromotions();
+}
+
+function useFallbackPromotions() {
+    promotions = [
+        {
+            id: 1,
+            title: "🔥 SUPER CHEGIRMA",
+            subtitle: "Har kungi yangi hosil mevalar va sabzavotlarga 25% gacha arzon narxlar!",
+            discount_price: 45000,
+            discount_text: "-25%",
+            image_url: "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=800&auto=format&fit=crop&q=80",
+            product_id: 102,
+            is_active: true
+        },
+        {
+            id: 2,
+            title: "🥑 ORGANIK AVOKADO HASS",
+            subtitle: "Meksika navli sara tabiiy avokadolar maxsus chegirma bilan!",
+            discount_price: 68000,
+            discount_text: "-20%",
+            image_url: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80",
+            product_id: 101,
+            is_active: true
+        },
+        {
+            id: 3,
+            title: "🥩 RIBEYE STEYK SUPER AKSIYA",
+            subtitle: "Marmar mol go'shti, mayin va suvli gril steyk uchun ajoyib taklif!",
+            discount_price: 145000,
+            discount_text: "-19%",
+            image_url: "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=800&auto=format&fit=crop&q=80",
+            product_id: 104,
+            is_active: true
+        },
+        {
+            id: 4,
+            title: "🥐 ISSIQ NONVOYXONA KRUASSAN",
+            subtitle: "Haqiqiy sariyog'li fransuzcha kruassanlar har kuni tongda!",
+            discount_price: 18000,
+            discount_text: "18 000 so'm",
+            image_url: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800&auto=format&fit=crop&q=80",
+            product_id: 105,
+            is_active: true
+        }
+    ];
+    renderPromoCarousel();
+}
+
+function renderPromoCarousel() {
+    const track = document.getElementById('promo-carousel-track');
+    const dotsContainer = document.getElementById('promo-carousel-dots');
+
+    if (!track || !promotions || promotions.length === 0) return;
+
+    if (currentCarouselIndex >= promotions.length) {
+        currentCarouselIndex = 0;
+    }
+
+    track.innerHTML = promotions.map((promo, idx) => {
+        const badgeTag = promo.discount_text || "🔥 SUPER AKSIYA";
+        const priceBadge = promo.discount_price 
+            ? `<div class="promo-price-badge">🏷 ${(promo.discount_price).toLocaleString('uz-UZ')} so'm</div>`
+            : '';
+        const bgImg = promo.image_url 
+            ? `<img src="${promo.image_url}" class="promo-card-bg-img" alt="${promo.title}" onerror="this.style.display='none'">`
+            : '';
+        const pid = promo.product_id ? promo.product_id : '';
+
+        return `
+            <div class="promo-carousel-slide" data-slide-index="${idx}">
+                <div class="promo-card-hero" onclick="handlePromoClick('${pid}')">
+                    ${bgImg}
+                    <div class="promo-card-content">
+                        <div class="promo-badge-row">
+                            <div class="promo-badge-tag">${badgeTag}</div>
+                            ${priceBadge}
+                        </div>
+                        <h2>${promo.title}</h2>
+                        <p>${promo.subtitle || "Maxsus narxlar va ajoyib chegirmalardan bahramand bo'ling!"}</p>
+                        <div class="promo-action-row">
+                            <button class="banner-action-btn" onclick="event.stopPropagation(); handlePromoClick('${pid}')">
+                                <span>Ko'rish</span>
+                                <span>➔</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    if (dotsContainer) {
+        if (promotions.length > 1) {
+            dotsContainer.innerHTML = promotions.map((_, idx) => `
+                <span class="carousel-dot ${idx === currentCarouselIndex ? 'active' : ''}" onclick="goToCarouselSlide(${idx})"></span>
+            `).join('');
+            dotsContainer.style.display = 'flex';
+        } else {
+            dotsContainer.innerHTML = '';
+            dotsContainer.style.display = 'none';
+        }
+    }
+
+    goToCarouselSlide(currentCarouselIndex);
+    setupCarouselTouchEvents();
+    startCarouselAutoPlay();
+}
+
+function handlePromoClick(productId) {
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('light');
+    }
+
+    if (productId && String(productId).trim() !== '' && String(productId) !== '0') {
+        const targetProd = products.find(p => String(p.id) === String(productId));
+        if (targetProd) {
+            openProductModal(targetProd.id);
+            return;
+        }
+    }
+
+    // Fallback: Filter by promo products and scroll
+    filterByPromo();
+}
+
+function goToCarouselSlide(index) {
+    const track = document.getElementById('promo-carousel-track');
+    const dots = document.querySelectorAll('#promo-carousel-dots .carousel-dot');
+
+    if (!track || !promotions || promotions.length === 0) return;
+
+    currentCarouselIndex = (index + promotions.length) % promotions.length;
+    track.style.transform = `translateX(-${currentCarouselIndex * 100}%)`;
+
+    dots.forEach((dot, idx) => {
+        if (idx === currentCarouselIndex) {
+            dot.classList.add('active');
+        } else {
+            dot.classList.remove('active');
+        }
+    });
+}
+
+function nextCarouselSlide() {
+    if (!promotions || promotions.length <= 1) return;
+    goToCarouselSlide(currentCarouselIndex + 1);
+}
+
+function prevCarouselSlide() {
+    if (!promotions || promotions.length <= 1) return;
+    goToCarouselSlide(currentCarouselIndex - 1);
+}
+
+function startCarouselAutoPlay() {
+    if (carouselInterval) {
+        clearInterval(carouselInterval);
+    }
+    if (!promotions || promotions.length <= 1) return;
+
+    carouselInterval = setInterval(() => {
+        if (currentScreen === 'home' && !isTouching) {
+            nextCarouselSlide();
+        }
+    }, 3800);
+}
+
+function setupCarouselTouchEvents() {
+    const viewport = document.getElementById('promo-carousel-viewport');
+    if (!viewport || viewport.dataset.touchAttached === 'true') return;
+
+    viewport.dataset.touchAttached = 'true';
+
+    viewport.addEventListener('touchstart', (e) => {
+        isTouching = true;
+        touchStartX = e.touches[0].clientX;
+        touchEndX = touchStartX;
+    }, { passive: true });
+
+    viewport.addEventListener('touchmove', (e) => {
+        touchEndX = e.touches[0].clientX;
+    }, { passive: true });
+
+    viewport.addEventListener('touchend', () => {
+        isTouching = false;
+        const diffX = touchStartX - touchEndX;
+        if (Math.abs(diffX) > 35) {
+            if (diffX > 0) {
+                // Swiped Left -> next
+                nextCarouselSlide();
+            } else {
+                // Swiped Right -> prev
+                prevCarouselSlide();
+            }
+            if (tg?.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('selection_changed');
+            }
+        }
+        startCarouselAutoPlay();
+    });
+
+    viewport.addEventListener('mouseenter', () => {
+        isTouching = true;
+    });
+
+    viewport.addEventListener('mouseleave', () => {
+        isTouching = false;
+    });
 }
 
 // ----------------- PRODUCTS FETCHING & RENDERING -----------------
@@ -1692,6 +1933,7 @@ function toggleAdminMode() {
         switchAdminTab('orders');
         loadAdminOrders();
         loadAdminStats();
+        loadAdminPromotions();
         loadAdminCards();
         renderAdminCategoriesList();
     } else {
@@ -1703,18 +1945,20 @@ function switchAdminTab(tab) {
     currentAdminTab = tab;
     const btnOrders = document.getElementById('tab-btn-orders');
     const btnAnalytics = document.getElementById('tab-btn-analytics');
+    const btnPromos = document.getElementById('tab-btn-promotions');
     const btnAddProd = document.getElementById('tab-btn-add-prod');
     const btnProdList = document.getElementById('tab-btn-prod-list');
     const btnCatList = document.getElementById('tab-btn-categories');
 
     const viewOrders = document.getElementById('admin-view-orders');
     const viewAnalytics = document.getElementById('admin-view-analytics');
+    const viewPromos = document.getElementById('admin-view-promotions');
     const viewAddProd = document.getElementById('admin-view-add-prod');
     const viewProdList = document.getElementById('admin-view-prod-list');
     const viewCatList = document.getElementById('admin-view-categories');
 
-    [btnOrders, btnAnalytics, btnAddProd, btnProdList, btnCatList].forEach(btn => btn?.classList.remove('active'));
-    [viewOrders, viewAnalytics, viewAddProd, viewProdList, viewCatList].forEach(v => v?.classList.add('hidden'));
+    [btnOrders, btnAnalytics, btnPromos, btnAddProd, btnProdList, btnCatList].forEach(btn => btn?.classList.remove('active'));
+    [viewOrders, viewAnalytics, viewPromos, viewAddProd, viewProdList, viewCatList].forEach(v => v?.classList.add('hidden'));
 
     if (adminOrdersInterval) {
         clearInterval(adminOrdersInterval);
@@ -1735,6 +1979,14 @@ function switchAdminTab(tab) {
         btnAnalytics?.classList.add('active');
         viewAnalytics?.classList.remove('hidden');
         loadAdminStats();
+    } else if (tab === 'promotions') {
+        btnPromos?.classList.add('active');
+        viewPromos?.classList.remove('hidden');
+        loadAdminPromotions();
+        const dynamicContainer = document.getElementById('admin-promo-dynamic-container');
+        if (dynamicContainer && dynamicContainer.children.length === 0) {
+            addDynamicPromoRow();
+        }
     } else if (tab === 'add-prod') {
         btnAddProd?.classList.add('active');
         viewAddProd?.classList.remove('hidden');
@@ -2424,6 +2676,30 @@ async function executeDelete() {
                 showToast(err.detail || "Kategoriyani o'chirishda xatolik!", "error");
                 closeDeleteConfirmModal();
             }
+        } else if (type === 'promotion') {
+            const res = await fetch(`/api/admin/promotions/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                const card = document.getElementById(`admin-promo-card-${id}`);
+                if (card) {
+                    card.classList.add('card-removing');
+                    setTimeout(() => card.remove(), 350);
+                }
+
+                showToast("Aksiya muvaffaqiyatli o'chirildi! 🗑️", "success");
+                closeDeleteConfirmModal();
+
+                promotions = promotions.filter(p => p.id != id);
+                adminPromosList = adminPromosList.filter(p => p.id != id);
+                renderPromoCarousel();
+                const countEl = document.getElementById('admin-promos-count');
+                const activeCountEl = document.getElementById('admin-promos-active-count');
+                if (countEl) countEl.innerText = adminPromosList.length;
+                if (activeCountEl) activeCountEl.innerText = adminPromosList.filter(p => p.is_active !== false).length;
+            } else {
+                const err = await res.json().catch(() => ({}));
+                showToast(err.detail || "Aksiyani o'chirishda xatolik!", "error");
+                closeDeleteConfirmModal();
+            }
         }
     } catch (e) {
         showToast("Server bilan bog'lanishda xatolik!", "error");
@@ -2472,6 +2748,509 @@ async function handleFilePicked(event) {
 
     event.target.value = '';
     targetAdminProductId = null;
+}
+
+// ================= ADMIN PROMOTIONS & BANNER MANAGEMENT =================
+async function loadAdminPromotions() {
+    const listEl = document.getElementById('admin-promotions-list');
+    const countEl = document.getElementById('admin-promos-count');
+    const activeCountEl = document.getElementById('admin-promos-active-count');
+
+    try {
+        const user = tg?.initDataUnsafe?.user;
+        const userId = user?.id || ADMIN_ID;
+        const res = await fetch(`/api/promotions?active_only=false&user_id=${userId}`);
+        if (res.ok) {
+            const data = await res.json();
+            adminPromosList = data.promotions || [];
+            if (countEl) countEl.innerText = adminPromosList.length;
+            if (activeCountEl) activeCountEl.innerText = adminPromosList.filter(p => p.is_active !== false).length;
+
+            if (!listEl) return;
+
+            if (adminPromosList.length === 0) {
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 30px 10px; color: var(--text-muted);">
+                        <div style="font-size: 32px; margin-bottom: 8px;">🔥</div>
+                        <p style="font-size: 14px; font-weight: 600;">Hozircha aksiyalar mavjud emas</p>
+                        <p style="font-size: 12px; margin-top: 4px;">Yuqoridagi formadan yangi aksiya banneri qo'shishingiz mumkin</p>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = adminPromosList.map(promo => {
+                const badgeText = promo.discount_text || 'Aksiya';
+                const priceFormatted = promo.discount_price ? `${(promo.discount_price).toLocaleString('uz-UZ')} so'm` : null;
+                const safeTitle = (promo.title || '').replace(/'/g, "\\'");
+                const prodName = promo.product ? promo.product.name : null;
+
+                return `
+                    <div id="admin-promo-card-${promo.id}" class="admin-promo-card">
+                        <div class="admin-promo-card-main">
+                            <div class="admin-promo-card-thumb-wrap">
+                                <img src="${promo.image_url}" class="admin-promo-card-thumb" alt="${promo.title}" onerror="this.src='https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200&auto=format&fit=crop&q=60'">
+                            </div>
+                            <div class="admin-promo-card-info">
+                                <div class="admin-promo-meta-row" style="margin-bottom: 4px;">
+                                    <span class="promo-badge-tag">${badgeText}</span>
+                                    ${priceFormatted ? `<span class="admin-promo-price-chip">${priceFormatted}</span>` : ''}
+                                    ${prodName ? `<span class="admin-promo-linked-chip" title="Bog'langan mahsulot">📦 ${prodName}</span>` : ''}
+                                </div>
+                                <h4 class="admin-promo-card-title">${promo.title}</h4>
+                                <p class="admin-promo-card-desc">${promo.subtitle || 'Tavsif yo\'q'}</p>
+                            </div>
+                        </div>
+
+                        <div class="admin-promo-card-bottom">
+                            <span style="font-size: 11px; color: var(--text-muted);">ID: #${promo.id} • ${promo.created_at ? promo.created_at.split(' ')[0] : 'Faol'}</span>
+                            <div class="admin-promo-card-actions">
+                                <button type="button" class="admin-promo-edit-btn" onclick="openEditPromoModal(${promo.id})">
+                                    ✏️ Tahrirlash
+                                </button>
+                                <button type="button" class="admin-delete-btn" style="padding: 6px 12px; font-size: 12px;" onclick="confirmDeletePromotion(${promo.id}, '${safeTitle}')">
+                                    🗑️ O'chirish
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    } catch (e) {
+        console.warn("Could not load admin promotions", e);
+    }
+}
+
+function addDynamicPromoRow(initialData = null) {
+    const container = document.getElementById('admin-promo-dynamic-container');
+    if (!container) return;
+
+    dynamicPromoRowCount++;
+    const rowId = `promo-dynamic-row-${dynamicPromoRowCount}`;
+    const rowNum = container.children.length + 1;
+
+    // Generate product options
+    const productOptionsHtml = `
+        <option value="">-- Mahsulotga bog'lash (Ixtiyoriy) --</option>
+        ${products.map(p => `<option value="${p.id}">${p.name} (${(p.price || 0).toLocaleString('uz-UZ')} so'm)</option>`).join('')}
+    `;
+
+    const rowDiv = document.createElement('div');
+    rowDiv.id = rowId;
+    rowDiv.className = 'promo-dynamic-row-card';
+    rowDiv.innerHTML = `
+        <div class="promo-row-header">
+            <span class="promo-row-badge-num">
+                <span>🔥</span> Aksiya elementi #${rowNum}
+            </span>
+            ${container.children.length > 0 ? `
+                <button type="button" class="promo-row-remove-btn" onclick="removeDynamicPromoRow('${rowId}')">✕ O'chirish</button>
+            ` : ''}
+        </div>
+
+        <div class="form-group" style="margin-bottom: 10px;">
+            <label class="form-label" style="font-size: 11px;">Mavjud Mahsulotga bog'lash (Avtomatik to'ldirish):</label>
+            <select class="form-select promo-row-product-select" onchange="handlePromoRowProductSelect('${rowId}', this)">
+                ${productOptionsHtml}
+            </select>
+        </div>
+
+        <div class="form-row-2">
+            <div class="form-group" style="flex: 2;">
+                <label class="form-label" style="font-size: 11px;">Aksiya Sarlavhasi <span class="req-star">*</span></label>
+                <input type="text" class="form-input promo-row-title" placeholder="Masalan: 🔥 SUPER CHEGIRMA" required>
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label class="form-label" style="font-size: 11px;">Chegirma matni</label>
+                <input type="text" class="form-input promo-row-badge" placeholder="-25% yoki SUPER NARX">
+            </div>
+        </div>
+
+        <div class="form-row-2">
+            <div class="form-group" style="flex: 2;">
+                <label class="form-label" style="font-size: 11px;">Qisqacha tavsif</label>
+                <input type="text" class="form-input promo-row-subtitle" placeholder="Har kungi yangi hosil meva va sabzavotlarga...">
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label class="form-label" style="font-size: 11px;">Aksiya narxi (so'm)</label>
+                <input type="number" class="form-input promo-row-price" placeholder="45000" min="0">
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+            <div class="label-with-action">
+                <label class="form-label" style="font-size: 11px;">Aksiya rasmi (URL yoki Fayl)</label>
+                <label class="upload-chip-btn" style="padding: 3px 8px; font-size: 11px;">
+                    📁 Fayl
+                    <input type="file" accept="image/*" style="display:none;" onchange="handlePromoRowFilePicked(event, '${rowId}')">
+                </label>
+            </div>
+            <input type="text" class="form-input promo-row-image" placeholder="https://images.unsplash.com/... yoki fayl yuklang" oninput="updatePromoRowImagePreview('${rowId}')">
+            <div class="admin-preview-wrap hidden promo-row-preview-wrap" style="margin-top: 6px;">
+                <img src="" alt="Ko'rish" class="admin-preview-img promo-row-preview-img" style="height: 60px;">
+            </div>
+        </div>
+    `;
+
+    container.appendChild(rowDiv);
+
+    if (initialData) {
+        const titleEl = rowDiv.querySelector('.promo-row-title');
+        const subtitleEl = rowDiv.querySelector('.promo-row-subtitle');
+        const priceEl = rowDiv.querySelector('.promo-row-price');
+        const badgeEl = rowDiv.querySelector('.promo-row-badge');
+        const imageEl = rowDiv.querySelector('.promo-row-image');
+        const prodSelectEl = rowDiv.querySelector('.promo-row-product-select');
+
+        if (titleEl) titleEl.value = initialData.title || '';
+        if (subtitleEl) subtitleEl.value = initialData.subtitle || '';
+        if (priceEl && initialData.discount_price) priceEl.value = initialData.discount_price;
+        if (badgeEl && initialData.discount_text) badgeEl.value = initialData.discount_text;
+        if (imageEl && initialData.image_url) imageEl.value = initialData.image_url;
+        if (prodSelectEl && initialData.product_id) prodSelectEl.value = initialData.product_id;
+        updatePromoRowImagePreview(rowId);
+    }
+}
+
+function removeDynamicPromoRow(rowId) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+
+    row.style.opacity = '0';
+    row.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+        row.remove();
+        // Re-index remaining rows badges
+        const container = document.getElementById('admin-promo-dynamic-container');
+        if (container) {
+            Array.from(container.children).forEach((child, idx) => {
+                const badgeNum = child.querySelector('.promo-row-badge-num');
+                if (badgeNum) {
+                    badgeNum.innerHTML = `<span>🔥</span> Aksiya elementi #${idx + 1}`;
+                }
+            });
+            if (container.children.length === 0) {
+                addDynamicPromoRow();
+            }
+        }
+    }, 200);
+}
+
+function handlePromoRowProductSelect(rowId, selectEl) {
+    const row = document.getElementById(rowId);
+    if (!row || !selectEl) return;
+
+    const selectedOption = selectEl.options[selectEl.selectedIndex];
+    if (!selectedOption || !selectedOption.value) return;
+
+    const prodId = selectedOption.value;
+    const prod = products.find(p => String(p.id) === String(prodId));
+    if (!prod) return;
+
+    const titleEl = row.querySelector('.promo-row-title');
+    const subtitleEl = row.querySelector('.promo-row-subtitle');
+    const priceEl = row.querySelector('.promo-row-price');
+    const badgeEl = row.querySelector('.promo-row-badge');
+    const imageEl = row.querySelector('.promo-row-image');
+
+    if (titleEl && !titleEl.value.trim()) {
+        titleEl.value = `🔥 ${prod.name.toUpperCase()}`;
+    }
+    if (subtitleEl && !subtitleEl.value.trim()) {
+        subtitleEl.value = prod.description || `Eng sara ${prod.name} maxsus aksiya narxida!`;
+    }
+    if (priceEl && (!priceEl.value || priceEl.value == '0')) {
+        priceEl.value = prod.price || '';
+    }
+    if (badgeEl && !badgeEl.value.trim()) {
+        badgeEl.value = prod.discount_percent ? `-${prod.discount_percent}%` : "SUPER NARX";
+    }
+    if (imageEl && !imageEl.value.trim() && prod.image_url) {
+        imageEl.value = prod.image_url;
+        updatePromoRowImagePreview(rowId);
+    }
+}
+
+async function handlePromoRowFilePicked(event, rowId) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    showToast("Aksiya rasmi yuklanmoqda... ⏳", "success");
+    const uploadedUrl = await uploadImageFile(file);
+
+    const row = document.getElementById(rowId);
+    if (row) {
+        const imageInput = row.querySelector('.promo-row-image');
+        if (imageInput) {
+            imageInput.value = uploadedUrl;
+            updatePromoRowImagePreview(rowId);
+        }
+    }
+    showToast("Aksiya rasmi yuklandi! 📸", "success");
+}
+
+function updatePromoRowImagePreview(rowId) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+
+    const input = row.querySelector('.promo-row-image');
+    const previewWrap = row.querySelector('.promo-row-preview-wrap');
+    const previewImg = row.querySelector('.promo-row-preview-img');
+    const url = (input?.value || '').trim();
+
+    if (url) {
+        if (previewImg) previewImg.src = url;
+        if (previewWrap) previewWrap.classList.remove('hidden');
+    } else {
+        if (previewWrap) previewWrap.classList.add('hidden');
+    }
+}
+
+async function submitSavePromotions() {
+    const container = document.getElementById('admin-promo-dynamic-container');
+    const submitBtn = document.getElementById('btn-submit-save-promos');
+    if (!container) return;
+
+    const rows = Array.from(container.children);
+    if (rows.length === 0) {
+        showToast("Kamida bitta aksiya kiritilishi kerak!", "error");
+        return;
+    }
+
+    const promotionsToSave = [];
+
+    for (const row of rows) {
+        const title = (row.querySelector('.promo-row-title')?.value || '').trim();
+        const subtitle = (row.querySelector('.promo-row-subtitle')?.value || '').trim();
+        const priceVal = row.querySelector('.promo-row-price')?.value;
+        const badge = (row.querySelector('.promo-row-badge')?.value || '').trim();
+        const image_url = (row.querySelector('.promo-row-image')?.value || '').trim();
+        const product_id = row.querySelector('.promo-row-product-select')?.value || null;
+
+        if (!title) {
+            showToast("Iltimos, barcha aksiyalar uchun sarlavha kiriting!", "error");
+            row.querySelector('.promo-row-title')?.focus();
+            return;
+        }
+
+        promotionsToSave.push({
+            title,
+            subtitle,
+            discount_price: priceVal ? parseInt(priceVal, 10) : null,
+            discount_text: badge || null,
+            image_url: image_url || null,
+            product_id: product_id && product_id !== '' ? parseInt(product_id, 10) : null,
+            is_active: true
+        });
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span>⏳ Saqlanmoqda...</span>`;
+    }
+
+    try {
+        const payload = promotionsToSave.length === 1 ? promotionsToSave[0] : { promotions: promotionsToSave };
+        const res = await fetch('/api/admin/promotions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            showToast(`${promotionsToSave.length} ta aksiya muvaffaqiyatli saqlandi! 🎉`, "success");
+            container.innerHTML = '';
+            addDynamicPromoRow();
+            await loadPromotions();
+            await loadAdminPromotions();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.detail || "Aksiyalarni saqlashda xatolik!", "error");
+        }
+    } catch (e) {
+        showToast("Server bilan bog'lanishda xatolik!", "error");
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<span>🔥 Aksiyalarni Saqlash</span>`;
+        }
+    }
+}
+
+function openEditPromoModal(promoId) {
+    const promo = adminPromosList.find(p => p.id == promoId) || promotions.find(p => p.id == promoId);
+    if (!promo) return;
+
+    currentEditingPromoId = promoId;
+
+    const idInput = document.getElementById('edit-promo-id');
+    const titleInput = document.getElementById('edit-promo-title');
+    const subtitleInput = document.getElementById('edit-promo-subtitle');
+    const priceInput = document.getElementById('edit-promo-price');
+    const badgeInput = document.getElementById('edit-promo-badge');
+    const imageInput = document.getElementById('edit-promo-image');
+    const productSelect = document.getElementById('edit-promo-product');
+    const modal = document.getElementById('modal-edit-promotion');
+
+    if (idInput) idInput.value = promo.id;
+    if (titleInput) titleInput.value = promo.title || '';
+    if (subtitleInput) subtitleInput.value = promo.subtitle || '';
+    if (priceInput) priceInput.value = promo.discount_price || '';
+    if (badgeInput) badgeInput.value = promo.discount_text || '';
+    if (imageInput) imageInput.value = promo.image_url || '';
+
+    if (productSelect) {
+        productSelect.innerHTML = `
+            <option value="">-- Mahsulotga bog'lanmagan (Umumiy aksiya) --</option>
+            ${products.map(p => `
+                <option value="${p.id}" ${promo.product_id == p.id ? 'selected' : ''}>
+                    ${p.name} (${(p.price || 0).toLocaleString('uz-UZ')} so'm)
+                </option>
+            `).join('')}
+        `;
+    }
+
+    updateEditPromoImagePreview();
+
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeEditPromoModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById('modal-edit-promotion');
+    if (modal) modal.classList.add('hidden');
+    currentEditingPromoId = null;
+}
+
+function handleEditPromoProductSelect() {
+    const select = document.getElementById('edit-promo-product');
+    if (!select || !select.value) return;
+
+    const prod = products.find(p => String(p.id) === String(select.value));
+    if (!prod) return;
+
+    const titleInput = document.getElementById('edit-promo-title');
+    const priceInput = document.getElementById('edit-promo-price');
+    const imageInput = document.getElementById('edit-promo-image');
+
+    if (titleInput && !titleInput.value.trim()) {
+        titleInput.value = `🔥 ${prod.name.toUpperCase()}`;
+    }
+    if (priceInput && (!priceInput.value || priceInput.value == '0')) {
+        priceInput.value = prod.price || '';
+    }
+    if (imageInput && !imageInput.value.trim() && prod.image_url) {
+        imageInput.value = prod.image_url;
+        updateEditPromoImagePreview();
+    }
+}
+
+async function handleEditPromoFilePicked(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    showToast("Aksiya rasmi yuklanmoqda... ⏳", "success");
+    const uploadedUrl = await uploadImageFile(file);
+
+    const imgInput = document.getElementById('edit-promo-image');
+    if (imgInput) {
+        imgInput.value = uploadedUrl;
+        updateEditPromoImagePreview();
+    }
+    showToast("Aksiya rasmi yuklandi! 📸", "success");
+}
+
+function updateEditPromoImagePreview() {
+    const input = document.getElementById('edit-promo-image');
+    const previewWrap = document.getElementById('edit-promo-preview-wrap');
+    const previewImg = document.getElementById('edit-promo-preview');
+    const url = (input?.value || '').trim();
+
+    if (url) {
+        if (previewImg) previewImg.src = url;
+        if (previewWrap) previewWrap.classList.remove('hidden');
+    } else {
+        if (previewWrap) previewWrap.classList.add('hidden');
+    }
+}
+
+async function submitUpdatePromotion() {
+    if (!currentEditingPromoId) return;
+
+    const titleInput = document.getElementById('edit-promo-title');
+    const subtitleInput = document.getElementById('edit-promo-subtitle');
+    const priceInput = document.getElementById('edit-promo-price');
+    const badgeInput = document.getElementById('edit-promo-badge');
+    const imageInput = document.getElementById('edit-promo-image');
+    const productSelect = document.getElementById('edit-promo-product');
+    const saveBtn = document.getElementById('btn-save-edit-promo');
+
+    const title = (titleInput?.value || '').trim();
+    const subtitle = (subtitleInput?.value || '').trim();
+    const priceVal = priceInput?.value;
+    const badge = (badgeInput?.value || '').trim();
+    const image_url = (imageInput?.value || '').trim();
+    const product_id = productSelect?.value || null;
+
+    if (!title) {
+        showToast("Aksiya sarlavhasini kiriting!", "error");
+        titleInput?.focus();
+        return;
+    }
+
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = "Saqlanmoqda...";
+    }
+
+    try {
+        const payload = {
+            title,
+            subtitle,
+            discount_price: priceVal ? parseInt(priceVal, 10) : null,
+            discount_text: badge || null,
+            image_url: image_url || null,
+            product_id: product_id && product_id !== '' ? parseInt(product_id, 10) : null,
+            is_active: true
+        };
+
+        const res = await fetch(`/api/admin/promotions/${currentEditingPromoId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            showToast("Aksiya muvaffaqiyatli yangilandi! 🎉", "success");
+            closeEditPromoModal();
+            await loadPromotions();
+            await loadAdminPromotions();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.detail || "Aksiyani yangilashda xatolik!", "error");
+        }
+    } catch (e) {
+        showToast("Server bilan bog'lanishda xatolik!", "error");
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerText = "💾 Saqlash";
+        }
+    }
+}
+
+function confirmDeletePromotion(promoId, promoTitle) {
+    deleteTarget = { type: 'promotion', id: promoId, name: promoTitle };
+    const modal = document.getElementById('modal-delete-confirm');
+    const title = document.getElementById('delete-modal-title');
+    const desc = document.getElementById('delete-modal-desc');
+
+    if (title) title.innerText = "Aksiyani o'chirish";
+    if (desc) {
+        desc.innerHTML = `Haqiqatan ham <strong>"${promoTitle}"</strong> aksiyasini o'chirmoqchimisiz?`;
+    }
+    if (modal) modal.classList.remove('hidden');
 }
 
 function showToast(message, type = "success") {
@@ -2534,3 +3313,21 @@ window.switchAdminTab = switchAdminTab;
 window.loadAdminStats = loadAdminStats;
 window.loadAdminOrders = loadAdminOrders;
 window.updateAdminOrderStatus = updateAdminOrderStatus;
+window.loadAdminPromotions = loadAdminPromotions;
+window.addDynamicPromoRow = addDynamicPromoRow;
+window.removeDynamicPromoRow = removeDynamicPromoRow;
+window.handlePromoRowProductSelect = handlePromoRowProductSelect;
+window.handlePromoRowFilePicked = handlePromoRowFilePicked;
+window.updatePromoRowImagePreview = updatePromoRowImagePreview;
+window.submitSavePromotions = submitSavePromotions;
+window.openEditPromoModal = openEditPromoModal;
+window.closeEditPromoModal = closeEditPromoModal;
+window.handleEditPromoProductSelect = handleEditPromoProductSelect;
+window.handleEditPromoFilePicked = handleEditPromoFilePicked;
+window.updateEditPromoImagePreview = updateEditPromoImagePreview;
+window.submitUpdatePromotion = submitUpdatePromotion;
+window.confirmDeletePromotion = confirmDeletePromotion;
+window.goToCarouselSlide = goToCarouselSlide;
+window.nextCarouselSlide = nextCarouselSlide;
+window.prevCarouselSlide = prevCarouselSlide;
+window.handlePromoClick = handlePromoClick;
