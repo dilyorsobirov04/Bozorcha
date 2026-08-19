@@ -8,7 +8,7 @@ const ngrokScript = fs.existsSync(localNgrok) ? localNgrok : 'ngrok';
 module.exports = {
   apps: [
     {
-      name: "bozorcha-backend",
+      name: "bozorcha-bot",
       script: "main.py",
       interpreter: "python",
       exec_mode: "fork",
@@ -21,7 +21,7 @@ module.exports = {
       }
     },
     {
-      name: "ngrok-tunnel",
+      name: "ngrok-1c",
       script: ngrokScript,
       args: "http 8080",
       exec_mode: "fork",
