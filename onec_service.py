@@ -1,4 +1,6 @@
 import os
+import re
+import json
 import time
 import asyncio
 import logging
@@ -55,10 +57,32 @@ def is_localhost_url(url: str) -> bool:
 
 
 def clean_1c_url(raw_url: Optional[str]) -> str:
-    """Strips whitespace and surrounding quotes."""
+    """Strips whitespace, markdown brackets/parentheses, quotes, and duplicates."""
     if not raw_url:
         return ""
-    return str(raw_url).strip().strip("'\"").strip()
+    s = str(raw_url).strip().strip("'\"").strip()
+
+    # 1. If Markdown format [text](url), extract URL from parentheses
+    md_match = re.search(r'\((https?://[^\s\)]+)\)', s)
+    if md_match:
+        s = md_match.group(1).strip()
+    elif s.startswith("[") and s.endswith("]"):
+        s = s[1:-1].strip()
+
+    # 2. Extract valid http/https URL if embedded or duplicated
+    url_match = re.search(r'(https?://[^\s\[\]\(\)\<\>\"\']+)', s)
+    if url_match:
+        s = url_match.group(1).strip()
+
+    # 3. If duplicated url (e.g. https://...https://...), keep first valid instance
+    if s.count("http://") + s.count("https://") > 1:
+        dup_match = re.search(r'(https?://.+?)(?=https?://|$)', s)
+        if dup_match:
+            s = dup_match.group(1).strip()
+
+    # Remove any trailing brackets/punctuation
+    s = re.sub(r'[\]\)>.,;\"\'\s]+$', '', s)
+    return s
 
 
 def get_active_1c_url() -> str:
