@@ -59,6 +59,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadPromotions();
     setupNavigationListeners();
 
+    // Automatic initial load & background sync for 1C products
+    if (isCurrentUserAdmin()) {
+        loadUncategorizedProducts();
+        load1CConfigStatus();
+        triggerSilent1CSync();
+    }
+
     // Check if returning user has already seen welcome onboarding
     try {
         const hasSeenWelcome = localStorage.getItem('hasSeenWelcome');
@@ -2732,6 +2739,13 @@ function renderUncategorizedProducts() {
     }).join('');
 }
 
+function renderUncategorizedGrid(items = null) {
+    if (items && Array.isArray(items)) {
+        uncategorizedProducts = items;
+    }
+    renderUncategorizedProducts();
+}
+
 function buildCategoryOptionsHtml() {
     if (!categories || categories.length === 0) return '';
 
@@ -2924,7 +2938,7 @@ async function trigger1CSync(btn = null) {
             // Instantly render fresh uncategorized items from sync response
             if (data.uncategorized_products && Array.isArray(data.uncategorized_products)) {
                 uncategorizedProducts = data.uncategorized_products;
-                renderUncategorizedGrid(uncategorizedProducts);
+                renderUncategorizedProducts();
                 const countEl = document.getElementById('admin-uncategorized-count');
                 const headerCountEl = document.getElementById('uncategorized-header-count');
                 if (countEl) countEl.innerText = uncategorizedProducts.length;
@@ -2957,6 +2971,35 @@ async function trigger1CSync(btn = null) {
             syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
         }
         await load1CConfigStatus();
+    }
+}
+
+async function triggerSilent1CSync() {
+    if (!isCurrentUserAdmin()) return;
+    try {
+        const res = await fetch(`/api/admin/sync-1c?user_id=${ALLOWED_ADMIN_ID}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+            if (data.uncategorized_products && Array.isArray(data.uncategorized_products)) {
+                uncategorizedProducts = data.uncategorized_products;
+                renderUncategorizedProducts();
+                const countEl = document.getElementById('admin-uncategorized-count');
+                const headerCountEl = document.getElementById('uncategorized-header-count');
+                if (countEl) countEl.innerText = uncategorizedProducts.length;
+                if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
+            } else {
+                await loadUncategorizedProducts();
+            }
+            await loadProducts();
+        }
+    } catch (e) {
+        console.debug('Silent background 1C sync completed/skipped:', e);
     }
 }
 
@@ -3970,6 +4013,9 @@ window.trigger1CSync = trigger1CSync;
 window.load1CConfigStatus = load1CConfigStatus;
 window.save1CUrlSetting = save1CUrlSetting;
 window.fetchUncategorizedProducts = loadUncategorizedProducts;
+window.renderUncategorizedGrid = renderUncategorizedGrid;
+window.renderUncategorizedProducts = renderUncategorizedProducts;
+window.triggerSilent1CSync = triggerSilent1CSync;
 window.clearAllToasts = clearAllToasts;
 window.showToast = showToast;
 
