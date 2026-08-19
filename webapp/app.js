@@ -1,6 +1,29 @@
 // Telegram WebApp SDK
 const tg = window.Telegram?.WebApp;
-const ADMIN_ID = 7351189083;
+const ALLOWED_ADMIN_ID = 7351189083;
+
+// Helper to retrieve current Telegram User ID
+function getCurrentTelegramUserId() {
+    const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if (user && user.id) {
+        return Number(user.id);
+    }
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const qUserId = urlParams.get('user_id') || urlParams.get('userId');
+        if (qUserId && !isNaN(Number(qUserId))) {
+            return Number(qUserId);
+        }
+    } catch (e) {}
+
+    return null;
+}
+
+// Strictly verify if current user is the authorized admin
+function isCurrentUserAdmin() {
+    const currentUserId = getCurrentTelegramUserId();
+    return currentUserId !== null && Number(currentUserId) === ALLOWED_ADMIN_ID;
+}
 
 // App State
 let currentScreen = 'onboarding';
@@ -55,14 +78,17 @@ function initTelegramApp() {
         if (tg.setHeaderColor) {
             tg.setHeaderColor('#090d16');
         }
+    }
 
-        const user = tg.initDataUnsafe?.user;
-        const userId = user?.id || ADMIN_ID;
-
-        // Admin tugmasi tekshiruvi
-        if (userId == ADMIN_ID || userId === 7351189083) {
-            const adminBtn = document.getElementById('admin-mode-toggle');
-            if (adminBtn) adminBtn.style.display = 'block';
+    // Conditionally render the "⚙️ Admin" button on the main header
+    const adminBtn = document.getElementById('admin-mode-toggle');
+    if (adminBtn) {
+        if (isCurrentUserAdmin()) {
+            adminBtn.style.display = 'inline-flex';
+            adminBtn.classList.remove('hidden');
+        } else {
+            adminBtn.style.display = 'none';
+            adminBtn.classList.add('hidden');
         }
     }
 }
@@ -144,6 +170,14 @@ function scrollToProducts() {
 
 // ----------------- SCREEN NAVIGATION -----------------
 function navigateTo(screenId, shouldScrollToTop = true) {
+    if (screenId === 'admin' && !isCurrentUserAdmin()) {
+        showToast("Ruxsat berilmadi: Siz admin emassiz ⛔️", "error");
+        if (currentScreen !== 'home') {
+            navigateTo('home', true);
+        }
+        return;
+    }
+
     currentScreen = screenId;
     document.querySelectorAll('.screen').forEach(s => {
         s.classList.remove('active');
@@ -1927,6 +1961,13 @@ let adminOrdersInterval = null;
 let adminOrdersList = [];
 
 function toggleAdminMode() {
+    if (!isCurrentUserAdmin()) {
+        showToast("Ruxsat berilmadi: Siz admin emassiz ⛔️", "error");
+        isAdminMode = false;
+        navigateTo('home', true);
+        return;
+    }
+
     isAdminMode = !isAdminMode;
     if (isAdminMode) {
         navigateTo('admin');
@@ -1942,6 +1983,13 @@ function toggleAdminMode() {
 }
 
 function switchAdminTab(tab) {
+    if (!isCurrentUserAdmin()) {
+        showToast("Ruxsat berilmadi: Siz admin emassiz ⛔️", "error");
+        isAdminMode = false;
+        navigateTo('home', true);
+        return;
+    }
+
     currentAdminTab = tab;
     const btnOrders = document.getElementById('tab-btn-orders');
     const btnAnalytics = document.getElementById('tab-btn-analytics');
@@ -1971,7 +2019,7 @@ function switchAdminTab(tab) {
         loadAdminOrders();
         // Start polling orders every 4 seconds
         adminOrdersInterval = setInterval(() => {
-            if (currentScreen === 'admin' && currentAdminTab === 'orders') {
+            if (currentScreen === 'admin' && currentAdminTab === 'orders' && isCurrentUserAdmin()) {
                 loadAdminOrders();
             }
         }, 4000);
@@ -2004,13 +2052,17 @@ function switchAdminTab(tab) {
 }
 
 async function loadAdminOrders() {
+    if (!isCurrentUserAdmin()) return;
+
     const listEl = document.getElementById('admin-orders-list');
     const countEl = document.getElementById('admin-orders-count');
 
     try {
-        const user = tg?.initDataUnsafe?.user;
-        const userId = user?.id || ADMIN_ID;
-        const res = await fetch(`/api/admin/orders?user_id=${userId}`);
+        const res = await fetch(`/api/admin/orders?user_id=${ALLOWED_ADMIN_ID}`, {
+            headers: {
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            }
+        });
         if (res.ok) {
             const data = await res.json();
             adminOrdersList = data.orders || [];
@@ -2148,6 +2200,11 @@ async function loadAdminOrders() {
 }
 
 async function updateAdminOrderStatus(orderId, statusCode, statusText) {
+    if (!isCurrentUserAdmin()) {
+        showToast("Ruxsat berilmadi: Siz admin emassiz ⛔️", "error");
+        return;
+    }
+
     if (tg?.HapticFeedback) {
         tg.HapticFeedback.impactOccurred('medium');
     }
@@ -2157,7 +2214,7 @@ async function updateAdminOrderStatus(orderId, statusCode, statusText) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Admin-Id': ADMIN_ID
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
             },
             body: JSON.stringify({
                 status: statusText,
@@ -2177,6 +2234,8 @@ async function updateAdminOrderStatus(orderId, statusCode, statusText) {
 }
 
 async function loadAdminStats() {
+    if (!isCurrentUserAdmin()) return;
+
     const dailyRevEl = document.getElementById('stats-daily-rev');
     const dailyOrdersEl = document.getElementById('stats-daily-orders');
     const monthlyRevEl = document.getElementById('stats-monthly-rev');
@@ -2184,9 +2243,11 @@ async function loadAdminStats() {
     const topListEl = document.getElementById('stats-top-products-list');
 
     try {
-        const user = tg?.initDataUnsafe?.user;
-        const userId = user?.id || ADMIN_ID;
-        const res = await fetch(`/api/admin/stats?user_id=${userId}`);
+        const res = await fetch(`/api/admin/stats?user_id=${ALLOWED_ADMIN_ID}`, {
+            headers: {
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            }
+        });
         if (res.ok) {
             const data = await res.json();
 
@@ -2361,7 +2422,10 @@ async function submitAddNewProduct() {
     try {
         const res = await fetch('/api/products', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
             body: JSON.stringify(payload)
         });
 
@@ -2460,6 +2524,11 @@ function filterAdminProducts() {
 
 // --- Category Creation & Tree List ---
 async function submitAddNewCategory() {
+    if (!isCurrentUserAdmin()) {
+        showToast("Ruxsat berilmadi: Siz admin emassiz ⛔️", "error");
+        return;
+    }
+
     const nameInput = document.getElementById('add-cat-name');
     const iconInput = document.getElementById('add-cat-icon');
     const imageInput = document.getElementById('add-cat-image');
@@ -2485,7 +2554,10 @@ async function submitAddNewCategory() {
     try {
         const res = await fetch('/api/categories', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
             body: JSON.stringify({ name, icon, image_url, parent_id })
         });
 
@@ -2626,6 +2698,11 @@ function closeDeleteConfirmModal(event) {
 
 async function executeDelete() {
     if (!deleteTarget.type || !deleteTarget.id) return;
+    if (!isCurrentUserAdmin()) {
+        showToast("Ruxsat berilmadi: Siz admin emassiz ⛔️", "error");
+        closeDeleteConfirmModal();
+        return;
+    }
 
     const btn = document.getElementById('btn-confirm-delete');
     if (btn) {
@@ -2637,7 +2714,12 @@ async function executeDelete() {
 
     try {
         if (type === 'product') {
-            const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/products/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+                }
+            });
             if (res.ok) {
                 const card = document.getElementById(`admin-card-${id}`);
                 if (card) {
@@ -2659,7 +2741,12 @@ async function executeDelete() {
                 closeDeleteConfirmModal();
             }
         } else if (type === 'category') {
-            const res = await fetch(`/api/categories/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/categories/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+                }
+            });
             if (res.ok) {
                 const card = document.getElementById(`admin-cat-card-${id}`);
                 if (card) {
@@ -2677,7 +2764,12 @@ async function executeDelete() {
                 closeDeleteConfirmModal();
             }
         } else if (type === 'promotion') {
-            const res = await fetch(`/api/admin/promotions/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/admin/promotions/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+                }
+            });
             if (res.ok) {
                 const card = document.getElementById(`admin-promo-card-${id}`);
                 if (card) {
@@ -2721,6 +2813,10 @@ function triggerAdminPhoto(productId) {
 async function handleFilePicked(event) {
     const file = event.target.files[0];
     if (!file || !targetAdminProductId) return;
+    if (!isCurrentUserAdmin()) {
+        showToast("Ruxsat berilmadi: Siz admin emassiz ⛔️", "error");
+        return;
+    }
 
     showToast("Rasm yuklanmoqda... ⏳", "success");
     const uploadedUrl = await uploadImageFile(file);
@@ -2728,7 +2824,10 @@ async function handleFilePicked(event) {
     try {
         const res = await fetch('/api/products/update-photo', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
             body: JSON.stringify({
                 product_id: targetAdminProductId,
                 image_url: uploadedUrl
@@ -2752,14 +2851,18 @@ async function handleFilePicked(event) {
 
 // ================= ADMIN PROMOTIONS & BANNER MANAGEMENT =================
 async function loadAdminPromotions() {
+    if (!isCurrentUserAdmin()) return;
+
     const listEl = document.getElementById('admin-promotions-list');
     const countEl = document.getElementById('admin-promos-count');
     const activeCountEl = document.getElementById('admin-promos-active-count');
 
     try {
-        const user = tg?.initDataUnsafe?.user;
-        const userId = user?.id || ADMIN_ID;
-        const res = await fetch(`/api/promotions?active_only=false&user_id=${userId}`);
+        const res = await fetch(`/api/promotions?active_only=false&user_id=${ALLOWED_ADMIN_ID}`, {
+            headers: {
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            }
+        });
         if (res.ok) {
             const data = await res.json();
             adminPromosList = data.promotions || [];
@@ -3008,6 +3111,11 @@ function updatePromoRowImagePreview(rowId) {
 }
 
 async function submitSavePromotions() {
+    if (!isCurrentUserAdmin()) {
+        showToast("Ruxsat berilmadi: Siz admin emassiz ⛔️", "error");
+        return;
+    }
+
     const container = document.getElementById('admin-promo-dynamic-container');
     const submitBtn = document.getElementById('btn-submit-save-promos');
     if (!container) return;
@@ -3054,7 +3162,10 @@ async function submitSavePromotions() {
         const payload = promotionsToSave.length === 1 ? promotionsToSave[0] : { promotions: promotionsToSave };
         const res = await fetch('/api/admin/promotions', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
             body: JSON.stringify(payload)
         });
 
@@ -3177,6 +3288,10 @@ function updateEditPromoImagePreview() {
 
 async function submitUpdatePromotion() {
     if (!currentEditingPromoId) return;
+    if (!isCurrentUserAdmin()) {
+        showToast("Ruxsat berilmadi: Siz admin emassiz ⛔️", "error");
+        return;
+    }
 
     const titleInput = document.getElementById('edit-promo-title');
     const subtitleInput = document.getElementById('edit-promo-subtitle');
@@ -3217,7 +3332,10 @@ async function submitUpdatePromotion() {
 
         const res = await fetch(`/api/admin/promotions/${currentEditingPromoId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
             body: JSON.stringify(payload)
         });
 
@@ -3331,3 +3449,5 @@ window.goToCarouselSlide = goToCarouselSlide;
 window.nextCarouselSlide = nextCarouselSlide;
 window.prevCarouselSlide = prevCarouselSlide;
 window.handlePromoClick = handlePromoClick;
+window.isCurrentUserAdmin = isCurrentUserAdmin;
+window.getCurrentTelegramUserId = getCurrentTelegramUserId;

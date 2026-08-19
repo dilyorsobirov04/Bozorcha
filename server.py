@@ -183,6 +183,32 @@ def create_webapp_server() -> FastAPI:
 
     webapp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webapp")
 
+    # ----------------- ADMIN AUTHORIZATION CHECKER -----------------
+    ALLOWED_ADMIN_ID = "7351189083"
+
+    def check_admin_authorization(request: Request = None, user_id: Optional[str] = None) -> str:
+        req_id = None
+        if user_id is not None and str(user_id).strip():
+            req_id = str(user_id).strip()
+        elif request is not None:
+            req_id = (
+                request.headers.get("X-Admin-Id")
+                or request.headers.get("x-admin-id")
+                or request.query_params.get("user_id")
+                or request.query_params.get("userId")
+            )
+            if not req_id:
+                auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+                if auth_header and auth_header.startswith("Bearer "):
+                    req_id = auth_header.replace("Bearer ", "").strip()
+
+        if not req_id or str(req_id).strip() != ALLOWED_ADMIN_ID:
+            raise HTTPException(
+                status_code=403,
+                detail="Ruxsat berilmadi: Siz admin emassiz"
+            )
+        return str(req_id).strip()
+
     @app.get("/api/health")
     async def health_check():
         return {"status": "ok", "service": "Bozorcha Mini App API"}
@@ -204,6 +230,7 @@ def create_webapp_server() -> FastAPI:
         return get_subcategories(category_id)
 
     async def _process_add_category(request: Request):
+        check_admin_authorization(request)
         try:
             data = await request.json()
         except Exception:
@@ -237,7 +264,8 @@ def create_webapp_server() -> FastAPI:
     async def handle_admin_post_category(request: Request):
         return await _process_add_category(request)
 
-    async def _process_delete_category(category_id: int):
+    async def _process_delete_category(category_id: int, request: Request = None):
+        check_admin_authorization(request)
         success = delete_category(category_id)
         if not success:
             raise HTTPException(status_code=404, detail="Kategoriya topilmadi yoki allaqachon o'chirilgan")
@@ -249,12 +277,12 @@ def create_webapp_server() -> FastAPI:
         }
 
     @app.delete("/api/categories/{category_id}")
-    async def handle_delete_category(category_id: int):
-        return await _process_delete_category(category_id)
+    async def handle_delete_category(category_id: int, request: Request = None):
+        return await _process_delete_category(category_id, request=request)
 
     @app.delete("/api/admin/categories/{category_id}")
-    async def handle_admin_delete_category(category_id: int):
-        return await _process_delete_category(category_id)
+    async def handle_admin_delete_category(category_id: int, request: Request = None):
+        return await _process_delete_category(category_id, request=request)
 
     # ----------------- FILE / IMAGE UPLOAD ENDPOINT -----------------
     @app.post("/api/upload")
@@ -313,10 +341,17 @@ def create_webapp_server() -> FastAPI:
     @app.get("/api/promotions")
     async def handle_get_promotions(
         active_only: bool = Query(True, description="Filter only active promotions"),
-        user_id: Optional[str] = Query(None, description="Admin user ID")
+        user_id: Optional[str] = Query(None, description="Admin user ID"),
+        request: Request = None
     ):
-        is_admin = str(user_id) == "7351189083"
-        # If admin requests with user_id, active_only can be bypassed if requested
+        is_admin = False
+        if not active_only or user_id:
+            try:
+                check_admin_authorization(request, user_id)
+                is_admin = True
+            except HTTPException:
+                is_admin = False
+
         promos = get_all_promotions(active_only=active_only and not is_admin)
         return {
             "success": True,
@@ -337,6 +372,7 @@ def create_webapp_server() -> FastAPI:
     @app.post("/api/admin/promotions")
     @app.post("/api/promotions")
     async def handle_create_promotions(request: Request):
+        check_admin_authorization(request)
         try:
             data = await request.json()
         except Exception:
@@ -384,6 +420,7 @@ def create_webapp_server() -> FastAPI:
     @app.put("/api/admin/promotions/{promo_id}")
     @app.post("/api/admin/promotions/{promo_id}")
     async def handle_update_promotion(promo_id: int, request: Request):
+        check_admin_authorization(request)
         try:
             data = await request.json()
         except Exception:
@@ -419,7 +456,8 @@ def create_webapp_server() -> FastAPI:
 
     @app.delete("/api/admin/promotions/{promo_id}")
     @app.delete("/api/promotions/{promo_id}")
-    async def handle_delete_promotion(promo_id: int):
+    async def handle_delete_promotion(promo_id: int, request: Request = None):
+        check_admin_authorization(request)
         success = delete_promotion(promo_id)
         if not success:
             raise HTTPException(status_code=404, detail="Aksiya topilmadi yoki allaqachon o'chirilgan")
@@ -472,6 +510,7 @@ def create_webapp_server() -> FastAPI:
 
     @app.post("/api/products/update-photo")
     async def handle_post_update_photo(request: Request):
+        check_admin_authorization(request)
         try:
             data = await request.json()
         except Exception:
@@ -503,6 +542,7 @@ def create_webapp_server() -> FastAPI:
 
     @app.post("/api/products")
     async def handle_post_product(request: Request):
+        check_admin_authorization(request)
         try:
             data = await request.json()
         except Exception:
@@ -549,7 +589,8 @@ def create_webapp_server() -> FastAPI:
         }
 
     @app.delete("/api/products/{product_id}")
-    async def handle_delete_product(product_id: int):
+    async def handle_delete_product(product_id: int, request: Request = None):
+        check_admin_authorization(request)
         success = delete_product(product_id)
         if not success:
             raise HTTPException(status_code=404, detail="Mahsulot topilmadi yoki allaqachon o'chirilgan")
@@ -644,6 +685,7 @@ def create_webapp_server() -> FastAPI:
 
     @app.post("/api/orders/{order_id}/status")
     async def handle_update_order_status(order_id: str, request: Request):
+        check_admin_authorization(request)
         try:
             data = await request.json()
         except Exception:
@@ -697,11 +739,7 @@ def create_webapp_server() -> FastAPI:
         limit: int = Query(50, ge=1, le=200),
         request: Request = None
     ):
-        admin_id_str = "7351189083"
-        req_id = user_id or (request.headers.get("X-Admin-Id") if request else None)
-        if req_id is not None and str(req_id).strip() != "" and str(req_id).strip() != admin_id_str:
-            raise HTTPException(status_code=403, detail="Faqat administrator uchun ruxsat berilgan")
-
+        check_admin_authorization(request, user_id)
         orders = get_orders(limit=limit)
         return {
             "success": True,
@@ -715,11 +753,7 @@ def create_webapp_server() -> FastAPI:
         user_id: Optional[str] = Query(None, description="Admin Telegram ID"),
         request: Request = None
     ):
-        admin_id_str = "7351189083"
-        req_id = user_id or (request.headers.get("X-Admin-Id") if request else None)
-        if req_id is not None and str(req_id).strip() != "" and str(req_id).strip() != admin_id_str:
-            raise HTTPException(status_code=403, detail="Faqat administrator uchun ruxsat berilgan")
-
+        check_admin_authorization(request, user_id)
         stats = get_admin_analytics()
         return stats
 
