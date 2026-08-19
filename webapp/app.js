@@ -705,7 +705,8 @@ function renderHomeProducts() {
     const query = (document.getElementById('home-search')?.value || '').toLowerCase().trim();
     const headingText = document.getElementById('products-heading-text');
 
-    let filtered = [...products];
+    // Strictly ensure uncategorized products NEVER appear in public storefront
+    let filtered = products.filter(p => p && p.category_id && categories.some(c => String(c.id) === String(p.category_id)));
 
     // Category filter
     if (currentCategory !== 'all') {

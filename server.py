@@ -513,15 +513,15 @@ def create_webapp_server() -> FastAPI:
             "promo_id": promo_id
         }
 
-    # ----------------- PRODUCT ENDPOINTS -----------------
     @app.get("/api/products")
     async def handle_get_products(
         page: int = Query(1, ge=1, description="Page number"),
-        limit: int = Query(100, ge=1, le=500, description="Items per page"),
+        limit: int = Query(100, ge=1, le=1000, description="Items per page"),
         category_id: Optional[str] = Query(None, description="Category or subcategory ID filter"),
         search: Optional[str] = Query(None, description="Search query string"),
         sort: Optional[str] = Query(None, description="Sorting parameter: price_asc, price_desc, name_asc, name_desc, discount_desc"),
-        discount_only: bool = Query(False, description="Filter only discounted/promo products")
+        discount_only: bool = Query(False, description="Filter only discounted/promo products"),
+        include_uncategorized: bool = Query(False, description="Include uncategorized products")
     ):
         data = get_all_products(
             page=page,
@@ -529,7 +529,8 @@ def create_webapp_server() -> FastAPI:
             category_id=category_id,
             search=search,
             sort=sort,
-            discount_only=discount_only
+            discount_only=discount_only,
+            include_uncategorized=include_uncategorized
         )
         return data
 
@@ -634,6 +635,7 @@ def create_webapp_server() -> FastAPI:
         }
 
     @app.get("/api/admin/products/uncategorized")
+    @app.get("/api/admin/uncategorized-products")
     async def handle_get_uncategorized_products(
         search: Optional[str] = Query(None, description="Search by name or 1C SKU"),
         request: Request = None

@@ -559,9 +559,20 @@ def get_all_products(
     category_id: int | str | None = None,
     search: str | None = None,
     sort: str | None = None,
-    discount_only: bool = False
+    discount_only: bool = False,
+    include_uncategorized: bool = False
 ) -> dict:
     all_prods = list(PRODUCTS_DB.values())
+
+    # Public storefront filter: Hide uncategorized products (category_id IS NOT NULL and in CATEGORIES_DB)
+    if not include_uncategorized:
+        all_prods = [
+            p for p in all_prods
+            if p.get("category_id") is not None
+            and p.get("category_id") != 0
+            and str(p.get("category_id")).strip() != ""
+            and (p.get("category_id") in CATEGORIES_DB)
+        ]
 
     # Category filter
     if category_id is not None and str(category_id).strip() != "" and str(category_id) != "all":
@@ -639,7 +650,9 @@ def get_discount_products(page: int = 1, limit: int = 100) -> dict:
 def get_discounted_products_api() -> list[dict]:
     return [
         prod for prod in PRODUCTS_DB.values()
-        if (prod.get("old_price", 0) > prod.get("price", 0)) or prod.get("is_promo")
+        if ((prod.get("old_price", 0) > prod.get("price", 0)) or prod.get("is_promo"))
+        and prod.get("category_id") is not None
+        and prod.get("category_id") in CATEGORIES_DB
     ]
 
 
