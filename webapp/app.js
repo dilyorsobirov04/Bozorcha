@@ -1,6 +1,6 @@
 // Telegram WebApp SDK
 const tg = window.Telegram?.WebApp;
-const ALLOWED_ADMIN_ID = 7351189083;
+const ALLOWED_ADMIN_IDS = [7351189083, 6243887731];
 
 // Helper to retrieve current Telegram User ID
 function getCurrentTelegramUserId() {
@@ -19,10 +19,25 @@ function getCurrentTelegramUserId() {
     return null;
 }
 
-// Strictly verify if current user is the authorized admin
+// Helper to retrieve active admin ID for API requests
+function getEffectiveAdminId() {
+    const currentUserId = getCurrentTelegramUserId();
+    if (currentUserId && ALLOWED_ADMIN_IDS.includes(Number(currentUserId))) {
+        return Number(currentUserId);
+    }
+    return ALLOWED_ADMIN_IDS[0];
+}
+
+// Dynamic proxy/object so any existing code using ALLOWED_ADMIN_ID automatically resolves the active admin
+const ALLOWED_ADMIN_ID = {
+    toString() { return String(getEffectiveAdminId()); },
+    valueOf() { return getEffectiveAdminId(); }
+};
+
+// Strictly verify if current user is an authorized admin
 function isCurrentUserAdmin() {
     const currentUserId = getCurrentTelegramUserId();
-    return currentUserId !== null && Number(currentUserId) === ALLOWED_ADMIN_ID;
+    return currentUserId !== null && ALLOWED_ADMIN_IDS.includes(Number(currentUserId));
 }
 
 // App State

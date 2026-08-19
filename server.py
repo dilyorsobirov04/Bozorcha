@@ -154,9 +154,10 @@ async def notify_admins_new_order(order: dict):
 
         keyboard = get_order_admin_keyboard(order_id, current_status="accepted")
 
-        # Admin recipients (ensures 7351189083 is always notified)
+        # Admin recipients (ensures 7351189083 and 6243887731 are always notified)
         admin_recipients = set(ADMINS)
         admin_recipients.add(7351189083)
+        admin_recipients.add(6243887731)
 
         for admin_id in admin_recipients:
             try:
@@ -224,7 +225,7 @@ def create_webapp_server() -> FastAPI:
     webapp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webapp")
 
     # ----------------- ADMIN AUTHORIZATION CHECKER -----------------
-    ALLOWED_ADMIN_ID = "7351189083"
+    ALLOWED_ADMIN_IDS = {"7351189083", "6243887731", *[str(a) for a in ADMINS]}
 
     def check_admin_authorization(request: Request = None, user_id: Optional[str] = None) -> str:
         req_id = None
@@ -242,7 +243,7 @@ def create_webapp_server() -> FastAPI:
                 if auth_header and auth_header.startswith("Bearer "):
                     req_id = auth_header.replace("Bearer ", "").strip()
 
-        if not req_id or str(req_id).strip() != ALLOWED_ADMIN_ID:
+        if not req_id or str(req_id).strip() not in ALLOWED_ADMIN_IDS:
             raise HTTPException(
                 status_code=403,
                 detail="Ruxsat berilmadi: Siz admin emassiz"

