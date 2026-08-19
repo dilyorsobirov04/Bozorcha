@@ -7,6 +7,12 @@ from typing import Optional, Any
 from datetime import datetime
 
 try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+try:
     import asyncpg
 except ImportError:
     asyncpg = None
