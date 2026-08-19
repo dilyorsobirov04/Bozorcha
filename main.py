@@ -35,6 +35,10 @@ async def main():
     dp.include_router(admin_router)
     dp.include_router(common_router)
 
+    # Auto-resolve live Ngrok URL if available
+    from onec_service import resolve_dynamic_ngrok_url_sync
+    resolve_dynamic_ngrok_url_sync()
+
     # TMA WebApp HTTP Serverini background task sifatida ishga tushirish (Uvicorn ASGI)
     config = uvicorn.Config(app=app, host="0.0.0.0", port=8000, log_level="warning")
     server = uvicorn.Server(config)

@@ -55,6 +55,47 @@ Shuningdek, 1C da nashr qilingan (published) baza nomi va servis yo'li registrga
 DEFAULT_1C_URL = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
 
 
+def resolve_dynamic_ngrok_url_sync() -> Optional[str]:
+    """
+    Queries local Ngrok API (http://127.0.0.1:4040/api/tunnels) to fetch the active public tunnel URL automatically.
+    Updates API_1C_URL dynamically so the backend always points to the live Ngrok endpoint.
+    """
+    import urllib.request
+    try:
+        req = urllib.request.Request("http://127.0.0.1:4040/api/tunnels", headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            if resp.status == 200:
+                body = resp.read().decode("utf-8")
+                data = json.loads(body)
+                tunnels = data.get("tunnels", [])
+                base_url = None
+                for t in tunnels:
+                    pub = t.get("public_url", "")
+                    if pub.startswith("https://"):
+                        base_url = pub
+                        break
+                    elif pub.startswith("http://") and not base_url:
+                        base_url = pub
+                if base_url:
+                    full_1c_url = f"{base_url.rstrip('/')}/Bozorcham/hs/Bozorcham/GetTovarList"
+                    update_1c_config(api_url=full_1c_url)
+                    logger.info(f"🚀 Auto-resolved active Ngrok tunnel URL: {full_1c_url}")
+                    print(f"🚀 Auto-resolved active Ngrok tunnel URL: {full_1c_url}")
+                    return full_1c_url
+    except Exception:
+        pass
+    return None
+
+
+async def start_ngrok_url_watcher(max_attempts: int = 10, interval: float = 2.0):
+    """Background task to poll Ngrok local API on startup until tunnel is active."""
+    for attempt in range(1, max_attempts + 1):
+        url = resolve_dynamic_ngrok_url_sync()
+        if url:
+            break
+        await asyncio.sleep(interval)
+
+
 def is_localhost_url(url: str) -> bool:
     """Checks if the given URL points to a local loopback address."""
     if not url:

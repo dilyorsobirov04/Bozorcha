@@ -53,7 +53,9 @@ from onec_service import (
     get_1c_config_status,
     update_1c_config,
     clear_1c_cache,
-    clean_1c_url
+    clean_1c_url,
+    resolve_dynamic_ngrok_url_sync,
+    start_ngrok_url_watcher
 )
 
 logger = logging.getLogger(__name__)
@@ -247,6 +249,8 @@ def create_webapp_server() -> FastAPI:
     @app.on_event("startup")
     async def on_startup():
         await init_postgres_db()
+        import asyncio
+        asyncio.create_task(start_ngrok_url_watcher())
 
     @app.get("/api/health")
     async def health_check():
