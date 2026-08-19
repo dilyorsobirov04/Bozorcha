@@ -138,6 +138,7 @@ def delete_category(category_id: int | str) -> bool:
 PRODUCTS_DB = {
     101: {
         "id": 101,
+        "sku": "1C-00101",
         "category_id": 12,  # Sabzavotlar (parent 1)
         "name": "Organik Avokado Hass",
         "unit": "kg",
@@ -154,6 +155,7 @@ PRODUCTS_DB = {
     },
     102: {
         "id": 102,
+        "sku": "1C-00102",
         "category_id": 11,  # Yangi Mevalar (parent 1)
         "name": "Qulupnay Premium Sweet",
         "unit": "kg",
@@ -170,6 +172,7 @@ PRODUCTS_DB = {
     },
     103: {
         "id": 103,
+        "sku": "1C-00103",
         "category_id": 21,  # Sut & Qatiq (parent 2)
         "name": "Fermer Suti 3.2% Bio",
         "unit": "dona",
@@ -186,6 +189,7 @@ PRODUCTS_DB = {
     },
     104: {
         "id": 104,
+        "sku": "1C-00104",
         "category_id": 31,  # Mol & Qo'y go'shti (parent 3)
         "name": "Mol Go'shti Ribeye Steyk",
         "unit": "kg",
@@ -202,6 +206,7 @@ PRODUCTS_DB = {
     },
     105: {
         "id": 105,
+        "sku": "1C-00105",
         "category_id": 42,  # Kruassan & Pishiriq (parent 4)
         "name": "Fransuzcha Kruassan Butter",
         "unit": "dona",
@@ -218,6 +223,7 @@ PRODUCTS_DB = {
     },
     106: {
         "id": 106,
+        "sku": "1C-00106",
         "category_id": 51,  # Sharbat & Fresh (parent 5)
         "name": "Apelsin Sharbati Fresh 1L",
         "unit": "dona",
@@ -234,6 +240,7 @@ PRODUCTS_DB = {
     },
     107: {
         "id": 107,
+        "sku": "1C-00107",
         "category_id": 22,  # Pishloq & Tvorog (parent 2)
         "name": "Gollandiya Pishlog'i Gouda",
         "unit": "kg",
@@ -250,6 +257,7 @@ PRODUCTS_DB = {
     },
     108: {
         "id": 108,
+        "sku": "1C-00108",
         "category_id": 13,  # Yashillik & Ko'kat (parent 1)
         "name": "Organik Ko'katlar To'plami",
         "unit": "dona",
@@ -263,6 +271,75 @@ PRODUCTS_DB = {
         "image_url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&auto=format&fit=crop&q=60",
         "is_promo": False,
         "recommendation": "Salatlar uchun"
+    },
+    # Uncategorized 1C Synced Products (category_id is None)
+    109: {
+        "id": 109,
+        "sku": "1C-9901",
+        "category_id": None,
+        "name": "Alpen Gold Shokolad Max Fun",
+        "unit": "dona",
+        "price": 19000,
+        "old_price": None,
+        "discount_percent": 0,
+        "stock": 45,
+        "description": "1C orqali yangi import qilingan tovar. Portlovchi karamel va mevali shokolad.",
+        "nutrition": {"cal": "520 kcal", "protein": "5g", "fat": "28g"},
+        "photo_file_id": None,
+        "image_url": "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&auto=format&fit=crop&q=60",
+        "is_promo": False,
+        "recommendation": "Choy bilan"
+    },
+    110: {
+        "id": 110,
+        "sku": "1C-9902",
+        "category_id": None,
+        "name": "Lipton Sariq Qora Choy 100x2g",
+        "unit": "quti",
+        "price": 32000,
+        "old_price": None,
+        "discount_percent": 0,
+        "stock": 28,
+        "description": "1C orqali import qilingan paketli yuqori sifatli qora choy.",
+        "nutrition": {"cal": "1 kcal", "protein": "0g", "fat": "0g"},
+        "photo_file_id": None,
+        "image_url": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=60",
+        "is_promo": False,
+        "recommendation": "Issiq ichimlik"
+    },
+    111: {
+        "id": 111,
+        "sku": "1C-9903",
+        "category_id": None,
+        "name": "Barilla Spaghetti N.5 500g",
+        "unit": "dona",
+        "price": 24000,
+        "old_price": None,
+        "discount_percent": 0,
+        "stock": 50,
+        "description": "1C orqali import qilingan qattiq bug'doyli Italiya spagettisi.",
+        "nutrition": {"cal": "359 kcal", "protein": "12.5g", "fat": "2g"},
+        "photo_file_id": None,
+        "image_url": "https://images.unsplash.com/photo-1551462147-ff29053bfc14?w=500&auto=format&fit=crop&q=60",
+        "is_promo": False,
+        "recommendation": "Pomidor sousi bilan"
+    },
+    112: {
+        "id": 112,
+        "sku": "1C-9904",
+        "category_id": None,
+        "name": "Zaytun Moyi Extra Virgin 500ml",
+        "unit": "dona",
+        "price": 68000,
+        "old_price": None,
+        "discount_percent": 0,
+        "stock": 15,
+        "description": "1C orqali import qilingan birinchi sovuq siquv tabiiy zaytun yog'i.",
+        "nutrition": {"cal": "824 kcal", "protein": "0g", "fat": "91.6g"},
+        "photo_file_id": None,
+        "image_url": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=500&auto=format&fit=crop&q=60",
+        "is_promo": False,
+        "recommendation": "Salat va taomlar uchun"
     }
 }
 
@@ -404,23 +481,69 @@ def update_product_photo_and_stock(
         return None
 
 
+def get_uncategorized_products(search: str | None = None) -> list[dict]:
+    """
+    Returns all products where category_id is missing, None, 0, or not found in CATEGORIES_DB.
+    Supports search query by product name or 1C SKU.
+    """
+    uncategorized = []
+    for p in PRODUCTS_DB.values():
+        cid = p.get("category_id")
+        if cid is None or cid == 0 or str(cid).strip() == "" or (cid not in CATEGORIES_DB):
+            uncategorized.append(p)
+
+    if search and str(search).strip():
+        q = str(search).strip().lower()
+        uncategorized = [
+            p for p in uncategorized
+            if q in (p.get("name") or "").lower()
+            or q in (str(p.get("sku") or p.get("code_1c") or "")).lower()
+            or q in (str(p.get("id") or "")).lower()
+            or q in (p.get("description") or "").lower()
+        ]
+
+    return uncategorized
+
+
+def assign_product_category(product_id: int | str, category_id: int | str) -> dict | None:
+    """
+    Assigns category_id to an uncategorized or existing product in the database.
+    """
+    try:
+        pid = int(product_id)
+        cid = int(category_id)
+        if pid not in PRODUCTS_DB:
+            return None
+        if cid not in CATEGORIES_DB:
+            return None
+
+        PRODUCTS_DB[pid]["category_id"] = cid
+        return PRODUCTS_DB[pid]
+    except (ValueError, TypeError):
+        return None
+
+
 def add_product(
     name: str,
     price: int | float,
-    category_id: int | str = 1,
+    category_id: int | str | None = 1,
     image_url: str | None = None,
     description: str | None = "",
     unit: str = "kg",
     stock: int = 50,
     old_price: int | float | None = None,
     discount_percent: int = 0,
-    recommendation: str | None = None
+    recommendation: str | None = None,
+    sku: str | None = None
 ) -> dict:
     new_id = (max(PRODUCTS_DB.keys()) + 1) if PRODUCTS_DB else 101
-    try:
-        cid = int(category_id)
-    except (ValueError, TypeError):
-        cid = 1
+    
+    cid = None
+    if category_id is not None and str(category_id).strip() != "" and str(category_id).lower() != "none":
+        try:
+            cid = int(category_id)
+        except (ValueError, TypeError):
+            cid = None
 
     try:
         pr = int(price)
@@ -448,6 +571,7 @@ def add_product(
 
     product = {
         "id": new_id,
+        "sku": sku or f"1C-{new_id:05d}",
         "category_id": cid,
         "name": name.strip() if name else f"Mahsulot #{new_id}",
         "unit": unit.strip() if unit else "kg",

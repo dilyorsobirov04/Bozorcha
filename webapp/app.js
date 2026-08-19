@@ -1976,6 +1976,7 @@ function toggleAdminMode() {
         loadAdminStats();
         loadAdminPromotions();
         loadAdminCards();
+        loadUncategorizedProducts();
         renderAdminCategoriesList();
     } else {
         navigateTo('home');
@@ -1992,6 +1993,7 @@ function switchAdminTab(tab) {
 
     currentAdminTab = tab;
     const btnOrders = document.getElementById('tab-btn-orders');
+    const btnUncat = document.getElementById('tab-btn-uncategorized');
     const btnAnalytics = document.getElementById('tab-btn-analytics');
     const btnPromos = document.getElementById('tab-btn-promotions');
     const btnAddProd = document.getElementById('tab-btn-add-prod');
@@ -1999,14 +2001,15 @@ function switchAdminTab(tab) {
     const btnCatList = document.getElementById('tab-btn-categories');
 
     const viewOrders = document.getElementById('admin-view-orders');
+    const viewUncat = document.getElementById('admin-view-uncategorized');
     const viewAnalytics = document.getElementById('admin-view-analytics');
     const viewPromos = document.getElementById('admin-view-promotions');
     const viewAddProd = document.getElementById('admin-view-add-prod');
     const viewProdList = document.getElementById('admin-view-prod-list');
     const viewCatList = document.getElementById('admin-view-categories');
 
-    [btnOrders, btnAnalytics, btnPromos, btnAddProd, btnProdList, btnCatList].forEach(btn => btn?.classList.remove('active'));
-    [viewOrders, viewAnalytics, viewPromos, viewAddProd, viewProdList, viewCatList].forEach(v => v?.classList.add('hidden'));
+    [btnOrders, btnUncat, btnAnalytics, btnPromos, btnAddProd, btnProdList, btnCatList].forEach(btn => btn?.classList.remove('active'));
+    [viewOrders, viewUncat, viewAnalytics, viewPromos, viewAddProd, viewProdList, viewCatList].forEach(v => v?.classList.add('hidden'));
 
     if (adminOrdersInterval) {
         clearInterval(adminOrdersInterval);
@@ -2043,6 +2046,10 @@ function switchAdminTab(tab) {
         btnProdList?.classList.add('active');
         viewProdList?.classList.remove('hidden');
         loadAdminCards();
+    } else if (tab === 'uncategorized') {
+        btnUncat?.classList.add('active');
+        viewUncat?.classList.remove('hidden');
+        loadUncategorizedProducts();
     } else if (tab === 'categories') {
         btnCatList?.classList.add('active');
         viewCatList?.classList.remove('hidden');
@@ -2463,6 +2470,274 @@ function getCategoryHierarchyName(categoryId) {
         }
     }
     return `${cat.icon || ''} ${cat.name}`;
+}
+
+// ----------------- UNCATEGORIZED 1C PRODUCTS MANAGEMENT -----------------
+let uncategorizedProducts = [];
+let uncategorizedSearchTimeout = null;
+
+async function loadUncategorizedProducts(searchQuery = '') {
+    if (!isCurrentUserAdmin()) return;
+
+    const container = document.getElementById('uncategorized-products-container');
+    const countEl = document.getElementById('admin-uncategorized-count');
+    const headerCountEl = document.getElementById('uncategorized-header-count');
+
+    // Show loading state
+    if (container) {
+        container.innerHTML = `
+            <div class="empty-admin-orders" style="padding: 40px 20px;">
+                <div class="uncat-loading-spinner"></div>
+                <p style="color: var(--text-muted); margin-top: 12px;">Yuklanmoqda...</p>
+            </div>
+        `;
+    }
+
+    try {
+        let url = `/api/admin/products/uncategorized?user_id=${ALLOWED_ADMIN_ID}`;
+        if (searchQuery && searchQuery.trim()) {
+            url += `&search=${encodeURIComponent(searchQuery.trim())}`;
+        }
+
+        const res = await fetch(url, {
+            headers: { 'X-Admin-Id': String(ALLOWED_ADMIN_ID) }
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            uncategorizedProducts = data.products || [];
+
+            if (countEl) countEl.innerText = uncategorizedProducts.length;
+            if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
+
+            renderUncategorizedProducts();
+        } else {
+            throw new Error('API error');
+        }
+    } catch (e) {
+        console.warn('Failed to load uncategorized products:', e);
+        if (container) {
+            container.innerHTML = `
+                <div class="empty-admin-orders">
+                    <span class="empty-icon">⚠️</span>
+                    <h4>Ma'lumotlarni yuklashda xatolik</h4>
+                    <p>Iltimos, qaytadan urinib ko'ring</p>
+                    <button type="button" class="analytics-refresh-btn" onclick="loadUncategorizedProducts()" style="margin-top: 10px;">
+                        <span>🔄 Qayta yuklash</span>
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+function renderUncategorizedProducts() {
+    const container = document.getElementById('uncategorized-products-container');
+    if (!container) return;
+
+    if (uncategorizedProducts.length === 0) {
+        const searchInput = document.getElementById('uncategorized-search-input');
+        const hasSearch = searchInput && searchInput.value.trim().length > 0;
+
+        container.innerHTML = `
+            <div class="empty-admin-orders">
+                <span class="empty-icon">${hasSearch ? '🔍' : '✅'}</span>
+                <h4>${hasSearch ? 'Qidiruv bo\'yicha natija topilmadi' : 'Barcha mahsulotlar toifalangan!'}</h4>
+                <p>${hasSearch ? 'Boshqa kalit so\'z bilan qidirib ko\'ring' : 'Hozircha kategoriyasiz mahsulotlar mavjud emas'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    const categoryOptionsHtml = buildCategoryOptionsHtml();
+
+    container.innerHTML = uncategorizedProducts.map(prod => {
+        const imgSrc = prod.image_url || prod.photo_file_id || 'https://via.placeholder.com/64x64/1a1f2e/666?text=📦';
+        const sku = prod.sku || prod.code_1c || '—';
+        const priceFormatted = (prod.price || 0).toLocaleString('uz-UZ');
+        const stockText = prod.stock != null ? `${prod.stock} ta` : '—';
+        const unitText = prod.unit || 'dona';
+
+        return `
+            <div class="uncat-card" id="uncat-card-${prod.id}" data-product-id="${prod.id}">
+                <div class="uncat-card-main">
+                    <div class="uncat-card-thumb-wrap">
+                        <img src="${imgSrc}" alt="${prod.name}" class="uncat-card-thumb" onerror="this.src='https://via.placeholder.com/64x64/1a1f2e/666?text=📦'" loading="lazy">
+                    </div>
+                    <div class="uncat-card-info">
+                        <div class="uncat-card-title">${prod.name || 'Nomsiz mahsulot'}</div>
+                        <div class="uncat-card-desc">${prod.description || '1C orqali import qilingan tovar'}</div>
+                        <div class="uncat-card-meta">
+                            <span class="sku-badge">🏷️ ${sku}</span>
+                            <span class="uncat-price-pill">${priceFormatted} so'm/${unitText}</span>
+                            <span class="uncat-stock-pill">📦 ${stockText}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="uncat-action-bar">
+                    <div class="uncat-select-wrap">
+                        <select class="uncat-cat-select" id="uncat-select-${prod.id}" aria-label="Kategoriya tanlash">
+                            <option value="">— Kategoriyani tanlang —</option>
+                            ${categoryOptionsHtml}
+                        </select>
+                    </div>
+                    <button type="button" class="uncat-save-btn" onclick="assignProductCategory(${prod.id})" title="Kategoriyaga biriktirish">
+                        <span>💾 Saqlash</span>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function buildCategoryOptionsHtml() {
+    if (!categories || categories.length === 0) return '';
+
+    // Build hierarchical options: Parent > Subcategory
+    const topLevel = categories.filter(c => !c.parent_id);
+    const subMap = {};
+    categories.forEach(c => {
+        if (c.parent_id) {
+            if (!subMap[c.parent_id]) subMap[c.parent_id] = [];
+            subMap[c.parent_id].push(c);
+        }
+    });
+
+    let html = '';
+    topLevel.forEach(parent => {
+        html += `<optgroup label="${parent.icon || '📁'} ${parent.name}">`;
+        // Allow assignment to parent category itself
+        html += `<option value="${parent.id}">${parent.icon || '📁'} ${parent.name} (umumiy)</option>`;
+        const subs = subMap[parent.id] || [];
+        subs.forEach(sub => {
+            html += `<option value="${sub.id}">&nbsp;&nbsp;${sub.icon || '📦'} ${sub.name}</option>`;
+        });
+        html += `</optgroup>`;
+    });
+
+    // Also include any categories without parent that aren't in topLevel (orphan subcats)
+    const orphans = categories.filter(c => c.parent_id && !categories.find(p => p.id === c.parent_id));
+    if (orphans.length > 0) {
+        html += `<optgroup label="📦 Boshqa">`;
+        orphans.forEach(c => {
+            html += `<option value="${c.id}">${c.icon || '📦'} ${c.name}</option>`;
+        });
+        html += `</optgroup>`;
+    }
+
+    return html;
+}
+
+function handleUncategorizedSearch(value) {
+    const clearBtn = document.getElementById('uncategorized-search-clear');
+    if (clearBtn) {
+        clearBtn.classList.toggle('hidden', !value || !value.trim());
+    }
+
+    // Debounce: wait 350ms after user stops typing
+    if (uncategorizedSearchTimeout) {
+        clearTimeout(uncategorizedSearchTimeout);
+    }
+    uncategorizedSearchTimeout = setTimeout(() => {
+        loadUncategorizedProducts(value);
+    }, 350);
+}
+
+function clearUncategorizedSearch() {
+    const input = document.getElementById('uncategorized-search-input');
+    const clearBtn = document.getElementById('uncategorized-search-clear');
+    if (input) input.value = '';
+    if (clearBtn) clearBtn.classList.add('hidden');
+    loadUncategorizedProducts();
+}
+
+async function assignProductCategory(productId) {
+    if (!isCurrentUserAdmin()) {
+        showToast('Ruxsat berilmadi: Siz admin emassiz ⛔️', 'error');
+        return;
+    }
+
+    const selectEl = document.getElementById(`uncat-select-${productId}`);
+    if (!selectEl || !selectEl.value) {
+        showToast('Iltimos, avval kategoriyani tanlang! ⚠️', 'error');
+        // Shake animation on select element
+        selectEl?.classList.add('shake-error');
+        setTimeout(() => selectEl?.classList.remove('shake-error'), 600);
+        return;
+    }
+
+    const categoryId = parseInt(selectEl.value);
+    const card = document.getElementById(`uncat-card-${productId}`);
+    const saveBtn = card?.querySelector('.uncat-save-btn');
+
+    // Disable button during request
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<span class="uncat-btn-spinner"></span> Saqlanmoqda...`;
+    }
+
+    try {
+        const res = await fetch(`/api/admin/products/${productId}/assign-category`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
+            body: JSON.stringify({ category_id: categoryId })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            const msg = data.message || `Mahsulot muvaffaqiyatli kategoriyaga biriktirildi! 🎉`;
+            showToast(msg, 'success');
+
+            // Animate card removal
+            if (card) {
+                card.style.transition = 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+                card.style.opacity = '0';
+                card.style.transform = 'translateX(60px) scale(0.95)';
+                card.style.maxHeight = card.scrollHeight + 'px';
+
+                setTimeout(() => {
+                    card.style.maxHeight = '0px';
+                    card.style.padding = '0';
+                    card.style.marginBottom = '0';
+                    card.style.borderWidth = '0';
+                    card.style.overflow = 'hidden';
+                }, 300);
+
+                setTimeout(() => {
+                    card.remove();
+
+                    // Update counts
+                    uncategorizedProducts = uncategorizedProducts.filter(p => p.id !== productId);
+                    const countEl = document.getElementById('admin-uncategorized-count');
+                    const headerCountEl = document.getElementById('uncategorized-header-count');
+                    if (countEl) countEl.innerText = uncategorizedProducts.length;
+                    if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
+
+                    // If no more products, show empty state
+                    if (uncategorizedProducts.length === 0) {
+                        renderUncategorizedProducts();
+                    }
+                }, 650);
+            }
+
+            // Also refresh main product list so the product now appears under its category
+            await loadProducts();
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            showToast(errData.detail || "Kategoriyaga biriktirishda xatolik yuz berdi!", 'error');
+        }
+    } catch (e) {
+        console.error('assignProductCategory error:', e);
+        showToast("Server bilan bog'lanishda xatolik!", 'error');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = `<span>💾 Saqlash</span>`;
+        }
+    }
 }
 
 function loadAdminCards(filteredList = null) {
@@ -3451,3 +3726,7 @@ window.prevCarouselSlide = prevCarouselSlide;
 window.handlePromoClick = handlePromoClick;
 window.isCurrentUserAdmin = isCurrentUserAdmin;
 window.getCurrentTelegramUserId = getCurrentTelegramUserId;
+window.loadUncategorizedProducts = loadUncategorizedProducts;
+window.handleUncategorizedSearch = handleUncategorizedSearch;
+window.clearUncategorizedSearch = clearUncategorizedSearch;
+window.assignProductCategory = assignProductCategory;

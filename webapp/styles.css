@@ -3693,6 +3693,376 @@ body {
     animation: slideUpModal 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* ================= UNCATEGORIZED 1C PRODUCTS & ASSIGNMENT ================= */
+.uncategorized-products-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.uncat-card {
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-xl);
+    padding: 14px;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.uncat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(to bottom, #a855f7, #ec4899);
+    border-radius: 4px 0 0 4px;
+}
+
+.uncat-card:hover {
+    border-color: rgba(168, 85, 247, 0.4);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    transform: translateY(-1px);
+}
+
+.uncat-card-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.uncat-card-thumb-wrap {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-lg);
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-glass);
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.uncat-card-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.uncat-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.uncat-card-title {
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    line-height: 1.3;
+}
+
+.uncat-card-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.3;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.uncat-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sku-badge {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    color: #c084fc;
+    font-family: 'JetBrains Mono', monospace, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    letter-spacing: 0.2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.uncat-price-pill {
+    background: rgba(255, 42, 77, 0.12);
+    border: 1px solid rgba(255, 42, 77, 0.25);
+    color: var(--primary-red);
+    font-size: 12px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.uncat-stock-pill {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+/* Uncategorized Assignment Action Bar */
+.uncat-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+}
+
+.uncat-select-wrap {
+    flex: 1;
+    min-width: 180px;
+}
+
+.uncat-cat-select {
+    width: 100%;
+    height: 38px;
+    background: rgba(10, 15, 29, 0.85);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 12px;
+    padding: 0 10px;
+    outline: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.uncat-cat-select:focus {
+    border-color: #a855f7;
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
+}
+
+.uncat-save-btn {
+    height: 38px;
+    padding: 0 14px;
+    background: var(--red-gradient);
+    border: none;
+    border-radius: var(--radius-md);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 10px var(--red-glow);
+}
+
+.uncat-save-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px var(--red-glow);
+}
+
+.uncat-save-btn:active {
+    transform: scale(0.97);
+}
+
+.uncat-modal-btn {
+    height: 38px;
+    width: 38px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.uncat-modal-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Modal Assign Preview Card */
+.assign-prod-preview-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(10, 15, 29, 0.7);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-lg);
+}
+
+.assign-prod-img-wrap {
+    width: 50px;
+    height: 50px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
+}
+
+.assign-prod-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.assign-prod-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.assign-prod-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.assign-prod-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.assign-prod-price-pill {
+    color: var(--primary-red);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+/* Uncategorized Loading Spinner */
+.uncat-loading-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(168, 85, 247, 0.2);
+    border-top-color: #a855f7;
+    border-radius: 50%;
+    margin: 0 auto;
+    animation: uncat-spin 0.8s linear infinite;
+}
+
+@keyframes uncat-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Save Button Spinner */
+.uncat-btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: uncat-spin 0.7s linear infinite;
+    vertical-align: middle;
+}
+
+/* Shake Error Animation for Select */
+@keyframes shake-error {
+    0%, 100% { transform: translateX(0); }
+    15% { transform: translateX(-6px); }
+    30% { transform: translateX(5px); }
+    45% { transform: translateX(-4px); }
+    60% { transform: translateX(3px); }
+    75% { transform: translateX(-2px); }
+}
+
+.shake-error {
+    animation: shake-error 0.5s ease-in-out;
+    border-color: #ff2a4d !important;
+    box-shadow: 0 0 0 3px rgba(255, 42, 77, 0.25) !important;
+}
+
+/* Uncategorized Card Assigned Success Glow */
+.uncat-card.assigned {
+    border-color: rgba(34, 197, 94, 0.5);
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.15);
+}
+
+/* Admin Search Clear Button */
+.admin-search-clear {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: var(--text-muted);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.admin-search-clear:hover {
+    background: rgba(255, 42, 77, 0.2);
+    color: #ff2a4d;
+}
+
+/* Admin Search Wrapper */
+.admin-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.admin-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.admin-search-input {
+    width: 100%;
+    height: 42px;
+    padding: 0 36px 0 38px;
+    background: rgba(10, 15, 29, 0.8);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-lg);
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.admin-search-input:focus {
+    border-color: #a855f7;
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+}
+
+.admin-search-input::placeholder {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
 .hidden {
     display: none !important;
 }

@@ -360,10 +360,13 @@
             </header>
 
             <div class="admin-content-scroll">
-                <!-- Segmented Tab Bar (5 tabs) -->
+                <!-- Segmented Tab Bar (6 tabs) -->
                 <div class="admin-tabs-bar">
                     <button id="tab-btn-orders" class="admin-tab-btn active" onclick="switchAdminTab('orders')">
                         <span>🛍 Buyurtmalar (<span id="admin-orders-count">0</span>)</span>
+                    </button>
+                    <button id="tab-btn-uncategorized" class="admin-tab-btn" onclick="switchAdminTab('uncategorized')">
+                        <span>🏷️ Kategoriyasiz (<span id="admin-uncategorized-count">0</span>)</span>
                     </button>
                     <button id="tab-btn-analytics" class="admin-tab-btn" onclick="switchAdminTab('analytics')">
                         <span>📊 Tahlil</span>
@@ -399,6 +402,34 @@
 
                     <div id="admin-orders-list" class="admin-orders-list" style="margin-top: 14px;">
                         <!-- Dynamically rendered order cards -->
+                    </div>
+                </div>
+
+                <!-- TAB: UNCATEGORIZED 1C PRODUCTS VIEW -->
+                <div id="admin-view-uncategorized" class="admin-tab-pane hidden">
+                    <div class="admin-orders-header-row" style="margin-bottom: 12px;">
+                        <div class="form-title-wrap" style="margin-bottom: 0;">
+                            <span class="form-title-icon">🏷️</span>
+                            <div>
+                                <h3 class="form-title">Kategoriyasiz Mahsulotlar (1C)</h3>
+                                <p class="form-subtitle">1C dan import bo'lgan va toifalanmagan tovarlar (<span id="uncategorized-header-count">0</span> ta)</p>
+                            </div>
+                        </div>
+                        <button type="button" class="analytics-refresh-btn" onclick="loadUncategorizedProducts()">
+                            <span>🔄 Yangilash</span>
+                        </button>
+                    </div>
+
+                    <!-- Search & Filter Bar with 1C SKU Support -->
+                    <div class="admin-search-wrap" style="margin-bottom: 14px;">
+                        <span class="admin-search-icon">🔍</span>
+                        <input type="text" id="uncategorized-search-input" class="admin-search-input" placeholder="Nomi yoki 1C SKU kodi bo'yicha qidirish (masalan: 1C-9901)..." oninput="handleUncategorizedSearch(this.value)">
+                        <button type="button" id="uncategorized-search-clear" class="admin-search-clear hidden" onclick="clearUncategorizedSearch()">✕</button>
+                    </div>
+
+                    <!-- Uncategorized Products Grid / Cards Container -->
+                    <div id="uncategorized-products-container" class="uncategorized-products-grid">
+                        <!-- Dynamically populated 1C items with direct category selector -->
                     </div>
                 </div>
 
@@ -801,6 +832,53 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- ================= MODAL: QUICK CATEGORY ASSIGNMENT ================= -->
+        <div id="modal-assign-category" class="modal-overlay hidden" onclick="closeAssignCategoryModal(event)">
+            <div class="modal-card modal-compact" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="modal-icon">🏷️</span>
+                        <div>
+                            <h3 class="modal-title">Kategoriyaga Biriktirish</h3>
+                            <p class="modal-subtitle" id="assign-cat-modal-name">Mahsulot nomi</p>
+                        </div>
+                    </div>
+                    <button type="button" class="modal-close-btn" onclick="closeAssignCategoryModal()">✕</button>
+                </div>
+
+                <div class="modal-body" style="padding-top: 10px;">
+                    <input type="hidden" id="assign-cat-modal-id">
+                    
+                    <div class="assign-prod-preview-card">
+                        <div class="assign-prod-img-wrap">
+                            <img id="assign-cat-modal-img" src="" alt="Mahsulot" class="assign-prod-thumb" onerror="this.src='https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=60'">
+                        </div>
+                        <div class="assign-prod-info">
+                            <div class="assign-prod-title" id="assign-cat-modal-title">Mahsulot nomi</div>
+                            <div class="assign-prod-meta-row">
+                                <span class="sku-badge" id="assign-cat-modal-sku">1C: -</span>
+                                <span class="assign-prod-price-pill" id="assign-cat-modal-price">0 so'm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 14px; margin-bottom: 0;">
+                        <label class="form-label" for="assign-category-select">Biriktiriladigan Bo'lim / Kategoriya: <span class="req-star">*</span></label>
+                        <select id="assign-category-select" class="form-select">
+                            <!-- Populated dynamically with category tree hierarchy -->
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="padding: 14px 18px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--border-color);">
+                    <button type="button" class="modal-cancel-btn" style="flex: 1;" onclick="closeAssignCategoryModal()">Bekor qilish</button>
+                    <button type="button" id="btn-submit-assign-category" class="modal-submit-order-btn" style="flex: 2; margin-top: 0;" onclick="submitModalCategoryAssignment()">
+                        <span>💾 Saqlash va Biriktirish</span>
+                    </button>
+                </div>
             </div>
         </div>
 

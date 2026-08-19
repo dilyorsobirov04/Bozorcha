@@ -14,6 +14,8 @@ from db import (
     get_discount_products,
     get_discounted_products_api,
     get_no_photo_products_api,
+    get_uncategorized_products,
+    assign_product_category,
     update_product_photo_and_stock,
     add_product,
     delete_product,
@@ -523,6 +525,54 @@ def create_webapp_server() -> FastAPI:
     ):
         no_photo_items = get_no_photo_products_api(category_id=category_id)
         return no_photo_items
+
+    # ----------------- UNCATEGORIZED 1C PRODUCTS & ASSIGNMENT -----------------
+    @app.get("/api/admin/products/uncategorized")
+    async def handle_get_uncategorized_products(
+        search: Optional[str] = Query(None, description="Search by name or 1C SKU"),
+        request: Request = None
+    ):
+        check_admin_authorization(request)
+        items = get_uncategorized_products(search=search)
+        return {
+            "success": True,
+            "total": len(items),
+            "products": items
+        }
+
+    @app.patch("/api/admin/products/{product_id}/assign-category")
+    @app.post("/api/admin/products/{product_id}/assign-category")
+    async def handle_assign_product_category(
+        product_id: int,
+        category_id: Optional[int] = Query(None),
+        request: Request = None
+    ):
+        check_admin_authorization(request)
+        target_cat_id = category_id
+        if target_cat_id is None and request:
+            try:
+                body = await request.json()
+                if isinstance(body, dict):
+                    target_cat_id = body.get("category_id") or body.get("categoryId")
+            except Exception:
+                pass
+
+        if target_cat_id is None:
+            raise HTTPException(status_code=400, detail="category_id parametri talab qilinadi")
+
+        updated_prod = assign_product_category(product_id, target_cat_id)
+        if not updated_prod:
+            raise HTTPException(status_code=404, detail="Mahsulot yoki kategoriya topilmadi")
+
+        cat = get_category(target_cat_id) or {}
+        cat_name = cat.get("name", f"Kategoriya #{target_cat_id}")
+
+        return {
+            "success": True,
+            "message": f"'{updated_prod.get('name')}' muvaffaqiyatli '{cat_name}' bo'limiga biriktirildi! 🎉",
+            "product": updated_prod,
+            "category": cat
+        }
 
     @app.post("/api/products/update-photo")
     async def handle_post_update_photo(request: Request):
