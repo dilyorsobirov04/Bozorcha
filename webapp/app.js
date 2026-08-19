@@ -2863,24 +2863,12 @@ async function trigger1CSync(btn = null) {
 
     clearAllToasts();
 
-    // Auto-save URL if user typed in input before pressing sync
     const urlInput = document.getElementById('onec-url-input');
     let effectiveUrl = urlInput ? urlInput.value.trim() : '';
     if (!effectiveUrl || effectiveUrl.includes('abcd-123') || effectiveUrl.includes('xxxx')) {
         effectiveUrl = DEFAULT_1C_URL;
         if (urlInput) urlInput.value = effectiveUrl;
     }
-
-    await fetch(`/api/admin/1c/config?user_id=${ALLOWED_ADMIN_ID}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Admin-Id': String(ALLOWED_ADMIN_ID)
-        },
-        body: JSON.stringify({ api_url: effectiveUrl })
-    }).catch(() => {});
-
-    clearAllToasts();
 
     const syncBtn = btn || document.getElementById('uncat-sync-1c-btn');
     if (syncBtn) {
@@ -2919,19 +2907,23 @@ async function trigger1CSync(btn = null) {
             }
             await loadUncategorizedProducts();
             await loadProducts();
-        } else {
-            let errorMsg = data.message || data.error || data.detail;
-            if (res.status === 404 || data.status_code === 404) {
-                errorMsg = "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C nashr qilingan xizmat yo'lini tekshiring.";
-            } else if (res.status === 401 || res.status === 403 || data.status_code === 401) {
-                errorMsg = "1C logini yoki paroli xato (401 Basic Auth).";
-            } else if (!errorMsg) {
-                errorMsg = "1C serveriga ulanib bo'lmadi. Ngrok va 1C ishlayotganini tekshiring.";
-            }
-            showToast(errorMsg, 'error');
+            return;
         }
+
+        clearAllToasts();
+        let errorMsg = data.message || data.error || data.detail;
+        if (res.status === 404 || data.status_code === 404) {
+            errorMsg = "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C nashr qilingan xizmat yo'lini tekshiring.";
+        } else if (res.status === 401 || res.status === 403 || data.status_code === 401) {
+            errorMsg = "1C logini yoki paroli xato (401 Basic Auth).";
+        } else if (!errorMsg) {
+            errorMsg = "1C serveriga ulanib bo'lmadi. Ngrok va 1C ishlayotganini tekshiring.";
+        }
+        showToast(errorMsg, 'error');
+        return;
     } catch (e) {
         console.error('trigger1CSync error:', e);
+        clearAllToasts();
         showToast("1C serveriga ulanib bo'lmadi. Ngrok va 1C ishlayotganini tekshiring.", 'error');
     } finally {
         if (syncBtn) {

@@ -255,18 +255,24 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                     logger.info(f"[1C RESPONSE] Target URL: {active_url} | HTTP Status Code: {status}")
 
                     if status == 200:
-                        content_type = response.headers.get("Content-Type", "").lower()
                         raw_data = None
-
-                        if "application/json" in content_type:
-                            try:
-                                raw_data = await response.json()
-                            except Exception:
-                                raw_text = await response.text()
-                                raw_data = raw_text
-                        else:
+                        try:
+                            raw_data = await response.json()
+                        except Exception:
                             raw_text = await response.text()
-                            raw_data = raw_text
+                            if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
+                                warning_msg = "Ngrok HTML ogohlantirish sahifasini qaytardi. ngrok-skip-browser-warning sarlavhasi bilan qayta urinib ko'ring."
+                                logger.warning(warning_msg)
+                                return {
+                                    "success": False,
+                                    "error": warning_msg,
+                                    "status_code": 200,
+                                    "data": None
+                                }
+                            try:
+                                raw_data = json.loads(raw_text)
+                            except Exception:
+                                raw_data = raw_text
 
                         # Log raw response info safely
                         sample_str = str(raw_data)[:300].encode('ascii', errors='replace').decode('ascii')
