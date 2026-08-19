@@ -2890,8 +2890,7 @@ async function trigger1CSync(btn = null) {
 
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success) {
-            const count = data.synced_count != null ? data.synced_count : 0;
-            showToast(`1C dan ${count} ta tovar muvaffaqiyatli import qilindi! 🎉`, 'success');
+            showToast("1C tovarlari muvaffaqiyatli yuklandi! 🎉", 'success');
 
             // Instantly render fresh uncategorized items from sync response
             if (data.uncategorized_products && Array.isArray(data.uncategorized_products)) {
@@ -2912,13 +2911,13 @@ async function trigger1CSync(btn = null) {
             } else if (res.status === 401 || res.status === 403 || data.status_code === 401) {
                 errorMsg = "1C logini yoki paroli xato (401 Basic Auth).";
             } else if (!errorMsg) {
-                errorMsg = "1C serverining tashqi IP/Ngrok manzili noto'g'ri ko'rsatilgan. .env dagi API_1C_URL ni tekshiring.";
+                errorMsg = "1C serveriga ulanib bo'lmadi. Ngrok va 1C ishlayotganini tekshiring.";
             }
             showToast(errorMsg, 'error');
         }
     } catch (e) {
         console.error('trigger1CSync error:', e);
-        showToast("1C serveriga ulanishda tarmoq xatoligi yuz berdi. .env dagi API_1C_URL (Ngrok) manzilini tekshiring.", 'error');
+        showToast("1C serveriga ulanib bo'lmadi. Ngrok va 1C ishlayotganini tekshiring.", 'error');
     } finally {
         if (syncBtn) {
             syncBtn.disabled = false;
