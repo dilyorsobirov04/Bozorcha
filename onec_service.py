@@ -250,32 +250,58 @@ def clear_1c_cache():
     _cache_time = 0.0
 
 
-def _extract_items_list(raw_data: Any) -> list:
+def _extract_items_list(data: Any) -> list:
     """Helper to extract list of product items from various 1C JSON/dict structures."""
-    if isinstance(raw_data, list):
-        print(f"DEBUG 1C RAW RESPONSE TYPE: list, LEN: {len(raw_data)}")
-        return raw_data
-    elif isinstance(raw_data, dict):
-        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(raw_data.keys())}")
-        for key in ["Tovary", "GetTovarList", "Tovari", "tovary", "tovari", "data", "items", "products", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
-            if key in raw_data and isinstance(raw_data[key], list):
-                print(f"DEBUG: Found product array under key '{key}' with {len(raw_data[key])} items.")
-                return raw_data[key]
+    if isinstance(data, list):
+        print(f"DEBUG 1C RAW RESPONSE TYPE: list, LEN: {len(data)}")
+        return data
+    elif isinstance(data, dict):
+        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(data.keys())}")
+        items = data if isinstance(data, list) else (
+            data.get("items") or
+            data.get("Tovary") or
+            data.get("data") or
+            data.get("products") or
+            data.get("GetTovarList") or
+            data.get("Tovari") or
+            data.get("tovary") or
+            data.get("goods") or
+            data.get("rows") or
+            data.get("payload") or
+            data.get("result") or
+            data.get("value") or
+            data.get("content") or
+            data.get("list") or
+            data.get("Товары") or
+            data.get("товары") or
+            data.get("Номенклатура") or
+            data.get("номенклатура") or
+            data.get("Catalog") or
+            data.get("catalog") or
+            data.get("Товар") or
+            data.get("товар") or
+            []
+        )
+        if isinstance(items, list) and len(items) > 0:
+            print(f"DEBUG: Found {len(items)} product items under dictionary key.")
+            return items
 
-        # Check if dict contains any key whose value is a list of dicts
-        for key, val in raw_data.items():
-            if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+        for key, val in data.items():
+            if isinstance(val, list) and len(val) > 0:
                 print(f"DEBUG: Found product array under dynamic key '{key}' with {len(val)} items.")
                 return val
 
-        # Check if dict itself represents a single product
-        if any(k in raw_data for k in ["id", "sku", "SKU", "Код", "код", "Name", "name", "Наименование"]):
+        if any(k in data for k in ["id", "sku", "SKU", "Код", "код", "Name", "name", "Наименование"]):
             print("DEBUG: Response dict represents a single product item.")
-            return [raw_data]
-    elif isinstance(raw_data, str):
-        print(f"DEBUG 1C RAW RESPONSE TYPE: str (len {len(raw_data)})")
-    else:
-        print(f"DEBUG 1C RAW RESPONSE TYPE: {type(raw_data)}")
+            return [data]
+    elif isinstance(data, str):
+        trimmed = data.strip()
+        if trimmed.startswith("{") or trimmed.startswith("["):
+            try:
+                parsed = json.loads(trimmed)
+                return _extract_items_list(parsed)
+            except Exception as e:
+                print("1C JSON parse error in _extract_items_list:", e)
 
     return []
 
@@ -372,6 +398,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
                         print("=== 1C RAW RESPONSE DEBUG START ===")
                         print(f"DEBUG [1C Response Status]: {status}")
+                        print(f"1C RAW RESPONSE: {raw_text[:500]}")
                         print(f"Response Text: {raw_text[:1000]}")
                         print("=== 1C RAW RESPONSE DEBUG END ===")
 
