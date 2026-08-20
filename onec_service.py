@@ -573,7 +573,10 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
                 res = await sync_products_from_1c(force_refresh=force_refresh)
             _1c_sync_state["last_result"] = res
             _1c_sync_state["last_sync_time"] = time.time()
-            print(f"[BACKGROUND 1C SYNC] Task finished successfully: {res.get('count', 0)} items synced.")
+            fetched = res.get('total_received', res.get('count', 0))
+            saved = res.get('synced_count', res.get('count', 0))
+            print(f"[SYNC COMPLETED] Total Fetched: {fetched}, Saved/Updated in DB: {saved}")
+            print(f"[BACKGROUND 1C SYNC] Task finished successfully: {saved} items synced.")
         except Exception as e:
             print(f"[BACKGROUND 1C SYNC ERROR]: {e}")
             _1c_sync_state["error"] = str(e)

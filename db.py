@@ -960,6 +960,7 @@ def sync_1c_products(raw_data: any) -> dict:
     uncategorized = [p for p in synced_products if p.get("category_id") is None or p.get("category_id") not in CATEGORIES_DB]
 
     # Log total upserted count in terminal as required
+    print(f"[SYNC COMPLETED] Total Fetched: {len(items_to_process)}, Saved/Updated in DB: {len(synced_products)}")
     print(f"Total 1C Synced Products: {len(synced_products)}")
 
     # Asynchronously persist synced products to local PostgreSQL database
@@ -1019,11 +1020,13 @@ async def _async_persist_synced_products(products_list: list):
                         price = EXCLUDED.price,
                         stock = EXCLUDED.stock,
                         unit = EXCLUDED.unit,
+                        category_id = COALESCE(products.category_id, EXCLUDED.category_id),
                         barcode = COALESCE(EXCLUDED.barcode, products.barcode),
                         description = COALESCE(EXCLUDED.description, products.description),
                         image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                         updated_at = CURRENT_TIMESTAMP
                 """, args_list)
+        print(f"[SYNC COMPLETED] Total Fetched: {len(products_list)}, Saved/Updated in DB: {len(products_list)}")
         print(f"DEBUG DB UPSERT RESULT: Successfully persisted {len(products_list)} items into PostgreSQL bozorcha_db products table.")
         print(f"[POSTGRESQL] Successfully persisted {len(products_list)} products in 500-item chunks to bozorcha_db products table.")
     except Exception as e:
