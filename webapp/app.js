@@ -2590,17 +2590,13 @@ async function save1CUrlSetting(btn = null) {
     }
 
     try {
-        const res = await fetch(`/api/admin/settings?user_id=${ALLOWED_ADMIN_ID}`, {
+        const res = await fetch(`/api/admin/1c/config?user_id=${ALLOWED_ADMIN_ID}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Admin-Id': String(ALLOWED_ADMIN_ID)
             },
-            body: JSON.stringify({ 
-                "1c_endpoint": newUrl,
-                "api_url": newUrl,
-                "url": newUrl
-            })
+            body: JSON.stringify({ api_url: newUrl })
         });
 
         const data = await res.json().catch(() => ({}));
@@ -2627,9 +2623,7 @@ async function save1CUrlSetting(btn = null) {
 
 async function loadProductCounts() {
     try {
-        const res = await fetch(`/api/admin/product-stats?user_id=${ALLOWED_ADMIN_ID}`, {
-            headers: { 'X-Admin-Id': String(ALLOWED_ADMIN_ID) }
-        });
+        const res = await fetch('/api/admin/products/counts');
         if (res.ok) {
             const data = await res.json();
             const totalEl = document.getElementById('stats-total-products');

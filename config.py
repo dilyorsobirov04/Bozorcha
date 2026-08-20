@@ -27,6 +27,6 @@ PAGE_SIZE = int(os.getenv("PAGE_SIZE", "10"))
 API_1C_URL = os.getenv("API_1C_URL", "").strip()
 API_1C_USER = os.getenv("API_1C_USER", "mobiles").strip()
 API_1C_PASS = os.getenv("API_1C_PASS", "123").strip()
-API_1C_TIMEOUT = int(os.getenv("API_1C_TIMEOUT", "120"))
+API_1C_TIMEOUT = int(os.getenv("API_1C_TIMEOUT", "20"))
 
 

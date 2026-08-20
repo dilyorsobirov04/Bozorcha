@@ -260,7 +260,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     active_user = get_active_1c_user()
     active_pass = get_active_1c_pass()
     ttl = int(get_system_setting("cache_ttl", 300))
-    eff_timeout = timeout_seconds or int(get_system_setting("api_1c_timeout", 120)) or 120
+    eff_timeout = timeout_seconds or int(get_system_setting("api_1c_timeout", 60)) or 60
 
     # 1. Check in-memory cache if not forcing refresh
     now = time.time()
@@ -298,7 +298,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
         "X-Requested-With": "XMLHttpRequest"
     }
 
-    timeout = aiohttp.ClientTimeout(total=eff_timeout, sock_read=eff_timeout, connect=30.0)
+    timeout = aiohttp.ClientTimeout(total=eff_timeout, sock_read=eff_timeout, connect=20.0)
     connector = aiohttp.TCPConnector(ssl=False)
 
     async with _cache_lock:
@@ -317,8 +317,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
             # Diagnostics request log
             print(f"=== 1C FETCH DEBUG ===")
             print(f"Target URL: {active_url}")
-            print(f"Timeout: {eff_timeout}s")
-            logger.info(f"[1C REQUEST] Calling 1C URL: {active_url} (Timeout: {eff_timeout}s)")
+            logger.info(f"[1C REQUEST] Calling 1C URL: {active_url}")
 
             async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
                 async with session.get(active_url, auth=auth, headers=headers) as response:
@@ -327,7 +326,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
                     if status == 200:
                         raw_text = await response.text()
-                        print(f"Response Raw ({len(raw_text)} bytes): {raw_text[:300]}")
+                        print(f"Response Raw: {raw_text[:300]}")
                         raw_data = None
 
                         if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
@@ -344,20 +343,6 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                             raw_data = json.loads(raw_text)
                         except (json.JSONDecodeError, Exception) as json_err:
                             raw_data = raw_text
-
-                        # Log 1C Array Length Diagnostics
-                        if isinstance(raw_data, dict):
-                            data_items = raw_data.get("data") or raw_data.get("products") or []
-                            count_msg = f"1C Raw Returned Items: {len(data_items)}"
-                            print(f"=== 1C RESPONSE DIAGNOSTICS ===")
-                            print(count_msg)
-                            print(f"1C Response 'error': {raw_data.get('error')}, 'message': {raw_data.get('message')}")
-                            logger.info(count_msg)
-                        elif isinstance(raw_data, list):
-                            count_msg = f"1C Raw Returned Items: {len(raw_data)}"
-                            print(f"=== 1C RESPONSE DIAGNOSTICS ===")
-                            print(count_msg)
-                            logger.info(count_msg)
 
                         # Update in-memory cache
                         _cache_data = raw_data
