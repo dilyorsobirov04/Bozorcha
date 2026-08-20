@@ -379,10 +379,14 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         target_url = f"{active_url}{sep}page={page}"
 
                     print(f"[1C PAGINATION] Requesting Page {page}: {target_url}", flush=True)
+                    print(f"[1C DEBUG] Requesting URL: {target_url}", flush=True)
+                    print(f"[1C DEBUG] Sent Headers: {headers}", flush=True)
                     async with session.get(target_url, auth=auth, headers=headers) as response:
                         status = response.status
                         raw_text = await response.text()
 
+                        print(f"[1C DEBUG] Response Status: {status}", flush=True)
+                        print(f"[1C DEBUG] Raw Body Preview: {raw_text[:500]}", flush=True)
                         print(f"=== 1C STATUS: {status} ===", flush=True)
                         print(f"=== 1C RAW BODY: {raw_text[:500]} ===", flush=True)
                         print("=== 1C RESPONSE DEBUG ===", flush=True)
