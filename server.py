@@ -14,7 +14,7 @@ except ImportError:
 from fastapi import FastAPI, Query, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import RedirectResponse, FileResponse, JSONResponse
 
 from db import (
     init_postgres_db,
@@ -60,6 +60,8 @@ from onec_service import (
     resolve_dynamic_ngrok_url_sync,
     start_ngrok_url_watcher
 )
+
+from config import ADMINS
 
 logger = logging.getLogger(__name__)
 
@@ -619,81 +621,111 @@ def create_webapp_server() -> FastAPI:
     @app.post("/api/admin/1c/config")
     @app.put("/api/admin/1c/config")
     async def handle_update_1c_config(request: Request):
-        check_admin_authorization(request)
         try:
-            body = await request.json()
+            check_admin_authorization(request)
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+
             if not isinstance(body, dict):
-                raise ValueError("JSON obyekt bo'lishi kerak")
+                body = {}
+
+            api_url = (
+                body.get("endpoint_url") or
+                body.get("1c_endpoint") or
+                body.get("api_url") or
+                body.get("url") or
+                body.get("endpoint") or
+                request.query_params.get("endpoint_url") or
+                request.query_params.get("1c_endpoint") or
+                request.query_params.get("api_url") or
+                request.query_params.get("url")
+            )
+            api_user = body.get("api_user") if "api_user" in body else body.get("user")
+            api_pass = body.get("api_pass") if "api_pass" in body else body.get("password")
+
+            if not api_url or not str(api_url).strip():
+                return JSONResponse(status_code=400, content={"error": "1C URL (endpoint_url yoki 1c_endpoint) parametri talab qilinadi", "detail": "1C URL talab qilinadi"})
+
+            clean_url = clean_1c_url(str(api_url).strip())
+            if not clean_url or not clean_url.startswith(("http://", "https://")):
+                return JSONResponse(status_code=400, content={"error": "Yaroqsiz URL formati. URL 'http://' yoki 'https://' bilan boshlanishi kerak.", "detail": "Yaroqsiz URL"})
+
+            updated_config = update_1c_config(api_url=clean_url, api_user=api_user, api_pass=api_pass)
+            print(f"[ADMIN API] POST /settings received URL: {clean_url}")
+
+            return {
+                "success": True,
+                "endpoint_url": clean_url,
+                "1c_endpoint": clean_url,
+                "endpoint": clean_url,
+                "api_url": clean_url,
+                "message": "1C URL muvaffaqiyatli saqlandi!",
+                **updated_config
+            }
+        except HTTPException as he:
+            print(f"CRITICAL ROUTE ERROR [POST /api/admin/settings]: {he.detail}")
+            return JSONResponse(status_code=he.status_code, content={"error": he.detail, "detail": he.detail})
         except Exception as e:
-            print(f"[ADMIN API] POST /settings error parsing JSON: {e}")
-            raise HTTPException(status_code=400, detail="Noto'g'ri JSON formati yuborildi")
+            print(f"CRITICAL ROUTE ERROR [POST /api/admin/settings]: {e}")
+            return JSONResponse(status_code=500, content={"error": str(e), "message": str(e), "detail": str(e)})
 
-        api_url = (
-            body.get("1c_endpoint") or
-            body.get("api_url") or
-            body.get("url") or
-            body.get("endpoint")
-        )
-        api_user = body.get("api_user") if "api_user" in body else body.get("user")
-        api_pass = body.get("api_pass") if "api_pass" in body else body.get("password")
-
-        if not api_url or not str(api_url).strip():
-            raise HTTPException(status_code=400, detail="1C URL (1c_endpoint yoki api_url) parametri talab qilinadi")
-
-        clean_url = clean_1c_url(str(api_url).strip())
-        if not clean_url or not clean_url.startswith(("http://", "https://")):
-            raise HTTPException(status_code=400, detail="Yaroqsiz URL formati. URL 'http://' yoki 'https://' bilan boshlanishi kerak.")
-
-        updated_config = update_1c_config(api_url=clean_url, api_user=api_user, api_pass=api_pass)
-        print(f"[ADMIN API] POST /settings received URL: {clean_url}")
-
-        return {
-            "success": True,
-            "endpoint": clean_url,
-            "api_url": clean_url,
-            "message": "1C URL muvaffaqiyatli saqlandi!",
-            **updated_config
-        }
-
-    @app.get("/api/admin/products/uncategorized")
     @app.get("/api/admin/uncategorized-products")
+    @app.get("/api/admin/products/uncategorized")
     async def handle_get_uncategorized_products(
         search: Optional[str] = Query(None, description="Search by name or 1C SKU"),
         request: Request = None
     ):
-        check_admin_authorization(request)
-        items = get_uncategorized_products(search=search)
-        print(f"[ADMIN API] GET /products/uncategorized executed -> found {len(items)} items")
-        return {
-            "success": True,
-            "total": len(items),
-            "products": items
-        }
+        try:
+            check_admin_authorization(request)
+            items = get_uncategorized_products(search=search)
+            print(f"[ADMIN API] GET /uncategorized-products executed -> found {len(items)} items")
+            return {
+                "success": True,
+                "total": len(items),
+                "products": items
+            }
+        except HTTPException as he:
+            print(f"CRITICAL ROUTE ERROR [GET /api/admin/uncategorized-products]: {he.detail}")
+            return JSONResponse(status_code=he.status_code, content={"error": he.detail, "detail": he.detail})
+        except Exception as e:
+            print(f"CRITICAL ROUTE ERROR [GET /api/admin/uncategorized-products]: {e}")
+            return JSONResponse(status_code=500, content={"error": str(e), "message": str(e), "detail": str(e)})
 
     @app.get("/api/admin/product-stats")
     @app.get("/api/admin/products/counts")
     @app.get("/api/products/counts")
     async def handle_get_products_counts():
         try:
-            counts = await query_postgres_product_counts()
+            try:
+                counts = await query_postgres_product_counts()
+            except Exception as dbe:
+                print(f"[ADMIN API] GET /product-stats DB query exception: {dbe}")
+                counts = get_products_counts()
+
             if not isinstance(counts, dict):
                 counts = get_products_counts()
+
+            total = int(counts.get("total") or len(PRODUCTS_DB))
+            categorized = int(counts.get("categorized") or 0)
+            uncategorized = int(counts.get("uncategorized") or 0)
+
+            print(f"[ADMIN API] GET /product-stats executed successfully -> total: {total}, uncategorized: {uncategorized}, categorized: {categorized}")
+            return {
+                "success": True,
+                "total": total,
+                "categorized": categorized,
+                "uncategorized": uncategorized
+            }
         except Exception as e:
-            print(f"[ADMIN API] GET /product-stats DB query exception (returning fallback): {e}")
-            counts = {
+            print(f"CRITICAL ROUTE ERROR [GET /api/admin/product-stats]: {e}")
+            return {
+                "success": True,
                 "total": len(PRODUCTS_DB),
                 "categorized": sum(1 for p in PRODUCTS_DB.values() if p.get("category_id")),
                 "uncategorized": sum(1 for p in PRODUCTS_DB.values() if not p.get("category_id"))
             }
-
-        print(f"[ADMIN API] GET /product-stats executed successfully -> total: {counts.get('total')}, uncategorized: {counts.get('uncategorized')}, categorized: {counts.get('categorized')}")
-        return {
-            "success": True,
-            "total": counts.get("total", 0),
-            "categorized": counts.get("categorized", 0),
-            "uncategorized": counts.get("uncategorized", 0),
-            **counts
-        }
 
     @app.put("/api/admin/products/{product_id}/assign-category")
     @app.patch("/api/admin/products/{product_id}/assign-category")
@@ -703,60 +735,74 @@ def create_webapp_server() -> FastAPI:
         category_id: Optional[int] = Query(None),
         request: Request = None
     ):
-        check_admin_authorization(request)
-        target_cat_id = category_id
-        if target_cat_id is None and request:
-            try:
-                body = await request.json()
-                if isinstance(body, dict):
-                    target_cat_id = body.get("category_id") or body.get("categoryId")
-            except Exception:
-                pass
+        try:
+            check_admin_authorization(request)
+            target_cat_id = category_id
+            if target_cat_id is None and request:
+                try:
+                    body = await request.json()
+                    if isinstance(body, dict):
+                        target_cat_id = body.get("category_id") or body.get("categoryId")
+                except Exception:
+                    pass
 
-        if target_cat_id is None:
-            raise HTTPException(status_code=400, detail="category_id parametri talab qilinadi")
+            if target_cat_id is None:
+                return JSONResponse(status_code=400, content={"error": "category_id parametri talab qilinadi", "detail": "category_id talab qilinadi"})
 
-        updated_prod = assign_product_category(product_id, target_cat_id)
-        if not updated_prod:
-            raise HTTPException(status_code=404, detail="Mahsulot yoki kategoriya topilmadi")
+            updated_prod = assign_product_category(product_id, target_cat_id)
+            if not updated_prod:
+                return JSONResponse(status_code=404, content={"error": "Mahsulot yoki kategoriya topilmadi", "detail": "Mahsulot topilmadi"})
 
-        cat = get_category(target_cat_id) or {}
-        cat_name = cat.get("name", f"Kategoriya #{target_cat_id}")
+            cat = get_category(target_cat_id) or {}
+            cat_name = cat.get("name", f"Kategoriya #{target_cat_id}")
 
-        return {
-            "success": True,
-            "message": f"'{updated_prod.get('name')}' muvaffaqiyatli '{cat_name}' bo'limiga biriktirildi! 🎉",
-            "product": updated_prod,
-            "category": cat
-        }
+            return {
+                "success": True,
+                "message": f"'{updated_prod.get('name')}' muvaffaqiyatli '{cat_name}' bo'limiga biriktirildi! 🎉",
+                "product": updated_prod,
+                "category": cat
+            }
+        except HTTPException as he:
+            print(f"CRITICAL ROUTE ERROR [POST /api/admin/products/{product_id}/assign-category]: {he.detail}")
+            return JSONResponse(status_code=he.status_code, content={"error": he.detail, "detail": he.detail})
+        except Exception as e:
+            print(f"CRITICAL ROUTE ERROR [POST /api/admin/products/{product_id}/assign-category]: {e}")
+            return JSONResponse(status_code=500, content={"error": str(e), "message": str(e), "detail": str(e)})
 
     @app.put("/api/admin/products/bulk-assign-category")
     @app.post("/api/admin/products/bulk-assign-category")
     async def handle_bulk_assign_product_category(request: Request):
-        check_admin_authorization(request)
         try:
-            body = await request.json()
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON body")
+            check_admin_authorization(request)
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
 
-        product_ids = body.get("product_ids") or body.get("productIds") or []
-        category_id = body.get("category_id") or body.get("categoryId")
+            product_ids = body.get("product_ids") or body.get("productIds") or []
+            category_id = body.get("category_id") or body.get("categoryId")
 
-        if not category_id:
-            raise HTTPException(status_code=400, detail="category_id parametri talab qilinadi")
-        if not product_ids or not isinstance(product_ids, list):
-            raise HTTPException(status_code=400, detail="product_ids ro'yxati talab qilinadi")
+            if not category_id:
+                return JSONResponse(status_code=400, content={"error": "category_id parametri talab qilinadi", "detail": "category_id talab qilinadi"})
+            if not product_ids or not isinstance(product_ids, list):
+                return JSONResponse(status_code=400, content={"error": "product_ids ro'yxati talab qilinadi", "detail": "product_ids talab qilinadi"})
 
-        updated_list = bulk_assign_product_categories(product_ids, category_id)
-        cat = get_category(category_id) or {}
-        cat_name = cat.get("name", f"Kategoriya #{category_id}")
+            updated_list = bulk_assign_product_categories(product_ids, category_id)
+            cat = get_category(category_id) or {}
+            cat_name = cat.get("name", f"Kategoriya #{category_id}")
 
-        return {
-            "success": True,
-            "message": f"{len(updated_list)} ta mahsulot '{cat_name}' bo'limiga biriktirildi! 🎉",
-            "count": len(updated_list),
-            "updated_products": updated_list
-        }
+            return {
+                "success": True,
+                "message": f"{len(updated_list)} ta mahsulot '{cat_name}' bo'limiga biriktirildi! 🎉",
+                "count": len(updated_list),
+                "updated_products": updated_list
+            }
+        except HTTPException as he:
+            print(f"CRITICAL ROUTE ERROR [POST /api/admin/products/bulk-assign-category]: {he.detail}")
+            return JSONResponse(status_code=he.status_code, content={"error": he.detail, "detail": he.detail})
+        except Exception as e:
+            print(f"CRITICAL ROUTE ERROR [POST /api/admin/products/bulk-assign-category]: {e}")
+            return JSONResponse(status_code=500, content={"error": str(e), "message": str(e), "detail": str(e)})
 
     @app.post("/api/products/update-photo")
     async def handle_post_update_photo(request: Request):

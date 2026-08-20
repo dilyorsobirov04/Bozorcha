@@ -2591,6 +2591,7 @@ async function save1CUrlSetting(btn = null) {
 
     try {
         const payload = {
+            "endpoint_url": newUrl,
             "1c_endpoint": newUrl,
             "api_url": newUrl,
             "url": newUrl
@@ -2605,7 +2606,7 @@ async function save1CUrlSetting(btn = null) {
         });
 
         const data = await res.json().catch(() => ({}));
-        if (res.ok && data.success) {
+        if (res.ok && (data.success || data.endpoint_url || data.endpoint)) {
             showToast(data.message || "1C URL muvaffaqiyatli saqlandi!", 'success');
             await load1CConfigStatus();
             await loadProductCounts();
@@ -2616,7 +2617,7 @@ async function save1CUrlSetting(btn = null) {
             return false;
         }
     } catch (e) {
-        console.error('save1CUrlSetting error:', e);
+        console.error('save1CUrlSetting API Fetch Error:', e);
         showToast(e.message ? `Xatolik: ${e.message}` : "Server bilan aloqa xatosi!", 'error');
         return false;
     } finally {
@@ -2664,7 +2665,7 @@ async function loadProductCounts() {
             if (uncatEl && uncatEl.innerText === '...') uncatEl.innerText = (uncategorizedProducts ? uncategorizedProducts.length : 0).toLocaleString('uz-UZ');
         }
     } catch (e) {
-        console.debug('Failed to load product counts:', e);
+        console.debug('Failed to load product counts (API Fetch Error):', e);
         if (totalEl && totalEl.innerText === '...') totalEl.innerText = '0';
         if (catEl && catEl.innerText === '...') catEl.innerText = '0';
         if (uncatEl && uncatEl.innerText === '...') uncatEl.innerText = '0';
@@ -2706,7 +2707,7 @@ async function loadUncategorizedProducts(searchQuery = '', triggerBtn = null) {
     }
 
     try {
-        let url = `/api/admin/products/uncategorized?user_id=${ALLOWED_ADMIN_ID}`;
+        let url = `/api/admin/uncategorized-products?user_id=${ALLOWED_ADMIN_ID}`;
         if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
             url += `&search=${encodeURIComponent(searchQuery.trim())}`;
         }
@@ -2717,17 +2718,17 @@ async function loadUncategorizedProducts(searchQuery = '', triggerBtn = null) {
 
         if (res.ok) {
             const data = await res.json();
-            uncategorizedProducts = data.products || [];
+            uncategorizedProducts = Array.isArray(data) ? data : (data.products || []);
 
             if (countEl) countEl.innerText = uncategorizedProducts.length;
             if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
 
             renderUncategorizedProducts();
         } else {
-            throw new Error('API error');
+            throw new Error(`API error: HTTP ${res.status}`);
         }
     } catch (e) {
-        console.warn('Failed to load uncategorized products:', e);
+        console.error('Failed to load uncategorized products (API Fetch Error):', e);
         if (container) {
             container.innerHTML = `
                 <div class="empty-admin-orders">
