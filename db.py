@@ -716,14 +716,24 @@ def sync_1c_products(raw_data: any) -> dict:
     if isinstance(raw_data, list):
         items_to_process = raw_data
     elif isinstance(raw_data, dict):
+        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(raw_data.keys())}")
         found_list = False
-        for key in ["data", "products", "items", "goods", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "rows"]:
+        for key in ["data", "products", "items", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
             if key in raw_data and isinstance(raw_data[key], list):
                 items_to_process = raw_data[key]
                 found_list = True
+                print(f"DEBUG: Found product array under key '{key}' with {len(items_to_process)} items.")
                 break
         if not found_list:
-            items_to_process = [raw_data]
+            for k, val in raw_data.items():
+                if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+                    items_to_process = val
+                    found_list = True
+                    print(f"DEBUG: Found product array under dynamic key '{k}' with {len(items_to_process)} items.")
+                    break
+        if not found_list:
+            if any(k in raw_data for k in ["id", "sku", "SKU", "Код", "код", "Name", "name", "Наименование"]):
+                items_to_process = [raw_data]
     elif isinstance(raw_data, str):
         trimmed = raw_data.strip()
         if trimmed.startswith("{") or trimmed.startswith("["):
@@ -759,6 +769,25 @@ def sync_1c_products(raw_data: any) -> dict:
 
     synced_products = []
     invalid_count = 0
+
+    print(f"DEBUG: Parsed {len(items_to_process)} items from 1C response.")
+
+    if len(items_to_process) == 0:
+        err_msg = "1C dan tovarlar ro'yxati bo'sh keldi"
+        print(f"DEBUG SYNC ERROR: {err_msg} (0 items to process)")
+        return {
+            "success": False,
+            "count": 0,
+            "message": err_msg,
+            "error": err_msg,
+            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar)",
+            "total_received": 0,
+            "synced_count": 0,
+            "invalid_count": 0,
+            "uncategorized_count": 0,
+            "products": [],
+            "uncategorized": []
+        }
 
     # Precompute SKU index for O(1) fast lookup across 13,000+ items
     sku_to_pid = {str(prod.get("sku", "")).strip().lower(): pid for pid, prod in PRODUCTS_DB.items() if prod.get("sku")}
@@ -911,6 +940,23 @@ def sync_1c_products(raw_data: any) -> dict:
             sku_to_pid[sku.lower()] = new_id
             synced_products.append(new_product)
 
+    if len(synced_products) == 0:
+        err_msg = "1C dan tovarlar ro'yxati bo'sh keldi"
+        print(f"DEBUG SYNC ERROR: {err_msg} (0 products synced out of {len(items_to_process)} items)")
+        return {
+            "success": False,
+            "count": 0,
+            "message": err_msg,
+            "error": err_msg,
+            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar)",
+            "total_received": len(items_to_process),
+            "synced_count": 0,
+            "invalid_count": invalid_count,
+            "uncategorized_count": 0,
+            "products": [],
+            "uncategorized": []
+        }
+
     uncategorized = [p for p in synced_products if p.get("category_id") is None or p.get("category_id") not in CATEGORIES_DB]
 
     # Log total upserted count in terminal as required
@@ -937,8 +983,10 @@ async def _async_persist_synced_products(products_list: list):
     try:
         pool = await get_pg_pool()
         if not pool or not products_list:
+            print("DEBUG DB UPSERT: Skipped (pool missing or empty products list)")
             return
 
+        print(f"DEBUG DB UPSERT: Executing batch insert/update for {len(products_list)} items across {((len(products_list)-1)//500)+1} chunks...")
         async with pool.acquire() as conn:
             batch_size = 500
             for i in range(0, len(products_list), batch_size):
@@ -976,6 +1024,7 @@ async def _async_persist_synced_products(products_list: list):
                         image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                         updated_at = CURRENT_TIMESTAMP
                 """, args_list)
+        print(f"DEBUG DB UPSERT RESULT: Successfully persisted {len(products_list)} items into PostgreSQL bozorcha_db products table.")
         print(f"[POSTGRESQL] Successfully persisted {len(products_list)} products in 500-item chunks to bozorcha_db products table.")
     except Exception as e:
         print(f"[POSTGRESQL] Sync persistence warning: {e}")

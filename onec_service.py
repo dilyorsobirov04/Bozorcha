@@ -250,15 +250,29 @@ def clear_1c_cache():
 
 def _extract_items_list(raw_data: Any) -> list:
     """Helper to extract list of product items from various 1C JSON/dict structures."""
-    if isinstance(raw_data, list):
-        return raw_data
-    elif isinstance(raw_data, dict):
-        for key in ["data", "products", "items", "goods", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "rows"]:
+    if isinstance(raw_data, dict):
+        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(raw_data.keys())}")
+        for key in ["data", "items", "products", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
             if key in raw_data and isinstance(raw_data[key], list):
+                print(f"DEBUG: Found product array under key '{key}' with {len(raw_data[key])} items.")
                 return raw_data[key]
+
+        # Check if dict contains any key whose value is a list of dicts
+        for key, val in raw_data.items():
+            if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+                print(f"DEBUG: Found product array under dynamic key '{key}' with {len(val)} items.")
+                return val
+
         # Check if dict itself represents a single product
-        if "id" in raw_data or "sku" in raw_data or "SKU" in raw_data or "Код" in raw_data or "Name" in raw_data:
+        if any(k in raw_data for k in ["id", "sku", "SKU", "Код", "код", "Name", "name", "Наименование"]):
+            print("DEBUG: Response dict represents a single product item.")
             return [raw_data]
+    elif isinstance(raw_data, list):
+        print(f"DEBUG 1C RAW RESPONSE TYPE: list, LEN: {len(raw_data)}")
+        return raw_data
+    else:
+        print(f"DEBUG 1C RAW RESPONSE TYPE: {type(raw_data)}")
+
     return []
 
 
@@ -370,7 +384,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 raw_data = raw_text
 
                             page_items = _extract_items_list(raw_data)
-                            print(f"Page {page} returned {len(page_items)} items")
+                            print(f"DEBUG: Parsed {len(page_items)} items from Page {page} response.")
 
                             if not page_items:
                                 # 0 items returned -> catalog end reached
@@ -426,17 +440,31 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 "data": None
                             }
 
+            # Check if 0 items total were parsed
+            if len(accumulated_items) == 0:
+                err_msg = "1C dan tovarlar ro'yxati bo'sh keldi"
+                print(f"DEBUG 1C FETCH ERROR: {err_msg} (0 items parsed)")
+                logger.warning(err_msg)
+                return {
+                    "success": False,
+                    "error": err_msg,
+                    "message": err_msg,
+                    "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar)",
+                    "status_code": 400,
+                    "data": None
+                }
+
             # Update in-memory cache with accumulated catalog items
-            final_data = accumulated_items if accumulated_items else raw_data
-            _cache_data = final_data
+            _cache_data = accumulated_items
             _cache_time = time.time()
 
+            print(f"DEBUG: Parsed {len(accumulated_items)} items total from 1C response.")
             print(f"[1C FETCH COMPLETE] Total accumulated items fetched: {len(accumulated_items)}")
 
             return {
                 "success": True,
                 "cached": False,
-                "data": final_data,
+                "data": accumulated_items,
                 "status_code": 200
             }
 
