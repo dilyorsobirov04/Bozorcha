@@ -3100,7 +3100,7 @@ async function trigger1CSync(btn = null) {
 
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success) {
-            showToast(data.message || "1C bilan sinxronlash fonda boshlandi. Bu bir oz vaqt olishi mumkin.", 'info');
+            showToast(data.message || "1C bilan sinxronlash fonda boshlandi. Sahifani yangilab turing.", 'info');
 
             if (_syncPollingInterval) {
                 clearInterval(_syncPollingInterval);

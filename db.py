@@ -1,5 +1,6 @@
 import os
 import json
+import traceback
 import xml.etree.ElementTree as ET
 import urllib.parse
 import asyncio
@@ -982,22 +983,36 @@ def sync_1c_products(raw_data: any) -> dict:
     }
 
 
-async def _async_persist_synced_products(products_list: list):
+async def _async_persist_synced_products(products_list: list) -> dict:
     """Persists synced products to the local PostgreSQL database in efficient 500-item chunks using executemany."""
     if not products_list or len(products_list) == 0:
         print("[DATABASE GUARD] Upsert skipped: 0 products to persist.")
-        return
+        return {"inserted": 0, "updated": 0, "total": 0}
 
     try:
         pool = await get_pg_pool()
         if not pool:
             print("DEBUG DB UPSERT: Skipped (pool missing)")
-            return
+            return {"inserted": 0, "updated": 0, "total": 0}
 
-        print(f"DEBUG DB UPSERT: Executing batch insert/update for {len(products_list)} items across {((len(products_list)-1)//500)+1} chunks...")
+        total_count = len(products_list)
+        print(f"DEBUG DB UPSERT: Executing batch insert/update for {total_count} items across {((total_count-1)//500)+1} chunks...")
         async with pool.acquire() as conn:
+            # Query existing SKUs from PostgreSQL database to calculate inserted vs updated count
+            existing_skus_rows = await conn.fetch("SELECT sku FROM products WHERE sku IS NOT NULL")
+            existing_skus = {str(row["sku"]).strip().lower() for row in existing_skus_rows if row.get("sku")}
+
+            updated_count = 0
+            inserted_count = 0
+            for p in products_list:
+                sku_str = str(p.get("sku", "")).strip().lower()
+                if sku_str and sku_str in existing_skus:
+                    updated_count += 1
+                else:
+                    inserted_count += 1
+
             batch_size = 500
-            for i in range(0, len(products_list), batch_size):
+            for i in range(0, total_count, batch_size):
                 chunk = products_list[i:i + batch_size]
                 args_list = []
                 for p in chunk:
@@ -1038,13 +1053,15 @@ async def _async_persist_synced_products(products_list: list):
             # Query PostgreSQL table directly after upserting to verify total count
             db_row = await conn.fetchrow("SELECT COUNT(*) as cnt FROM products")
             total_db_count = db_row["cnt"] if db_row else 0
+            print(f"DEBUG: Successfully processed {total_count} products into PostgreSQL. (New: {inserted_count}, Updated: {updated_count})")
             print(f"[POSTGRESQL VERIFICATION] Direct query total products count in bozorcha_db: {total_db_count}")
 
-        print(f"[SYNC COMPLETED] Total Fetched: {len(products_list)}, Saved/Updated in DB: {len(products_list)}")
-        print(f"DEBUG DB UPSERT RESULT: Successfully persisted {len(products_list)} items into PostgreSQL bozorcha_db products table.")
-        print(f"[POSTGRESQL] Successfully persisted {len(products_list)} products in 500-item chunks to bozorcha_db products table.")
+        print(f"[SYNC COMPLETED] Total Fetched: {total_count}, Saved/Updated in DB: {total_count}")
+        return {"inserted": inserted_count, "updated": updated_count, "total": total_count}
     except Exception as e:
-        print(f"[POSTGRESQL] Sync persistence warning: {e}")
+        print("CRITICAL ERROR IN POSTGRESQL UPSERT:")
+        print(traceback.format_exc())
+        raise e
 
 
 def get_products_counts() -> dict:

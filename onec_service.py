@@ -5,6 +5,7 @@ import base64
 import time
 import asyncio
 import logging
+import traceback
 import aiohttp
 from typing import Optional, Any
 
@@ -578,6 +579,7 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
     async def _worker():
         global _1c_sync_state
         try:
+            print("DEBUG: Starting 1C Fetch...")
             print("[BACKGROUND 1C SYNC] Task started in background...")
             if raw_payload is not None:
                 res = sync_1c_products(raw_payload)
@@ -593,8 +595,17 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
             print(f"[SYNC COMPLETED] Total Fetched: {fetched}, Saved/Updated in DB: {saved}")
             print(f"[BACKGROUND 1C SYNC] Task finished successfully: {saved} items synced.")
         except Exception as e:
-            print(f"[BACKGROUND 1C SYNC ERROR]: {e}")
+            print("CRITICAL ERROR IN 1C BACKGROUND SYNC:")
+            print(traceback.format_exc())
+            logger.error(f"CRITICAL ERROR IN 1C BACKGROUND SYNC: {e}", exc_info=True)
             _1c_sync_state["error"] = str(e)
+            _1c_sync_state["last_result"] = {
+                "success": False,
+                "error": str(e),
+                "detail": traceback.format_exc(),
+                "count": 0,
+                "synced_count": 0
+            }
         finally:
             _1c_sync_state["is_syncing"] = False
 
@@ -603,7 +614,7 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
     return {
         "success": True,
         "is_syncing": True,
-        "message": "1C bilan sinxronlash fonda boshlandi. Bu bir oz vaqt olishi mumkin."
+        "message": "1C bilan sinxronlash fonda boshlandi. Sahifani yangilab turing."
     }
 
 
