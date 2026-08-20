@@ -248,11 +248,25 @@ def clear_1c_cache():
     _cache_time = 0.0
 
 
+def _extract_items_list(raw_data: Any) -> list:
+    """Helper to extract list of product items from various 1C JSON/dict structures."""
+    if isinstance(raw_data, list):
+        return raw_data
+    elif isinstance(raw_data, dict):
+        for key in ["data", "products", "items", "goods", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "rows"]:
+            if key in raw_data and isinstance(raw_data[key], list):
+                return raw_data[key]
+        # Check if dict itself represents a single product
+        if "id" in raw_data or "sku" in raw_data or "SKU" in raw_data or "Код" in raw_data or "Name" in raw_data:
+            return [raw_data]
+    return []
+
+
 async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Optional[int] = None) -> dict:
     """
     Asynchronously fetches product catalog from 1C HTTP Service.
-    Supports direct local connection (http://127.0.0.1:8080/...) or external tunnel URLs.
-    Uses Basic Auth and standard headers.
+    Loops through pages (limit/offset or page=1,2,3...) until 0 items are returned.
+    Sets HTTP Client Timeout to 180 seconds to prevent socket timeouts on large payloads.
     """
     global _cache_data, _cache_time
 
@@ -260,7 +274,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     active_user = get_active_1c_user()
     active_pass = get_active_1c_pass()
     ttl = int(get_system_setting("cache_ttl", 300))
-    eff_timeout = timeout_seconds or int(get_system_setting("api_1c_timeout", 60)) or 60
+    eff_timeout = float(timeout_seconds or get_system_setting("api_1c_timeout", 180.0) or 180.0)
 
     # 1. Check in-memory cache if not forcing refresh
     now = time.time()
@@ -298,7 +312,8 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
         "X-Requested-With": "XMLHttpRequest"
     }
 
-    timeout = aiohttp.ClientTimeout(total=eff_timeout, sock_read=eff_timeout, connect=20.0)
+    # Set HTTP Client Timeout to 180 seconds or eff_timeout
+    timeout = aiohttp.ClientTimeout(total=eff_timeout, sock_read=eff_timeout, connect=30.0)
     connector = aiohttp.TCPConnector(ssl=False)
 
     async with _cache_lock:
@@ -314,83 +329,116 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                 }
 
         try:
-            # Diagnostics request log
             print(f"=== 1C FETCH DEBUG ===")
             print(f"Target URL: {active_url}")
-            logger.info(f"[1C REQUEST] Calling 1C URL: {active_url}")
+            print(f"Timeout setting: {eff_timeout}s")
+            logger.info(f"[1C REQUEST] Calling 1C URL: {active_url} (timeout: {eff_timeout}s)")
+
+            accumulated_items = []
+            page = 1
+            max_pages = 200  # Safeguard cap for pagination loop
 
             async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-                async with session.get(active_url, auth=auth, headers=headers) as response:
-                    status = response.status
-                    print(f"Status Code: {status}")
+                while page <= max_pages:
+                    # Construct page URL
+                    if page == 1:
+                        target_url = active_url
+                    else:
+                        sep = "&" if "?" in active_url else "?"
+                        target_url = f"{active_url}{sep}page={page}"
 
-                    if status == 200:
-                        raw_text = await response.text()
-                        print(f"Response Raw: {raw_text[:300]}")
-                        raw_data = None
+                    print(f"[1C PAGINATION] Requesting Page {page}: {target_url}")
+                    async with session.get(target_url, auth=auth, headers=headers) as response:
+                        status = response.status
+                        print(f"Page {page} Status Code: {status}")
 
-                        if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
-                            warning_msg = "Ngrok HTML ogohlantirish sahifasini qaytardi. ngrok-skip-browser-warning sarlavhasi talab qilinadi."
-                            logger.warning(warning_msg)
+                        if status == 200:
+                            raw_text = await response.text()
+                            if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
+                                warning_msg = "Ngrok HTML ogohlantirish sahifasini qaytardi. ngrok-skip-browser-warning sarlavhasi talab qilinadi."
+                                logger.warning(warning_msg)
+                                return {
+                                    "success": False,
+                                    "error": warning_msg,
+                                    "status_code": 200,
+                                    "data": None
+                                }
+
+                            try:
+                                raw_data = json.loads(raw_text)
+                            except (json.JSONDecodeError, Exception):
+                                raw_data = raw_text
+
+                            page_items = _extract_items_list(raw_data)
+                            print(f"Page {page} returned {len(page_items)} items")
+
+                            if not page_items:
+                                # 0 items returned -> catalog end reached
+                                print(f"[1C PAGINATION] Page {page} returned 0 items. Loop finished.")
+                                break
+
+                            accumulated_items.extend(page_items)
+
+                            # If page 1 returned non-paginated data (e.g. text/xml/dict or single list without paging support)
+                            # or fewer than 5 items, check if loop should continue
+                            if page == 1 and isinstance(raw_data, str) and not raw_data.strip().startswith("["):
+                                break
+
+                            page += 1
+                        elif status in (401, 403):
+                            err_text = await response.text()
+                            warning_msg = "1C login yoki paroli noto'g'ri (401/403 Basic Auth)"
+                            logger.warning(f"1C Auth Error ({status}) at {target_url}: {warning_msg}")
+                            if page == 1:
+                                return {
+                                    "success": False,
+                                    "error": warning_msg,
+                                    "detail": err_text[:300],
+                                    "status_code": status,
+                                    "data": None
+                                }
+                            break
+                        elif status == 404:
+                            if page > 1:
+                                # Next page 404 means pagination reached the end
+                                print(f"[1C PAGINATION] Page {page} returned 404. End of catalog.")
+                                break
+                            err_text = await response.text()
+                            warning_msg = "1C HTTP xizmati topilmadi (404 Not Found)."
                             return {
                                 "success": False,
                                 "error": warning_msg,
-                                "status_code": 200,
+                                "url": target_url,
+                                "detail": err_text[:300],
+                                "status_code": 404,
+                                "data": None
+                            }
+                        else:
+                            if page > 1:
+                                break
+                            err_text = await response.text()
+                            warning_msg = f"1C serveridan xato javob qaytdi (HTTP {status}): {err_text[:200]}"
+                            return {
+                                "success": False,
+                                "error": warning_msg,
+                                "status_code": status,
+                                "detail": err_text[:300],
                                 "data": None
                             }
 
-                        try:
-                            raw_data = json.loads(raw_text)
-                        except (json.JSONDecodeError, Exception) as json_err:
-                            raw_data = raw_text
+            # Update in-memory cache with accumulated catalog items
+            final_data = accumulated_items if accumulated_items else raw_data
+            _cache_data = final_data
+            _cache_time = time.time()
 
-                        # Update in-memory cache
-                        _cache_data = raw_data
-                        _cache_time = time.time()
+            print(f"[1C FETCH COMPLETE] Total accumulated items fetched: {len(accumulated_items)}")
 
-                        return {
-                            "success": True,
-                            "cached": False,
-                            "data": raw_data,
-                            "status_code": status
-                        }
-                    elif status in (401, 403):
-                        err_text = await response.text()
-                        print(f"Response Raw: {err_text[:300]}")
-                        warning_msg = "1C login yoki paroli noto'g'ri (401/403 Basic Auth)"
-                        logger.warning(f"1C Auth Error ({status}) at {active_url}: {warning_msg}")
-                        return {
-                            "success": False,
-                            "error": warning_msg,
-                            "detail": err_text[:300],
-                            "status_code": status,
-                            "data": None
-                        }
-                    elif status == 404:
-                        err_text = await response.text()
-                        print(f"Response Raw: {err_text[:300]}")
-                        warning_msg = "1C HTTP xizmati topilmadi (404 Not Found). Nashr qilingan xizmat yo'lini tekshiring."
-                        logger.warning(f"1C 404 Not Found at {active_url}: {warning_msg}")
-                        return {
-                            "success": False,
-                            "error": warning_msg,
-                            "url": active_url,
-                            "detail": err_text[:300],
-                            "status_code": 404,
-                            "data": None
-                        }
-                    else:
-                        err_text = await response.text()
-                        print(f"Response Raw: {err_text[:300]}")
-                        warning_msg = f"1C serveridan xato javob qaytdi (HTTP {status}): {err_text[:200]}"
-                        logger.warning(f"1C Error ({status}) at {active_url}: {warning_msg}")
-                        return {
-                            "success": False,
-                            "error": warning_msg,
-                            "status_code": status,
-                            "detail": err_text[:300],
-                            "data": None
-                        }
+            return {
+                "success": True,
+                "cached": False,
+                "data": final_data,
+                "status_code": 200
+            }
 
         except aiohttp.ClientConnectorError as e:
             print(f"=== 1C FETCH EXCEPTION ===")
@@ -454,3 +502,4 @@ async def sync_products_from_1c(force_refresh: bool = True) -> dict:
     sync_result["uncategorized_products"] = get_uncategorized_products()
 
     return sync_result
+

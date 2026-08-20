@@ -1605,6 +1605,11 @@ async function submitOrderFinal() {
         }
     } catch (e) {
         console.warn('Could not post order to API, using client fallback', e);
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<span>✅ Buyurtmani tasdiqlash</span>`;
+        }
     }
 
     if (!createdOrder) {
@@ -1629,11 +1634,6 @@ async function submitOrderFinal() {
 
     // Close modal
     closeCheckoutModal();
-
-    if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = `<span>✅ Buyurtmani tasdiqlash</span>`;
-    }
 
     // Update Live Tracking Screen Elements
     const trackingOrderId = document.getElementById('tracking-order-id');
@@ -3015,11 +3015,14 @@ async function bulkAssignCategory(categoryId, productIds = []) {
             await loadProductCounts();
         } else {
             const err = await res.json().catch(() => ({}));
-            showToast(err.detail || "Biriktirishda xatolik yuz berdi", 'error');
+            const errMsg = err.detail || err.error || err.message || "Biriktirishda xatolik yuz berdi";
+            showToast(errMsg, 'error');
         }
     } catch (e) {
         console.error('bulkAssignCategory error:', e);
-        showToast("Server bilan bog'lanishda xatolik!", 'error');
+        showToast(e.message ? `Xatolik: ${e.message}` : "Server bilan bog'lanishda xatolik!", 'error');
+    } finally {
+        await loadUncategorizedProducts();
     }
 }
 

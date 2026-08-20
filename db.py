@@ -214,9 +214,13 @@ async def init_postgres_db():
 def _safe_bg_task(coro):
     """Executes a coroutine in background without failing sync callers."""
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(coro)
+        loop = asyncio.get_running_loop()
+        loop.create_task(coro)
+    except RuntimeError:
+        try:
+            asyncio.run(coro)
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -909,6 +913,9 @@ def sync_1c_products(raw_data: any) -> dict:
 
     uncategorized = [p for p in synced_products if p.get("category_id") is None or p.get("category_id") not in CATEGORIES_DB]
 
+    # Log total upserted count in terminal as required
+    print(f"Total 1C Synced Products: {len(synced_products)}")
+
     # Asynchronously persist synced products to local PostgreSQL database
     _safe_bg_task(_async_persist_synced_products(synced_products))
 
@@ -952,6 +959,7 @@ async def _async_persist_synced_products(products_list: list):
                                 image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                                 updated_at = CURRENT_TIMESTAMP
                         """, str(p.get("sku", "")), p.get("barcode"), p.get("category_id"), str(p.get("name", "")), str(p.get("unit", "dona")), int(p.get("price", 0)), p.get("old_price"), int(p.get("discount_percent", 0)), int(p.get("stock", 0)), p.get("description"), nutrition_json, p.get("photo_file_id"), p.get("image_url"), bool(p.get("is_promo", False)), p.get("recommendation"))
+        print(f"[POSTGRESQL] Successfully persisted {len(products_list)} products to bozorcha_db products table.")
     except Exception as e:
         print(f"[POSTGRESQL] Sync persistence warning: {e}")
 
@@ -997,6 +1005,53 @@ async def query_postgres_product_counts() -> dict:
     except Exception as e:
         print(f"[POSTGRESQL] Error querying product counts: {e}")
     return get_products_counts()
+
+
+async def query_postgres_uncategorized_products(search: str | None = None) -> list[dict]:
+    """Queries PostgreSQL database directly for uncategorized products (where category_id IS NULL or 0)."""
+    pool = await get_pg_pool()
+    if not pool:
+        return get_uncategorized_products(search=search)
+    try:
+        async with pool.acquire() as conn:
+            if search and str(search).strip():
+                q = f"%{str(search).strip().lower()}%"
+                rows = await conn.fetch("""
+                    SELECT * FROM products 
+                    WHERE (category_id IS NULL OR category_id = 0)
+                      AND (LOWER(name) LIKE $1 OR LOWER(sku) LIKE $1 OR LOWER(description) LIKE $1)
+                    ORDER BY id ASC
+                """, q)
+            else:
+                rows = await conn.fetch("""
+                    SELECT * FROM products 
+                    WHERE category_id IS NULL OR category_id = 0
+                    ORDER BY id ASC
+                """)
+            
+            result = []
+            for r in rows:
+                pid = r["id"]
+                result.append({
+                    "id": pid,
+                    "sku": r["sku"] or f"SKU-{pid}",
+                    "barcode": r.get("barcode"),
+                    "category_id": r["category_id"],
+                    "name": r["name"],
+                    "unit": r["unit"] or "dona",
+                    "price": int(r["price"] or 0),
+                    "old_price": r["old_price"],
+                    "discount_percent": r["discount_percent"] or 0,
+                    "stock": r["stock"] or 0,
+                    "description": r["description"] or "",
+                    "photo_file_id": r["photo_file_id"],
+                    "image_url": r["image_url"],
+                    "is_promo": bool(r["is_promo"])
+                })
+            return result
+    except Exception as e:
+        print(f"[POSTGRESQL] Error querying uncategorized products: {e}")
+        return get_uncategorized_products(search=search)
 
 
 def get_uncategorized_products(search: str | None = None) -> list[dict]:
