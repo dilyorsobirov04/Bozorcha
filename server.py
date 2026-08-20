@@ -39,6 +39,10 @@ from db import (
     add_category,
     delete_category,
     create_order,
+    create_postgres_order,
+    query_postgres_orders,
+    query_postgres_order_by_id,
+    update_postgres_order_status,
     get_orders,
     get_order,
     update_order_status,
@@ -960,7 +964,15 @@ def create_webapp_server() -> FastAPI:
                 qty = entry.get("qty", 1)
                 total_val += int(round(price * weight * qty))
 
-        order = create_order(
+        # Explicit user_id (Telegram User ID)
+        raw_user_id = data.get("user_id") or user_info.get("id") or data.get("telegram_id") or data.get("userId")
+        try:
+            user_id = int(raw_user_id) if raw_user_id is not None else None
+        except (ValueError, TypeError):
+            user_id = None
+
+        order = await create_postgres_order(
+            user_id=user_id,
             cart=cart,
             total_amount=total_val,
             payment_type=payment_type,
@@ -991,8 +1003,28 @@ def create_webapp_server() -> FastAPI:
         }
 
     @app.get("/api/orders")
-    async def handle_get_orders(limit: int = Query(50, ge=1, le=200)):
-        orders = get_orders(limit=limit)
+    async def handle_get_orders(user_id: Optional[str] = Query(None), limit: int = Query(50, ge=1, le=200)):
+        uid_val = None
+        if user_id is not None:
+            try:
+                uid_val = int(user_id)
+            except ValueError:
+                uid_val = None
+        orders = await query_postgres_orders(user_id=uid_val, limit=limit)
+        return {
+            "success": True,
+            "orders": orders,
+            "total": len(orders)
+        }
+
+    @app.get("/api/orders/user/{user_id}")
+    @app.get("/api/user/{user_id}/orders")
+    async def handle_get_user_orders(user_id: str, limit: int = Query(50, ge=1, le=200)):
+        try:
+            uid_val = int(user_id)
+        except ValueError:
+            uid_val = None
+        orders = await query_postgres_orders(user_id=uid_val, limit=limit)
         return {
             "success": True,
             "orders": orders,
@@ -1001,7 +1033,7 @@ def create_webapp_server() -> FastAPI:
 
     @app.get("/api/orders/{order_id}")
     async def handle_get_order(order_id: str):
-        order = get_order(order_id)
+        order = await query_postgres_order_by_id(order_id)
         if not order:
             raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
         return {
@@ -1042,7 +1074,7 @@ def create_webapp_server() -> FastAPI:
             status_text = "Qabul qilindi"
             s_code = "accepted"
 
-        updated = update_order_status(order_id, status=status_text, status_code=s_code)
+        updated = await update_postgres_order_status(order_id, status=status_text, status_code=s_code)
         if not updated:
             raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
 
@@ -1066,7 +1098,7 @@ def create_webapp_server() -> FastAPI:
         request: Request = None
     ):
         check_admin_authorization(request, user_id)
-        orders = get_orders(limit=limit)
+        orders = await query_postgres_orders(user_id=None, limit=limit)
         return {
             "success": True,
             "orders": orders,

@@ -129,12 +129,22 @@ async def init_postgres_db():
                     user_id BIGINT,
                     items JSONB NOT NULL,
                     total_price BIGINT NOT NULL,
-                    status VARCHAR(64) DEFAULT 'pending',
+                    status VARCHAR(64) DEFAULT 'PENDING',
                     delivery_address TEXT,
                     delivery_location JSONB,
                     contact_phone VARCHAR(64),
                     payment_method VARCHAR(64),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS order_items (
+                    id SERIAL PRIMARY KEY,
+                    order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+                    product_id INTEGER,
+                    product_name VARCHAR(512),
+                    price BIGINT,
+                    quantity INTEGER DEFAULT 1,
+                    total_price BIGINT
                 );
 
                 -- Alter table migrations for backward compatibility
@@ -1056,6 +1066,7 @@ async def _async_persist_synced_products(products_list: list) -> dict:
             print(f"DEBUG: Successfully processed {total_count} products into PostgreSQL. (New: {inserted_count}, Updated: {updated_count})")
             print(f"[POSTGRESQL VERIFICATION] Direct query total products count in bozorcha_db: {total_db_count}")
 
+        print(f"[SYNC] Upserted {total_count} products into Database")
         print(f"[SYNC COMPLETED] Total Fetched: {total_count}, Saved/Updated in DB: {total_count}")
         return {"inserted": inserted_count, "updated": updated_count, "total": total_count}
     except Exception as e:
@@ -1498,6 +1509,243 @@ def update_order_status(order_id: str | int, status: str, status_code: str | Non
             ORDERS_DB[oid]["status_code"] = status_code
         return ORDERS_DB[oid]
     return None
+
+
+async def create_postgres_order(
+    user_id: Optional[int] = None,
+    cart: dict = None,
+    total_amount: int = 0,
+    payment_type: str = "cash",
+    address: str = "Mini App orqali buyurtma",
+    delivery_time: str = "15 - 25 daqiqa",
+    user_info: dict = None,
+    full_name: str = None,
+    phone_number: str = None,
+    location_lat: float = None,
+    location_lng: float = None
+) -> dict:
+    """
+    Saves an order to PostgreSQL using an explicit transaction across orders and order_items tables.
+    Also syncs in-memory ORDERS_DB for zero-downtime fallback.
+    """
+    u_info = user_info or {}
+    clean_payment_type = "click" if str(payment_type).lower() == "click" else "cash"
+    resolved_name = full_name or u_info.get("full_name") or f"{u_info.get('first_name', '')} {u_info.get('last_name', '')}".strip() or u_info.get("name") or "Mijoz"
+    resolved_phone = phone_number or u_info.get("phone") or u_info.get("phone_number") or "Mavjud emas"
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    order_id_str = None
+    pool = await get_pg_pool()
+
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    cart_json = json.dumps(cart or {})
+                    location_json = json.dumps({"lat": location_lat, "lng": location_lng}) if (location_lat is not None or location_lng is not None) else None
+
+                    row = await conn.fetchrow("""
+                        INSERT INTO orders (
+                            user_id, items, total_price, status, delivery_address,
+                            delivery_location, contact_phone, payment_method, created_at
+                        ) VALUES ($1, $2::jsonb, $3, $4, $5, $6::jsonb, $7, $8, CURRENT_TIMESTAMP)
+                        RETURNING id, created_at
+                    """, user_id, cart_json, int(total_amount), "PENDING", address, location_json, resolved_phone, clean_payment_type)
+
+                    pg_id = row["id"]
+                    order_id_str = str(pg_id)
+                    if row.get("created_at"):
+                        now_str = row["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+
+                    # Insert line items into order_items table
+                    if isinstance(cart, dict):
+                        for key, entry in cart.items():
+                            if not isinstance(entry, dict):
+                                continue
+                            item = entry.get("item") or {}
+                            pid = item.get("id") or entry.get("id")
+                            pname = item.get("name") or entry.get("name") or "Mahsulot"
+                            price = item.get("price") or entry.get("price") or 0
+                            qty = entry.get("qty") or entry.get("count") or 1
+                            item_total = int(round(price * qty))
+                            await conn.execute("""
+                                INSERT INTO order_items (order_id, product_id, product_name, price, quantity, total_price)
+                                VALUES ($1, $2, $3, $4, $5, $6)
+                            """, pg_id, int(pid) if isinstance(pid, (int, str)) and str(pid).isdigit() else None, str(pname), int(price), int(qty), item_total)
+        except Exception as e:
+            print(f"[POSTGRESQL ERROR] Transaction failed while creating order: {e}")
+            print(traceback.format_exc())
+
+    if not order_id_str:
+        order_id_str = str(84000 + len(ORDERS_DB) + 1)
+
+    click_url = generate_click_url(order_id_str, total_amount) if clean_payment_type == "click" else None
+
+    order_record = {
+        "id": order_id_str,
+        "order_id": order_id_str,
+        "user_id": user_id,
+        "cart": cart or {},
+        "total_amount": int(total_amount),
+        "total_price": int(total_amount),
+        "payment_type": clean_payment_type,
+        "payment_method": clean_payment_type,
+        "payment_method_name": "Click / Payme" if clean_payment_type == "click" else "Naqd pul",
+        "status": "PENDING",
+        "status_code": "pending",
+        "address": address,
+        "delivery_address": address,
+        "delivery_time": delivery_time,
+        "full_name": resolved_name,
+        "phone_number": resolved_phone,
+        "location_lat": location_lat,
+        "location_lng": location_lng,
+        "user_info": u_info,
+        "click_url": click_url,
+        "created_at": now_str
+    }
+
+    ORDERS_DB[order_id_str] = order_record
+    print(f"[ORDER CREATED] Saved Order ID: {order_id_str} for User ID: {user_id} in Database")
+
+    return order_record
+
+
+async def query_postgres_orders(user_id: Optional[int] = None, limit: int = 50) -> list[dict]:
+    """
+    Queries orders from PostgreSQL ordered by created_at DESC (including all statuses: PENDING, PROCESSING, COMPLETED, CREATED, etc.).
+    Filters by user_id if provided.
+    """
+    pool = await get_pg_pool()
+    if not pool:
+        return get_orders(limit=limit)
+    try:
+        async with pool.acquire() as conn:
+            if user_id is not None:
+                rows = await conn.fetch("""
+                    SELECT * FROM orders 
+                    WHERE user_id = $1 
+                    ORDER BY created_at DESC, id DESC 
+                    LIMIT $2
+                """, user_id, limit)
+            else:
+                rows = await conn.fetch("""
+                    SELECT * FROM orders 
+                    ORDER BY created_at DESC, id DESC 
+                    LIMIT $1
+                """, limit)
+
+            result = []
+            for r in rows:
+                oid = str(r["id"])
+                items_val = r["items"]
+                if isinstance(items_val, str):
+                    try:
+                        items_val = json.loads(items_val)
+                    except Exception:
+                        items_val = {}
+                elif not isinstance(items_val, dict) and not isinstance(items_val, list):
+                    items_val = {}
+
+                created_at_str = r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if r.get("created_at") else ""
+                status = r["status"] or "PENDING"
+                cached = ORDERS_DB.get(oid) or {}
+
+                result.append({
+                    "id": oid,
+                    "order_id": oid,
+                    "user_id": r["user_id"],
+                    "cart": items_val,
+                    "total_amount": int(r["total_price"] or 0),
+                    "total_price": int(r["total_price"] or 0),
+                    "payment_type": r["payment_method"] or "cash",
+                    "payment_method": r["payment_method"] or "cash",
+                    "payment_method_name": "Click / Payme" if r["payment_method"] == "click" else "Naqd pul",
+                    "status": status,
+                    "status_code": str(status).lower(),
+                    "address": r["delivery_address"] or cached.get("address", ""),
+                    "delivery_address": r["delivery_address"] or cached.get("address", ""),
+                    "delivery_time": cached.get("delivery_time", "15 - 25 daqiqa"),
+                    "full_name": cached.get("full_name") or "Mijoz",
+                    "phone_number": r["contact_phone"] or cached.get("phone_number", "Mavjud emas"),
+                    "user_info": cached.get("user_info") or {},
+                    "click_url": cached.get("click_url"),
+                    "created_at": created_at_str
+                })
+            return result
+    except Exception as e:
+        print(f"[POSTGRESQL] Error querying orders: {e}")
+        return get_orders(limit=limit)
+
+
+async def query_postgres_order_by_id(order_id: str | int) -> dict | None:
+    oid = str(order_id)
+    pool = await get_pg_pool()
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                r = await conn.fetchrow("""
+                    SELECT * FROM orders WHERE id = $1 OR CAST(id AS VARCHAR) = $2
+                """, int(oid) if oid.isdigit() else 0, oid)
+                if r:
+                    items_val = r["items"]
+                    if isinstance(items_val, str):
+                        try:
+                            items_val = json.loads(items_val)
+                        except Exception:
+                            items_val = {}
+                    created_at_str = r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if r.get("created_at") else ""
+                    cached = ORDERS_DB.get(oid) or {}
+                    return {
+                        "id": oid,
+                        "order_id": oid,
+                        "user_id": r["user_id"],
+                        "cart": items_val,
+                        "total_amount": int(r["total_price"] or 0),
+                        "total_price": int(r["total_price"] or 0),
+                        "payment_type": r["payment_method"] or "cash",
+                        "payment_method": r["payment_method"] or "cash",
+                        "payment_method_name": "Click / Payme" if r["payment_method"] == "click" else "Naqd pul",
+                        "status": r["status"] or "PENDING",
+                        "status_code": str(r["status"] or "PENDING").lower(),
+                        "address": r["delivery_address"] or cached.get("address", ""),
+                        "delivery_address": r["delivery_address"] or cached.get("address", ""),
+                        "delivery_time": cached.get("delivery_time", "15 - 25 daqiqa"),
+                        "full_name": cached.get("full_name") or "Mijoz",
+                        "phone_number": r["contact_phone"] or cached.get("phone_number", "Mavjud emas"),
+                        "user_info": cached.get("user_info") or {},
+                        "click_url": cached.get("click_url"),
+                        "created_at": created_at_str
+                    }
+        except Exception as e:
+            print(f"[POSTGRESQL] Error querying order {order_id}: {e}")
+
+    return get_order(order_id)
+
+
+async def update_postgres_order_status(order_id: str | int, status: str, status_code: str | None = None) -> dict | None:
+    oid = str(order_id)
+    pool = await get_pg_pool()
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute("""
+                    UPDATE orders SET status = $1 WHERE id = $2 OR CAST(id AS VARCHAR) = $3
+                """, status, int(oid) if oid.isdigit() else 0, oid)
+        except Exception as e:
+            print(f"[POSTGRESQL ERROR] Failed to update order status: {e}")
+
+    if oid in ORDERS_DB:
+        ORDERS_DB[oid]["status"] = status
+        if status_code:
+            ORDERS_DB[oid]["status_code"] = status_code
+        return ORDERS_DB[oid]
+    return {
+        "id": oid,
+        "order_id": oid,
+        "status": status,
+        "status_code": status_code or str(status).lower()
+    }
 
 
 def get_statistics() -> dict:
