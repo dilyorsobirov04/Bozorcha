@@ -174,21 +174,22 @@ async def init_postgres_db():
                 k = r["key"]
                 v = r["value"]
                 SYSTEM_SETTINGS_DB[k] = v
-                if k == "API_1C_URL":
+                if k in ("API_1C_URL", "ONEC_API_URL"):
                     SYSTEM_SETTINGS_DB["api_1c_url"] = v
+                    SYSTEM_SETTINGS_DB["ONEC_API_URL"] = v
 
-            # Ensure API_1C_URL is clean and persisted with active target URL
+            # Fallback default URL ONLY if no URL exists in system_settings
             target_url = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
-            init_url = SYSTEM_SETTINGS_DB.get("api_1c_url", "").strip()
-            if not init_url or "abcd-123" in init_url or "xxxx" in init_url or "127.0.0.1" in init_url or "localhost" in init_url:
+            init_url = SYSTEM_SETTINGS_DB.get("ONEC_API_URL") or SYSTEM_SETTINGS_DB.get("api_1c_url", "").strip()
+            if not init_url:
                 init_url = target_url
-
-            SYSTEM_SETTINGS_DB["api_1c_url"] = init_url
-            await conn.execute("""
-                INSERT INTO system_settings (key, value, updated_at)
-                VALUES ('API_1C_URL', $1, CURRENT_TIMESTAMP)
-                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
-            """, init_url)
+                SYSTEM_SETTINGS_DB["api_1c_url"] = init_url
+                SYSTEM_SETTINGS_DB["ONEC_API_URL"] = init_url
+                await conn.execute("""
+                    INSERT INTO system_settings (key, value, updated_at)
+                    VALUES ('ONEC_API_URL', $1, CURRENT_TIMESTAMP)
+                    ON CONFLICT (key) DO NOTHING
+                """, init_url)
 
             # Load all products from PostgreSQL database into memory
             rows = await conn.fetch("SELECT * FROM products ORDER BY id ASC")
@@ -278,7 +279,9 @@ def update_1c_system_settings(api_url: str = None, api_user: str = None, api_pas
     if api_url is not None:
         clean_url = str(api_url).strip()
         SYSTEM_SETTINGS_DB["api_1c_url"] = clean_url
+        SYSTEM_SETTINGS_DB["ONEC_API_URL"] = clean_url
         set_system_setting("api_1c_url", clean_url)
+        set_system_setting("ONEC_API_URL", clean_url)
     if api_user is not None:
         SYSTEM_SETTINGS_DB["api_1c_user"] = str(api_user).strip()
         set_system_setting("api_1c_user", str(api_user).strip())

@@ -136,11 +136,36 @@ def clean_1c_url(raw_url: Optional[str]) -> str:
 
 
 def get_active_1c_url() -> str:
-    """Returns currently active 1C URL from dynamic system settings, defaulting to active target URL."""
-    val = get_system_setting("api_1c_url", DEFAULT_1C_URL)
-    cleaned = clean_1c_url(val)
+    """
+    Returns currently active 1C URL from dynamic system settings / Database FIRST.
+    Fallbacks to process.env.ONEC_API_URL / API_1C_URL.
+    Sanitizes trailing slashes and ensures /GetTovarList suffix.
+    """
+    # 1. Fetch from DB settings first
+    db_val = (
+        get_system_setting("ONEC_API_URL") or
+        get_system_setting("api_1c_url") or
+        get_system_setting("1c_endpoint") or
+        get_system_setting("endpoint_url")
+    )
+    
+    # 2. Fallback to env variable ONEC_API_URL / API_1C_URL
+    env_val = os.getenv("ONEC_API_URL", "").strip() or os.getenv("API_1C_URL", "").strip()
+
+    raw_url = db_val or env_val or DEFAULT_1C_URL
+    cleaned = clean_1c_url(raw_url)
+
     if not cleaned or "abcd-123" in cleaned or "xxxx" in cleaned:
-        return DEFAULT_1C_URL
+        cleaned = clean_1c_url(DEFAULT_1C_URL)
+
+    # 3. Clean trailing slashes
+    cleaned = cleaned.rstrip('/')
+
+    # 4. Ensure URL ends with /GetTovarList
+    if not cleaned.endswith("/GetTovarList"):
+        cleaned = f"{cleaned}/GetTovarList"
+
+    print(f"[1C CRITICAL DEBUG] Making HTTP request to EXACT URL: {cleaned}", flush=True)
     return cleaned
 
 
