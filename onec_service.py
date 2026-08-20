@@ -250,9 +250,12 @@ def clear_1c_cache():
 
 def _extract_items_list(raw_data: Any) -> list:
     """Helper to extract list of product items from various 1C JSON/dict structures."""
-    if isinstance(raw_data, dict):
+    if isinstance(raw_data, list):
+        print(f"DEBUG 1C RAW RESPONSE TYPE: list, LEN: {len(raw_data)}")
+        return raw_data
+    elif isinstance(raw_data, dict):
         print(f"DEBUG 1C RAW RESPONSE KEYS: {list(raw_data.keys())}")
-        for key in ["data", "items", "products", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
+        for key in ["Tovary", "GetTovarList", "Tovari", "tovary", "tovari", "data", "items", "products", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
             if key in raw_data and isinstance(raw_data[key], list):
                 print(f"DEBUG: Found product array under key '{key}' with {len(raw_data[key])} items.")
                 return raw_data[key]
@@ -267,9 +270,8 @@ def _extract_items_list(raw_data: Any) -> list:
         if any(k in raw_data for k in ["id", "sku", "SKU", "Код", "код", "Name", "name", "Наименование"]):
             print("DEBUG: Response dict represents a single product item.")
             return [raw_data]
-    elif isinstance(raw_data, list):
-        print(f"DEBUG 1C RAW RESPONSE TYPE: list, LEN: {len(raw_data)}")
-        return raw_data
+    elif isinstance(raw_data, str):
+        print(f"DEBUG 1C RAW RESPONSE TYPE: str (len {len(raw_data)})")
     else:
         print(f"DEBUG 1C RAW RESPONSE TYPE: {type(raw_data)}")
 
@@ -319,7 +321,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
     # 4. Mandatory Headers (Ngrok bypass & JSON accept)
     headers = {
-        "ngrok-skip-browser-warning": "true",
+        "ngrok-skip-browser-warning": "69420",
         "User-Agent": "Mozilla/5.0",
         "Accept": "application/json",
         "Bypass-Tunnel-Reminder": "true",
@@ -367,7 +369,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         raw_text = await response.text()
 
                         print("=== 1C RAW RESPONSE DEBUG START ===")
-                        print(f"HTTP Status: {status}")
+                        print(f"DEBUG [1C Response Status]: {status}")
                         print(f"Response Text: {raw_text[:1000]}")
                         print("=== 1C RAW RESPONSE DEBUG END ===")
 
@@ -388,7 +390,10 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 raw_data = raw_text
 
                             page_items = _extract_items_list(raw_data)
-                            print(f"DEBUG: Parsed {len(page_items)} items from Page {page} response.")
+                            print(f"DEBUG [Parsed Items Count]: {len(page_items)}")
+                            if len(page_items) > 0:
+                                sample_str = str(page_items[0])[:200].encode('ascii', errors='replace').decode('ascii')
+                                print(f"DEBUG [Sample First Item]: {sample_str}")
 
                             if not page_items:
                                 # 0 items returned -> catalog end reached
@@ -443,14 +448,14 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
             # Check if 0 items total were parsed
             if len(accumulated_items) == 0:
-                err_msg = "1C dan tovarlar kela olmadi. Terminal loglarini tekshiring!"
+                err_msg = "1C dan tovar olinmadi. 1C yoki Ngrok sozlamalarini tekshiring."
                 print(f"DEBUG 1C FETCH ERROR: {err_msg} (0 items parsed)")
                 logger.warning(err_msg)
                 return {
                     "success": False,
                     "error": err_msg,
                     "message": err_msg,
-                    "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar). Terminal loglarini tekshiring!",
+                    "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi. 1C yoki Ngrok sozlamalarini tekshiring.",
                     "status_code": 400,
                     "data": None
                 }

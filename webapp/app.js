@@ -3092,7 +3092,7 @@ async function trigger1CSync(btn = null) {
                             const hasError = statusData.error || lastRes.success === false || (lastRes.synced_count != null && lastRes.synced_count === 0);
 
                             if (hasError) {
-                                const errMsg = statusData.error || lastRes.error || lastRes.message || "1C dan tovarlar kela olmadi. Terminal loglarini tekshiring!";
+                                const errMsg = statusData.error || lastRes.error || lastRes.message || "1C dan tovar olinmadi. 1C yoki Ngrok sozlamalarini tekshiring.";
                                 showToast(errMsg, 'error');
                             } else {
                                 const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count || 0);

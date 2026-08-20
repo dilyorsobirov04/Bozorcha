@@ -718,7 +718,7 @@ def sync_1c_products(raw_data: any) -> dict:
     elif isinstance(raw_data, dict):
         print(f"DEBUG 1C RAW RESPONSE KEYS: {list(raw_data.keys())}")
         found_list = False
-        for key in ["data", "products", "items", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
+        for key in ["Tovary", "GetTovarList", "Tovari", "tovary", "tovari", "data", "products", "items", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
             if key in raw_data and isinstance(raw_data[key], list):
                 items_to_process = raw_data[key]
                 found_list = True
@@ -770,17 +770,20 @@ def sync_1c_products(raw_data: any) -> dict:
     synced_products = []
     invalid_count = 0
 
-    print(f"DEBUG: Parsed {len(items_to_process)} items from 1C response.")
+    print(f"DEBUG [Parsed Items Count]: {len(items_to_process)}")
+    if len(items_to_process) > 0:
+        sample_str = str(items_to_process[0])[:200].encode('ascii', errors='replace').decode('ascii')
+        print(f"DEBUG [Sample First Item]: {sample_str}")
 
     if len(items_to_process) == 0:
-        err_msg = "1C dan tovarlar kela olmadi. Terminal loglarini tekshiring!"
+        err_msg = "1C dan tovar olinmadi. 1C yoki Ngrok sozlamalarini tekshiring."
         print(f"DEBUG SYNC ERROR: {err_msg} (0 items to process)")
         return {
             "success": False,
             "count": 0,
             "message": err_msg,
             "error": err_msg,
-            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar). Terminal loglarini tekshiring!",
+            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi. 1C yoki Ngrok sozlamalarini tekshiring.",
             "total_received": 0,
             "synced_count": 0,
             "invalid_count": 0,
@@ -941,14 +944,14 @@ def sync_1c_products(raw_data: any) -> dict:
             synced_products.append(new_product)
 
     if len(synced_products) == 0:
-        err_msg = "1C dan tovarlar kela olmadi. Terminal loglarini tekshiring!"
+        err_msg = "1C dan tovar olinmadi. 1C yoki Ngrok sozlamalarini tekshiring."
         print(f"DEBUG SYNC ERROR: {err_msg} (0 products synced out of {len(items_to_process)} items)")
         return {
             "success": False,
             "count": 0,
             "message": err_msg,
             "error": err_msg,
-            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar). Terminal loglarini tekshiring!",
+            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi. 1C yoki Ngrok sozlamalarini tekshiring.",
             "total_received": len(items_to_process),
             "synced_count": 0,
             "invalid_count": invalid_count,
