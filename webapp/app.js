@@ -2532,6 +2532,45 @@ async function load1CConfigStatus() {
                 badgeEl.className = 'onec-badge ok';
                 badgeEl.innerText = '🟢 Faol (Ngrok 1C)';
             }
+
+            if (data.is_syncing && !_syncPollingInterval) {
+                const syncBtn = document.getElementById('uncat-sync-1c-btn');
+                if (syncBtn) {
+                    syncBtn.disabled = true;
+                    syncBtn.classList.add('loading');
+                    syncBtn.innerHTML = `<span class="uncat-btn-spinner" style="margin-right: 6px;"></span><span>Sinxronlanmoqda...</span>`;
+                }
+                _syncPollingInterval = setInterval(async () => {
+                    await loadProductCounts();
+                    await loadUncategorizedProducts();
+                    try {
+                        const statusRes = await fetch(`/api/admin/sync-1c/status?user_id=${ALLOWED_ADMIN_ID}`, {
+                            headers: { 'X-Admin-Id': String(ALLOWED_ADMIN_ID) }
+                        });
+                        if (statusRes.ok) {
+                            const statusData = await statusRes.json();
+                            if (statusData.is_syncing === false) {
+                                clearInterval(_syncPollingInterval);
+                                _syncPollingInterval = null;
+                                const currentBtn = document.getElementById('uncat-sync-1c-btn');
+                                if (currentBtn) {
+                                    currentBtn.disabled = false;
+                                    currentBtn.classList.remove('loading');
+                                    currentBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
+                                }
+                                const lastRes = statusData.last_result || {};
+                                const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count || 0);
+                                showToast(`${count} ta 1C tovari muvaffaqiyatli sinxronizatsiya qilindi! 🎉`, 'success');
+                                await loadProductCounts();
+                                await loadUncategorizedProducts();
+                                await loadProducts();
+                            }
+                        }
+                    } catch (err) {
+                        console.warn("Status polling warning:", err);
+                    }
+                }, 3000);
+            }
         }
     } catch (e) {
         console.warn('Failed to load 1C config status:', e);

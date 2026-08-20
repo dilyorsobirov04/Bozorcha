@@ -20,7 +20,8 @@ from db import (
     get_system_setting,
     set_system_setting,
     get_1c_system_settings,
-    update_1c_system_settings
+    update_1c_system_settings,
+    _async_persist_synced_products
 )
 
 logger = logging.getLogger(__name__)
@@ -532,6 +533,11 @@ async def sync_products_from_1c(force_refresh: bool = True) -> dict:
     if "cache_age" in fetch_res:
         sync_result["cache_age"] = fetch_res["cache_age"]
 
+    # Await database persistence so is_syncing remains True during PostgreSQL batch updates
+    products_to_persist = sync_result.get("products") or []
+    if products_to_persist:
+        await _async_persist_synced_products(products_to_persist)
+
     # Instantly include fresh uncategorized products list
     sync_result["uncategorized_products"] = get_uncategorized_products()
 
@@ -575,6 +581,9 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
             print("[BACKGROUND 1C SYNC] Task started in background...")
             if raw_payload is not None:
                 res = sync_1c_products(raw_payload)
+                products_to_persist = res.get("products") or []
+                if products_to_persist:
+                    await _async_persist_synced_products(products_to_persist)
             else:
                 res = await sync_products_from_1c(force_refresh=force_refresh)
             _1c_sync_state["last_result"] = res

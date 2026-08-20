@@ -28,7 +28,7 @@ SYSTEM_SETTINGS_DB = {
     "api_1c_pass": os.getenv("API_1C_PASS", "123").strip(),
     "cache_ttl": int(os.getenv("CACHE_TTL", "300")),
     "page_size": int(os.getenv("PAGE_SIZE", "10")),
-    "api_1c_timeout": int(os.getenv("API_1C_TIMEOUT", "20")),
+    "api_1c_timeout": int(os.getenv("API_1C_TIMEOUT", "300")),
 }
 
 
@@ -258,7 +258,7 @@ def get_1c_system_settings() -> dict:
         "api_user": SYSTEM_SETTINGS_DB.get("api_1c_user", "mobiles"),
         "has_password": bool(SYSTEM_SETTINGS_DB.get("api_1c_pass")),
         "cache_ttl": SYSTEM_SETTINGS_DB.get("cache_ttl", 300),
-        "timeout": SYSTEM_SETTINGS_DB.get("api_1c_timeout", 20)
+        "timeout": SYSTEM_SETTINGS_DB.get("api_1c_timeout", 300)
     }
 
 
@@ -1033,6 +1033,7 @@ async def _async_persist_synced_products(products_list: list):
                         image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                         updated_at = CURRENT_TIMESTAMP
                 """, args_list)
+                await asyncio.sleep(0.01)
 
             # Query PostgreSQL table directly after upserting to verify total count
             db_row = await conn.fetchrow("SELECT COUNT(*) as cnt FROM products")
