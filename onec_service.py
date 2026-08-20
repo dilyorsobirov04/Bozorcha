@@ -253,55 +253,41 @@ def clear_1c_cache():
 def _extract_items_list(data: Any) -> list:
     """Helper to extract list of product items from various 1C JSON/dict structures."""
     if isinstance(data, list):
-        print(f"DEBUG 1C RAW RESPONSE TYPE: list, LEN: {len(data)}")
+        print(f"DEBUG 1C RAW RESPONSE TYPE: list, LEN: {len(data)}", flush=True)
         return data
     elif isinstance(data, dict):
-        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(data.keys())}")
-        items = data if isinstance(data, list) else (
-            data.get("items") or
-            data.get("Tovary") or
-            data.get("data") or
-            data.get("products") or
-            data.get("GetTovarList") or
-            data.get("Tovari") or
-            data.get("tovary") or
-            data.get("goods") or
-            data.get("rows") or
-            data.get("payload") or
-            data.get("result") or
-            data.get("value") or
-            data.get("content") or
-            data.get("list") or
-            data.get("Товары") or
-            data.get("товары") or
-            data.get("Номенклатура") or
-            data.get("номенклатура") or
-            data.get("Catalog") or
-            data.get("catalog") or
-            data.get("Товар") or
-            data.get("товар") or
-            []
+        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(data.keys())}", flush=True)
+        
+        # Check "data" key first as top priority, followed by other common keys
+        items = (
+            data.get("data") if isinstance(data.get("data"), list) else None
         )
-        if isinstance(items, list) and len(items) > 0:
-            print(f"DEBUG: Found {len(items)} product items under dictionary key.")
+        if items is None:
+            for key in ["Tovary", "items", "products", "GetTovarList", "Tovari", "tovary", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
+                if key in data and isinstance(data[key], list):
+                    items = data[key]
+                    break
+
+        if items is not None:
+            print(f"DEBUG: Found {len(items)} product items under dictionary key.", flush=True)
             return items
 
         for key, val in data.items():
-            if isinstance(val, list) and len(val) > 0:
-                print(f"DEBUG: Found product array under dynamic key '{key}' with {len(val)} items.")
+            if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+                print(f"DEBUG: Found product array under dynamic key '{key}' with {len(val)} items.", flush=True)
                 return val
 
         if any(k in data for k in ["id", "sku", "SKU", "Код", "код", "Name", "name", "Наименование"]):
-            print("DEBUG: Response dict represents a single product item.")
+            print("DEBUG: Response dict represents a single product item.", flush=True)
             return [data]
     elif isinstance(data, str):
-        trimmed = data.strip()
+        trimmed = data.strip().lstrip('\ufeff')
         if trimmed.startswith("{") or trimmed.startswith("["):
             try:
                 parsed = json.loads(trimmed)
                 return _extract_items_list(parsed)
             except Exception as e:
-                print("1C JSON parse error in _extract_items_list:", e)
+                print("1C JSON parse error in _extract_items_list:", e, flush=True)
 
     return []
 

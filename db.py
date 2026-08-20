@@ -727,13 +727,13 @@ def sync_1c_products(raw_data: any) -> dict:
     if isinstance(raw_data, list):
         items_to_process = raw_data
     elif isinstance(raw_data, dict):
-        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(raw_data.keys())}")
+        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(raw_data.keys())}", flush=True)
         found_list = False
-        for key in ["Tovary", "GetTovarList", "Tovari", "tovary", "tovari", "data", "products", "items", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
+        for key in ["data", "Tovary", "items", "products", "GetTovarList", "Tovari", "tovary", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
             if key in raw_data and isinstance(raw_data[key], list):
                 items_to_process = raw_data[key]
                 found_list = True
-                print(f"DEBUG: Found product array under key '{key}' with {len(items_to_process)} items.")
+                print(f"DEBUG: Found product array under key '{key}' with {len(items_to_process)} items.", flush=True)
                 break
         if not found_list:
             for k, val in raw_data.items():
