@@ -3026,6 +3026,8 @@ async function bulkAssignCategory(categoryId, productIds = []) {
     }
 }
 
+let _syncPollingInterval = null;
+
 async function trigger1CSync(btn = null) {
     if (!isCurrentUserAdmin()) {
         showToast('Ruxsat berilmadi: Siz admin emassiz ⛔️', 'error');
@@ -3059,26 +3061,44 @@ async function trigger1CSync(btn = null) {
 
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success) {
-            clearAllToasts();
-            const syncedCount = data.synced_count != null ? data.synced_count : (data.products ? data.products.length : 0);
-            if (syncedCount > 0) {
-                showToast("1C tovarlari muvaffaqiyatli yuklandi!", 'success');
-            } else {
-                showToast("1C serveri bilan aloqa o'rnatildi, lekin yangi tovarlar topilmadi.", 'info');
+            showToast("Sinxronlash fonda boshlandi! 🚀", 'success');
+
+            if (_syncPollingInterval) {
+                clearInterval(_syncPollingInterval);
             }
 
-            // Instantly render fresh uncategorized items from sync response
-            if (data.uncategorized_products && Array.isArray(data.uncategorized_products)) {
-                uncategorizedProducts = data.uncategorized_products;
-                renderUncategorizedProducts();
-                const countEl = document.getElementById('admin-uncategorized-count');
-                const headerCountEl = document.getElementById('uncategorized-header-count');
-                if (countEl) countEl.innerText = uncategorizedProducts.length;
-                if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
-            }
-            await loadUncategorizedProducts();
-            await loadProducts();
-            await loadProductCounts();
+            // Poll counts and status every 3 seconds while background job runs
+            _syncPollingInterval = setInterval(async () => {
+                await loadProductCounts();
+                await loadUncategorizedProducts();
+
+                try {
+                    const statusRes = await fetch(`/api/admin/sync-1c/status?user_id=${ALLOWED_ADMIN_ID}`, {
+                        headers: { 'X-Admin-Id': String(ALLOWED_ADMIN_ID) }
+                    });
+                    if (statusRes.ok) {
+                        const statusData = await statusRes.json();
+                        if (statusData.is_syncing === false) {
+                            clearInterval(_syncPollingInterval);
+                            _syncPollingInterval = null;
+
+                            if (syncBtn) {
+                                syncBtn.disabled = false;
+                                syncBtn.classList.remove('loading');
+                                syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
+                            }
+
+                            showToast("1C Sinxronlash muvaffaqiyatli yakunlandi! 🎉", 'success');
+                            await loadProductCounts();
+                            await loadUncategorizedProducts();
+                            await loadProducts();
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Status polling warning:", err);
+                }
+            }, 3000);
+
             return;
         }
 
@@ -3092,17 +3112,21 @@ async function trigger1CSync(btn = null) {
             errorMsg = "1C serveriga ulanib bo'lmadi. Ngrok va 1C ishlayotganini tekshiring.";
         }
         showToast(errorMsg, 'error');
-        return;
-    } catch (e) {
-        console.error('trigger1CSync error:', e);
-        clearAllToasts();
-        showToast(e.message ? `Xatolik: ${e.message}` : "1C serveriga ulanib bo'lmadi", 'error');
-    } finally {
         if (syncBtn) {
             syncBtn.disabled = false;
             syncBtn.classList.remove('loading');
             syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
         }
+    } catch (e) {
+        console.error('trigger1CSync error:', e);
+        clearAllToasts();
+        showToast(e.message ? `Xatolik: ${e.message}` : "1C serveriga ulanib bo'lmadi", 'error');
+        if (syncBtn) {
+            syncBtn.disabled = false;
+            syncBtn.classList.remove('loading');
+            syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
+        }
+    } finally {
         await load1CConfigStatus();
     }
 }

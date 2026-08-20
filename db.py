@@ -933,7 +933,7 @@ def sync_1c_products(raw_data: any) -> dict:
 
 
 async def _async_persist_synced_products(products_list: list):
-    """Persists synced products to the local PostgreSQL database in efficient batches."""
+    """Persists synced products to the local PostgreSQL database in efficient 500-item chunks using executemany."""
     try:
         pool = await get_pg_pool()
         if not pool or not products_list:
@@ -943,23 +943,40 @@ async def _async_persist_synced_products(products_list: list):
             batch_size = 500
             for i in range(0, len(products_list), batch_size):
                 chunk = products_list[i:i + batch_size]
-                async with conn.transaction():
-                    for p in chunk:
-                        nutrition_json = json.dumps(p.get("nutrition") or {})
-                        await conn.execute("""
-                            INSERT INTO products (sku, barcode, category_id, name, unit, price, old_price, discount_percent, stock, description, nutrition, photo_file_id, image_url, is_promo, recommendation)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
-                            ON CONFLICT (sku) DO UPDATE SET
-                                name = EXCLUDED.name,
-                                price = EXCLUDED.price,
-                                stock = EXCLUDED.stock,
-                                unit = EXCLUDED.unit,
-                                barcode = COALESCE(EXCLUDED.barcode, products.barcode),
-                                description = COALESCE(EXCLUDED.description, products.description),
-                                image_url = COALESCE(EXCLUDED.image_url, products.image_url),
-                                updated_at = CURRENT_TIMESTAMP
-                        """, str(p.get("sku", "")), p.get("barcode"), p.get("category_id"), str(p.get("name", "")), str(p.get("unit", "dona")), int(p.get("price", 0)), p.get("old_price"), int(p.get("discount_percent", 0)), int(p.get("stock", 0)), p.get("description"), nutrition_json, p.get("photo_file_id"), p.get("image_url"), bool(p.get("is_promo", False)), p.get("recommendation"))
-        print(f"[POSTGRESQL] Successfully persisted {len(products_list)} products to bozorcha_db products table.")
+                args_list = []
+                for p in chunk:
+                    nutrition_json = json.dumps(p.get("nutrition") or {})
+                    args_list.append((
+                        str(p.get("sku", "")),
+                        p.get("barcode"),
+                        p.get("category_id"),
+                        str(p.get("name", "")),
+                        str(p.get("unit", "dona")),
+                        int(p.get("price", 0)),
+                        p.get("old_price"),
+                        int(p.get("discount_percent", 0)),
+                        int(p.get("stock", 0)),
+                        p.get("description"),
+                        nutrition_json,
+                        p.get("photo_file_id"),
+                        p.get("image_url"),
+                        bool(p.get("is_promo", False)),
+                        p.get("recommendation")
+                    ))
+                await conn.executemany("""
+                    INSERT INTO products (sku, barcode, category_id, name, unit, price, old_price, discount_percent, stock, description, nutrition, photo_file_id, image_url, is_promo, recommendation)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
+                    ON CONFLICT (sku) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        price = EXCLUDED.price,
+                        stock = EXCLUDED.stock,
+                        unit = EXCLUDED.unit,
+                        barcode = COALESCE(EXCLUDED.barcode, products.barcode),
+                        description = COALESCE(EXCLUDED.description, products.description),
+                        image_url = COALESCE(EXCLUDED.image_url, products.image_url),
+                        updated_at = CURRENT_TIMESTAMP
+                """, args_list)
+        print(f"[POSTGRESQL] Successfully persisted {len(products_list)} products in 500-item chunks to bozorcha_db products table.")
     except Exception as e:
         print(f"[POSTGRESQL] Sync persistence warning: {e}")
 

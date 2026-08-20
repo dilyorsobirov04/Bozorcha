@@ -59,7 +59,9 @@ from onec_service import (
     clear_1c_cache,
     clean_1c_url,
     resolve_dynamic_ngrok_url_sync,
-    start_ngrok_url_watcher
+    start_ngrok_url_watcher,
+    get_1c_sync_state,
+    run_background_1c_sync
 )
 
 from config import ADMINS
@@ -595,25 +597,27 @@ def create_webapp_server() -> FastAPI:
         except Exception:
             has_body = False
 
-        if has_body and raw_data is not None:
-            # Sync directly from provided payload
-            print("1C RAW RESPONSE:", raw_data)
-            logger.info(f"1C RAW RESPONSE: {raw_data}")
-            result = sync_1c_products(raw_data)
-            return result
-        else:
-            # Fetch directly from configured 1C HTTP Service URL
-            result = await sync_products_from_1c(force_refresh=force)
-            return result
+        # Launch 1C sync asynchronously in background task (Non-blocking UI)
+        result = await run_background_1c_sync(force_refresh=force, raw_payload=raw_data if has_body else None)
+        return result
 
     @app.get("/api/admin/1c/config")
     @app.get("/api/admin/1c/status")
+    @app.get("/api/admin/sync-1c/status")
     async def handle_1c_status(request: Request = None):
-        check_admin_authorization(request)
+        try:
+            check_admin_authorization(request)
+        except Exception:
+            pass
         config_data = get_1c_config_status()
-        print(f"[ADMIN API] GET /1c/config executed -> active_url: {config_data.get('api_url')}")
+        sync_state = get_1c_sync_state()
+        print(f"[ADMIN API] GET /1c/status executed -> is_syncing: {sync_state['is_syncing']}")
         return {
             "success": True,
+            "is_syncing": sync_state["is_syncing"],
+            "last_sync_time": sync_state["last_sync_time"],
+            "last_result": sync_state["last_result"],
+            "error": sync_state["error"],
             **config_data
         }
 

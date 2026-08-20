@@ -503,3 +503,61 @@ async def sync_products_from_1c(force_refresh: bool = True) -> dict:
 
     return sync_result
 
+
+_1c_sync_state = {
+    "is_syncing": False,
+    "last_sync_time": None,
+    "last_result": None,
+    "error": None
+}
+
+
+def get_1c_sync_state() -> dict:
+    """Returns current active background sync state."""
+    return {
+        "is_syncing": _1c_sync_state["is_syncing"],
+        "last_sync_time": _1c_sync_state["last_sync_time"],
+        "last_result": _1c_sync_state["last_result"],
+        "error": _1c_sync_state["error"]
+    }
+
+
+async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = None) -> dict:
+    """Spawns 1C product fetching & database upsert asynchronously in background."""
+    global _1c_sync_state
+    if _1c_sync_state["is_syncing"]:
+        return {
+            "success": True,
+            "is_syncing": True,
+            "message": "Sinxronlash jarayoni allaqachon fonda ishlamoqda..."
+        }
+
+    _1c_sync_state["is_syncing"] = True
+    _1c_sync_state["error"] = None
+
+    async def _worker():
+        global _1c_sync_state
+        try:
+            print("[BACKGROUND 1C SYNC] Task started in background...")
+            if raw_payload is not None:
+                res = sync_1c_products(raw_payload)
+            else:
+                res = await sync_products_from_1c(force_refresh=force_refresh)
+            _1c_sync_state["last_result"] = res
+            _1c_sync_state["last_sync_time"] = time.time()
+            print(f"[BACKGROUND 1C SYNC] Task finished successfully: {res.get('count', 0)} items synced.")
+        except Exception as e:
+            print(f"[BACKGROUND 1C SYNC ERROR]: {e}")
+            _1c_sync_state["error"] = str(e)
+        finally:
+            _1c_sync_state["is_syncing"] = False
+
+    asyncio.create_task(_worker())
+
+    return {
+        "success": True,
+        "is_syncing": True,
+        "message": "Sinxronlash fonda boshlandi"
+    }
+
+
