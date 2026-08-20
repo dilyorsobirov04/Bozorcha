@@ -349,9 +349,10 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
     # 4. Mandatory Headers (Ngrok bypass & JSON accept)
     headers = {
-        "ngrok-skip-browser-warning": "69420",
-        "User-Agent": "Mozilla/5.0",
+        "ngrok-skip-browser-warning": "true",
+        "User-Agent": "BozorchaBackend/1.0",
         "Accept": "application/json",
+        "Content-Type": "application/json",
         "Bypass-Tunnel-Reminder": "true",
         "X-Requested-With": "XMLHttpRequest"
     }
@@ -396,11 +397,10 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         status = response.status
                         raw_text = await response.text()
 
-                        print("=== 1C RAW RESPONSE DEBUG START ===")
-                        print(f"DEBUG [1C Response Status]: {status}")
-                        print("1C RAW:", raw_text[:300])
-                        print(f"Response Text: {raw_text[:1000]}")
-                        print("=== 1C RAW RESPONSE DEBUG END ===")
+                        print("=== 1C RESPONSE DEBUG ===")
+                        print("Status:", status)
+                        print("Raw Body (first 300 chars):", raw_text[:300])
+                        print("=========================")
 
                         if status == 200:
                             if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
