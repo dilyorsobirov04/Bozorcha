@@ -282,7 +282,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     """
     Asynchronously fetches product catalog from 1C HTTP Service.
     Loops through pages (limit/offset or page=1,2,3...) until 0 items are returned.
-    Sets HTTP Client Timeout to 180 seconds to prevent socket timeouts on large payloads.
+    Sets HTTP Client Timeout to 300 seconds (5 minutes) to prevent socket timeouts on large payloads.
     """
     global _cache_data, _cache_time
 
@@ -290,7 +290,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     active_user = get_active_1c_user()
     active_pass = get_active_1c_pass()
     ttl = int(get_system_setting("cache_ttl", 300))
-    eff_timeout = float(timeout_seconds or get_system_setting("api_1c_timeout", 180.0) or 180.0)
+    eff_timeout = max(300.0, float(timeout_seconds or get_system_setting("api_1c_timeout", 300.0) or 300.0))
 
     # 1. Check in-memory cache if not forcing refresh
     now = time.time()
@@ -328,8 +328,8 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
         "X-Requested-With": "XMLHttpRequest"
     }
 
-    # Set HTTP Client Timeout to 180 seconds or eff_timeout
-    timeout = aiohttp.ClientTimeout(total=eff_timeout, sock_read=eff_timeout, connect=30.0)
+    # Set HTTP Client Timeout to 300 seconds (5 minutes)
+    timeout = aiohttp.ClientTimeout(total=eff_timeout, sock_read=eff_timeout, connect=60.0)
     connector = aiohttp.TCPConnector(ssl=False)
 
     async with _cache_lock:
@@ -594,7 +594,7 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
     return {
         "success": True,
         "is_syncing": True,
-        "message": "Sinxronlash fonda boshlandi"
+        "message": "1C bilan sinxronlash fonda boshlandi. Bu bir oz vaqt olishi mumkin."
     }
 
 
