@@ -607,31 +607,50 @@ def create_webapp_server() -> FastAPI:
     @app.get("/api/admin/1c/status")
     async def handle_1c_status(request: Request = None):
         check_admin_authorization(request)
+        config_data = get_1c_config_status()
+        print(f"[ADMIN API] GET /1c/config executed -> active_url: {config_data.get('api_url')}")
         return {
             "success": True,
-            **get_1c_config_status()
+            **config_data
         }
 
+    @app.post("/api/admin/settings")
+    @app.put("/api/admin/settings")
     @app.post("/api/admin/1c/config")
     @app.put("/api/admin/1c/config")
     async def handle_update_1c_config(request: Request):
         check_admin_authorization(request)
         try:
             body = await request.json()
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON body")
+            if not isinstance(body, dict):
+                raise ValueError("JSON obyekt bo'lishi kerak")
+        except Exception as e:
+            print(f"[ADMIN API] POST /settings error parsing JSON: {e}")
+            raise HTTPException(status_code=400, detail="Noto'g'ri JSON formati yuborildi")
 
-        api_url = body.get("api_url") if "api_url" in body else body.get("url")
+        api_url = (
+            body.get("1c_endpoint") or
+            body.get("api_url") or
+            body.get("url") or
+            body.get("endpoint")
+        )
         api_user = body.get("api_user") if "api_user" in body else body.get("user")
         api_pass = body.get("api_pass") if "api_pass" in body else body.get("password")
 
-        if api_url is None:
-            raise HTTPException(status_code=400, detail="api_url parametri talab qilinadi")
+        if not api_url or not str(api_url).strip():
+            raise HTTPException(status_code=400, detail="1C URL (1c_endpoint yoki api_url) parametri talab qilinadi")
 
-        clean_url = clean_1c_url(api_url)
+        clean_url = clean_1c_url(str(api_url).strip())
+        if not clean_url or not clean_url.startswith(("http://", "https://")):
+            raise HTTPException(status_code=400, detail="Yaroqsiz URL formati. URL 'http://' yoki 'https://' bilan boshlanishi kerak.")
+
         updated_config = update_1c_config(api_url=clean_url, api_user=api_user, api_pass=api_pass)
+        print(f"[ADMIN API] POST /settings received URL: {clean_url}")
+
         return {
             "success": True,
+            "endpoint": clean_url,
+            "api_url": clean_url,
             "message": "1C URL muvaffaqiyatli saqlandi!",
             **updated_config
         }
@@ -644,18 +663,35 @@ def create_webapp_server() -> FastAPI:
     ):
         check_admin_authorization(request)
         items = get_uncategorized_products(search=search)
+        print(f"[ADMIN API] GET /products/uncategorized executed -> found {len(items)} items")
         return {
             "success": True,
             "total": len(items),
             "products": items
         }
 
+    @app.get("/api/admin/product-stats")
     @app.get("/api/admin/products/counts")
     @app.get("/api/products/counts")
     async def handle_get_products_counts():
-        counts = await query_postgres_product_counts()
+        try:
+            counts = await query_postgres_product_counts()
+            if not isinstance(counts, dict):
+                counts = get_products_counts()
+        except Exception as e:
+            print(f"[ADMIN API] GET /product-stats DB query exception (returning fallback): {e}")
+            counts = {
+                "total": len(PRODUCTS_DB),
+                "categorized": sum(1 for p in PRODUCTS_DB.values() if p.get("category_id")),
+                "uncategorized": sum(1 for p in PRODUCTS_DB.values() if not p.get("category_id"))
+            }
+
+        print(f"[ADMIN API] GET /product-stats executed successfully -> total: {counts.get('total')}, uncategorized: {counts.get('uncategorized')}, categorized: {counts.get('categorized')}")
         return {
             "success": True,
+            "total": counts.get("total", 0),
+            "categorized": counts.get("categorized", 0),
+            "uncategorized": counts.get("uncategorized", 0),
             **counts
         }
 

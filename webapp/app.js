@@ -2590,27 +2590,34 @@ async function save1CUrlSetting(btn = null) {
     }
 
     try {
-        const res = await fetch(`/api/admin/1c/config?user_id=${ALLOWED_ADMIN_ID}`, {
+        const payload = {
+            "1c_endpoint": newUrl,
+            "api_url": newUrl,
+            "url": newUrl
+        };
+        const res = await fetch(`/api/admin/settings?user_id=${ALLOWED_ADMIN_ID}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Admin-Id': String(ALLOWED_ADMIN_ID)
             },
-            body: JSON.stringify({ api_url: newUrl })
+            body: JSON.stringify(payload)
         });
 
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success) {
             showToast(data.message || "1C URL muvaffaqiyatli saqlandi!", 'success');
             await load1CConfigStatus();
+            await loadProductCounts();
             return true;
         } else {
-            showToast(data.detail || data.message || "1C manzilini saqlashda xatolik yuz berdi", 'error');
+            const errorMsg = data.detail || data.message || data.error || "1C manzilini saqlashda xatolik yuz berdi";
+            showToast(errorMsg, 'error');
             return false;
         }
     } catch (e) {
         console.error('save1CUrlSetting error:', e);
-        showToast("Server bilan aloqa xatosi!", 'error');
+        showToast(e.message ? `Xatolik: ${e.message}` : "Server bilan aloqa xatosi!", 'error');
         return false;
     } finally {
         if (saveBtn) {
@@ -2622,26 +2629,45 @@ async function save1CUrlSetting(btn = null) {
 }
 
 async function loadProductCounts() {
-    try {
-        const res = await fetch('/api/admin/products/counts');
-        if (res.ok) {
-            const data = await res.json();
-            const totalEl = document.getElementById('stats-total-products');
-            const catEl = document.getElementById('stats-categorized-products');
-            const uncatEl = document.getElementById('stats-uncategorized-products');
-            const adminProdCount = document.getElementById('admin-prod-count');
-            const adminUncatCount = document.getElementById('admin-uncategorized-count');
-            const headerCount = document.getElementById('uncategorized-header-count');
+    const totalEl = document.getElementById('stats-total-products');
+    const catEl = document.getElementById('stats-categorized-products');
+    const uncatEl = document.getElementById('stats-uncategorized-products');
+    const adminProdCount = document.getElementById('admin-prod-count');
+    const adminUncatCount = document.getElementById('admin-uncategorized-count');
+    const headerCount = document.getElementById('uncategorized-header-count');
 
-            if (totalEl) totalEl.innerText = (data.total || 0).toLocaleString('uz-UZ');
-            if (catEl) catEl.innerText = (data.categorized || 0).toLocaleString('uz-UZ');
-            if (uncatEl) uncatEl.innerText = (data.uncategorized || 0).toLocaleString('uz-UZ');
-            if (adminProdCount) adminProdCount.innerText = (data.total || 0).toLocaleString('uz-UZ');
-            if (adminUncatCount) adminUncatCount.innerText = data.uncategorized || 0;
-            if (headerCount) headerCount.innerText = (data.uncategorized || 0).toLocaleString('uz-UZ');
+    try {
+        let res = await fetch(`/api/admin/product-stats?user_id=${ALLOWED_ADMIN_ID}`, {
+            headers: { 'X-Admin-Id': String(ALLOWED_ADMIN_ID) }
+        }).catch(() => null);
+
+        if (!res || !res.ok) {
+            res = await fetch('/api/admin/products/counts').catch(() => null);
+        }
+
+        if (res && res.ok) {
+            const data = await res.json().catch(() => ({}));
+            const total = data.total != null ? data.total : (products ? products.length : 0);
+            const categorized = data.categorized != null ? data.categorized : 0;
+            const uncategorized = data.uncategorized != null ? data.uncategorized : 0;
+
+            if (totalEl) totalEl.innerText = Number(total).toLocaleString('uz-UZ');
+            if (catEl) catEl.innerText = Number(categorized).toLocaleString('uz-UZ');
+            if (uncatEl) uncatEl.innerText = Number(uncategorized).toLocaleString('uz-UZ');
+            if (adminProdCount) adminProdCount.innerText = Number(total).toLocaleString('uz-UZ');
+            if (adminUncatCount) adminUncatCount.innerText = uncategorized;
+            if (headerCount) headerCount.innerText = Number(uncategorized).toLocaleString('uz-UZ');
+        } else {
+            // Fallback from existing loaded items so dots never stay
+            if (totalEl && totalEl.innerText === '...') totalEl.innerText = (products ? products.length : 0).toLocaleString('uz-UZ');
+            if (catEl && catEl.innerText === '...') catEl.innerText = (products ? products.length : 0).toLocaleString('uz-UZ');
+            if (uncatEl && uncatEl.innerText === '...') uncatEl.innerText = (uncategorizedProducts ? uncategorizedProducts.length : 0).toLocaleString('uz-UZ');
         }
     } catch (e) {
         console.debug('Failed to load product counts:', e);
+        if (totalEl && totalEl.innerText === '...') totalEl.innerText = '0';
+        if (catEl && catEl.innerText === '...') catEl.innerText = '0';
+        if (uncatEl && uncatEl.innerText === '...') uncatEl.innerText = '0';
     }
 }
 
