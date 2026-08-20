@@ -1558,20 +1558,36 @@ async def create_postgres_order(
                         now_str = row["created_at"].strftime("%Y-%m-%d %H:%M:%S")
 
                     # Insert line items into order_items table
+                    items_iterable = []
                     if isinstance(cart, dict):
-                        for key, entry in cart.items():
-                            if not isinstance(entry, dict):
-                                continue
-                            item = entry.get("item") or {}
-                            pid = item.get("id") or entry.get("id")
-                            pname = item.get("name") or entry.get("name") or "Mahsulot"
-                            price = item.get("price") or entry.get("price") or 0
-                            qty = entry.get("qty") or entry.get("count") or 1
-                            item_total = int(round(price * qty))
-                            await conn.execute("""
-                                INSERT INTO order_items (order_id, product_id, product_name, price, quantity, total_price)
-                                VALUES ($1, $2, $3, $4, $5, $6)
-                            """, pg_id, int(pid) if isinstance(pid, (int, str)) and str(pid).isdigit() else None, str(pname), int(price), int(qty), item_total)
+                        items_iterable = list(cart.values())
+                    elif isinstance(cart, list):
+                        items_iterable = cart
+
+                    for entry in items_iterable:
+                        if not isinstance(entry, dict):
+                            continue
+                        item = entry.get("item") if isinstance(entry.get("item"), dict) else entry
+                        pid = item.get("id") or entry.get("id") or item.get("product_id")
+                        pname = item.get("name") or entry.get("name") or item.get("product_name") or "Mahsulot"
+                        price_raw = item.get("price") or entry.get("price") or 0
+                        qty_raw = entry.get("qty") or entry.get("count") or entry.get("quantity") or 1
+
+                        try:
+                            price = int(round(float(str(price_raw).replace("\xa0", "").replace(" ", "").replace(",", "."))))
+                        except Exception:
+                            price = 0
+
+                        try:
+                            qty = int(round(float(str(qty_raw).replace("\xa0", "").replace(" ", "").replace(",", "."))))
+                        except Exception:
+                            qty = 1
+
+                        item_total = int(round(price * qty))
+                        await conn.execute("""
+                            INSERT INTO order_items (order_id, product_id, product_name, price, quantity, total_price)
+                            VALUES ($1, $2, $3, $4, $5, $6)
+                        """, pg_id, int(pid) if isinstance(pid, (int, str)) and str(pid).isdigit() else None, str(pname), price, qty, item_total)
         except Exception as e:
             print(f"[POSTGRESQL ERROR] Transaction failed while creating order: {e}")
             print(traceback.format_exc())
