@@ -397,6 +397,8 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         status = response.status
                         raw_text = await response.text()
 
+                        print(f"=== 1C STATUS: {status} ===", flush=True)
+                        print(f"=== 1C RAW BODY: {raw_text[:500]} ===", flush=True)
                         print("=== 1C RESPONSE DEBUG ===", flush=True)
                         print("Status:", status, flush=True)
                         print("Raw Body (first 300 chars):", raw_text[:300], flush=True)
@@ -419,14 +421,14 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 raw_data = raw_text
 
                             page_items = _extract_items_list(raw_data)
-                            print(f"DEBUG [Parsed Items Count]: {len(page_items)}")
+                            print(f"DEBUG [Parsed Items Count]: {len(page_items)}", flush=True)
                             if len(page_items) > 0:
                                 sample_str = str(page_items[0])[:200].encode('ascii', errors='replace').decode('ascii')
-                                print(f"DEBUG [Sample First Item]: {sample_str}")
+                                print(f"DEBUG [Sample First Item]: {sample_str}", flush=True)
 
                             if not page_items:
                                 # 0 items returned -> catalog end reached
-                                print(f"[1C PAGINATION] Page {page} returned 0 items. Loop finished.")
+                                print(f"[1C PAGINATION] Page {page} returned 0 items. Loop finished.", flush=True)
                                 break
 
                             accumulated_items.extend(page_items)
@@ -452,7 +454,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         elif status == 404:
                             if page > 1:
                                 # Next page 404 means pagination reached the end
-                                print(f"[1C PAGINATION] Page {page} returned 404. End of catalog.")
+                                print(f"[1C PAGINATION] Page {page} returned 404. End of catalog.", flush=True)
                                 break
                             warning_msg = "1C HTTP xizmati topilmadi (404 Not Found)."
                             return {
@@ -477,14 +479,14 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
             # Check if 0 items total were parsed
             if len(accumulated_items) == 0:
-                err_msg = "1C dan tovar olinmadi. 1C yoki Ngrok sozlamalarini tekshiring."
-                print(f"DEBUG 1C FETCH ERROR: {err_msg} (0 items parsed)")
+                err_msg = "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring."
+                print(f"DEBUG 1C FETCH ERROR: {err_msg} (0 items parsed)", flush=True)
                 logger.warning(err_msg)
                 return {
                     "success": False,
                     "error": err_msg,
                     "message": err_msg,
-                    "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi. 1C yoki Ngrok sozlamalarini tekshiring.",
+                    "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring.",
                     "status_code": 400,
                     "data": None
                 }

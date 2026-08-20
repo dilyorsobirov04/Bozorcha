@@ -787,14 +787,14 @@ def sync_1c_products(raw_data: any) -> dict:
         print(f"DEBUG [Sample First Item]: {sample_str}")
 
     if len(items_to_process) == 0:
-        err_msg = "1C dan tovar olinmadi. 1C yoki Ngrok sozlamalarini tekshiring."
-        print(f"DEBUG SYNC ERROR: {err_msg} (0 items to process)")
+        err_msg = "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring."
+        print(f"DEBUG SYNC ERROR: {err_msg} (0 items to process)", flush=True)
         return {
             "success": False,
             "count": 0,
             "message": err_msg,
             "error": err_msg,
-            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi. 1C yoki Ngrok sozlamalarini tekshiring.",
+            "detail": err_msg,
             "total_received": 0,
             "synced_count": 0,
             "invalid_count": 0,
@@ -955,14 +955,14 @@ def sync_1c_products(raw_data: any) -> dict:
             synced_products.append(new_product)
 
     if len(synced_products) == 0:
-        err_msg = "1C dan tovar olinmadi. 1C yoki Ngrok sozlamalarini tekshiring."
-        print(f"DEBUG SYNC ERROR: {err_msg} (0 products synced out of {len(items_to_process)} items)")
+        err_msg = "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring."
+        print(f"DEBUG SYNC ERROR: {err_msg} (0 products synced out of {len(items_to_process)} items)", flush=True)
         return {
             "success": False,
             "count": 0,
             "message": err_msg,
             "error": err_msg,
-            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi. 1C yoki Ngrok sozlamalarini tekshiring.",
+            "detail": err_msg,
             "total_received": len(items_to_process),
             "synced_count": 0,
             "invalid_count": invalid_count,

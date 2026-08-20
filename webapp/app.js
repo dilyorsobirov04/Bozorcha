@@ -2560,10 +2560,10 @@ async function load1CConfigStatus() {
                                 }
                                 const lastRes = statusData.last_result || {};
                                 const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count != null ? lastRes.count : 0);
-                                const hasError = statusData.error || lastRes.success === false || count === 0;
+                                const hasError = statusData.error || lastRes.success === false || count <= 0;
 
                                 if (hasError) {
-                                    const errMsg = statusData.error || lastRes.error || lastRes.message || "1C dan tovar olinmadi. 1C yoki Ngrok sozlamalarini tekshiring.";
+                                    const errMsg = statusData.error || lastRes.error || lastRes.message || "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring.";
                                     showToast(errMsg, 'error');
                                 } else {
                                     showToast(`${count} ta 1C tovari muvaffaqiyatli sinxronizatsiya qilindi! 🎉`, 'success');
@@ -3135,13 +3135,13 @@ async function trigger1CSync(btn = null) {
                             }
 
                             const lastRes = statusData.last_result || {};
-                            const hasError = statusData.error || lastRes.success === false || (lastRes.synced_count != null && lastRes.synced_count === 0);
+                            const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count != null ? lastRes.count : 0);
+                            const hasError = statusData.error || lastRes.success === false || count <= 0;
 
                             if (hasError) {
-                                const errMsg = statusData.error || lastRes.error || lastRes.message || "1C dan tovar olinmadi. 1C yoki Ngrok sozlamalarini tekshiring.";
+                                const errMsg = statusData.error || lastRes.error || lastRes.message || "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring.";
                                 showToast(errMsg, 'error');
                             } else {
-                                const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count || 0);
                                 showToast(`${count} ta 1C tovari muvaffaqiyatli sinxronizatsiya qilindi! 🎉`, 'success');
                             }
 
