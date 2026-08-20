@@ -318,7 +318,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     active_user = get_active_1c_user()
     active_pass = get_active_1c_pass()
     ttl = int(get_system_setting("cache_ttl", 300))
-    eff_timeout = max(300.0, float(timeout_seconds or get_system_setting("api_1c_timeout", 300.0) or 300.0))
+    eff_timeout = max(180.0, float(timeout_seconds or get_system_setting("api_1c_timeout", 300.0) or 300.0))
 
     # 1. Check in-memory cache if not forcing refresh
     now = time.time()
@@ -357,7 +357,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
         "X-Requested-With": "XMLHttpRequest"
     }
 
-    # Set HTTP Client Timeout to 300 seconds (5 minutes)
+    # Set HTTP Client Timeout to at least 180 seconds (3 minutes)
     timeout = aiohttp.ClientTimeout(total=eff_timeout, sock_read=eff_timeout, connect=60.0)
     connector = aiohttp.TCPConnector(ssl=False)
 
@@ -374,9 +374,9 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                 }
 
         try:
-            print(f"=== 1C FETCH DEBUG ===")
-            print(f"Target URL: {active_url}")
-            print(f"Timeout setting: {eff_timeout}s")
+            print(f"=== 1C FETCH DEBUG ===", flush=True)
+            print(f"Target URL: {active_url}", flush=True)
+            print(f"Timeout setting: {eff_timeout}s", flush=True)
             logger.info(f"[1C REQUEST] Calling 1C URL: {active_url} (timeout: {eff_timeout}s)")
 
             accumulated_items = []
@@ -392,15 +392,15 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         sep = "&" if "?" in active_url else "?"
                         target_url = f"{active_url}{sep}page={page}"
 
-                    print(f"[1C PAGINATION] Requesting Page {page}: {target_url}")
+                    print(f"[1C PAGINATION] Requesting Page {page}: {target_url}", flush=True)
                     async with session.get(target_url, auth=auth, headers=headers) as response:
                         status = response.status
                         raw_text = await response.text()
 
-                        print("=== 1C RESPONSE DEBUG ===")
-                        print("Status:", status)
-                        print("Raw Body (first 300 chars):", raw_text[:300])
-                        print("=========================")
+                        print("=== 1C RESPONSE DEBUG ===", flush=True)
+                        print("Status:", status, flush=True)
+                        print("Raw Body (first 300 chars):", raw_text[:300], flush=True)
+                        print("=========================", flush=True)
 
                         if status == 200:
                             if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
