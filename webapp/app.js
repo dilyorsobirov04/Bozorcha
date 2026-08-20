@@ -3088,7 +3088,17 @@ async function trigger1CSync(btn = null) {
                                 syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
                             }
 
-                            showToast("1C Sinxronlash muvaffaqiyatli yakunlandi! 🎉", 'success');
+                            const lastRes = statusData.last_result || {};
+                            const hasError = statusData.error || lastRes.success === false || (lastRes.synced_count != null && lastRes.synced_count === 0);
+
+                            if (hasError) {
+                                const errMsg = statusData.error || lastRes.error || lastRes.message || "1C dan tovarlar kela olmadi. Terminal loglarini tekshiring!";
+                                showToast(errMsg, 'error');
+                            } else {
+                                const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count || 0);
+                                showToast(`${count} ta 1C tovari muvaffaqiyatli sinxronizatsiya qilindi! 🎉`, 'success');
+                            }
+
                             await loadProductCounts();
                             await loadUncategorizedProducts();
                             await loadProducts();

@@ -364,10 +364,14 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                     print(f"[1C PAGINATION] Requesting Page {page}: {target_url}")
                     async with session.get(target_url, auth=auth, headers=headers) as response:
                         status = response.status
-                        print(f"Page {page} Status Code: {status}")
+                        raw_text = await response.text()
+
+                        print("=== 1C RAW RESPONSE DEBUG START ===")
+                        print(f"HTTP Status: {status}")
+                        print(f"Response Text: {raw_text[:1000]}")
+                        print("=== 1C RAW RESPONSE DEBUG END ===")
 
                         if status == 200:
-                            raw_text = await response.text()
                             if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
                                 warning_msg = "Ngrok HTML ogohlantirish sahifasini qaytardi. ngrok-skip-browser-warning sarlavhasi talab qilinadi."
                                 logger.warning(warning_msg)
@@ -400,14 +404,13 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
                             page += 1
                         elif status in (401, 403):
-                            err_text = await response.text()
                             warning_msg = "1C login yoki paroli noto'g'ri (401/403 Basic Auth)"
                             logger.warning(f"1C Auth Error ({status}) at {target_url}: {warning_msg}")
                             if page == 1:
                                 return {
                                     "success": False,
                                     "error": warning_msg,
-                                    "detail": err_text[:300],
+                                    "detail": raw_text[:300],
                                     "status_code": status,
                                     "data": None
                                 }
@@ -417,39 +420,37 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 # Next page 404 means pagination reached the end
                                 print(f"[1C PAGINATION] Page {page} returned 404. End of catalog.")
                                 break
-                            err_text = await response.text()
                             warning_msg = "1C HTTP xizmati topilmadi (404 Not Found)."
                             return {
                                 "success": False,
                                 "error": warning_msg,
                                 "url": target_url,
-                                "detail": err_text[:300],
+                                "detail": raw_text[:300],
                                 "status_code": 404,
                                 "data": None
                             }
                         else:
                             if page > 1:
                                 break
-                            err_text = await response.text()
-                            warning_msg = f"1C serveridan xato javob qaytdi (HTTP {status}): {err_text[:200]}"
+                            warning_msg = f"1C serveridan xato javob qaytdi (HTTP {status}): {raw_text[:200]}"
                             return {
                                 "success": False,
                                 "error": warning_msg,
                                 "status_code": status,
-                                "detail": err_text[:300],
+                                "detail": raw_text[:300],
                                 "data": None
                             }
 
             # Check if 0 items total were parsed
             if len(accumulated_items) == 0:
-                err_msg = "1C dan tovarlar ro'yxati bo'sh keldi"
+                err_msg = "1C dan tovarlar kela olmadi. Terminal loglarini tekshiring!"
                 print(f"DEBUG 1C FETCH ERROR: {err_msg} (0 items parsed)")
                 logger.warning(err_msg)
                 return {
                     "success": False,
                     "error": err_msg,
                     "message": err_msg,
-                    "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar)",
+                    "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar). Terminal loglarini tekshiring!",
                     "status_code": 400,
                     "data": None
                 }

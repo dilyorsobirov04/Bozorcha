@@ -773,14 +773,14 @@ def sync_1c_products(raw_data: any) -> dict:
     print(f"DEBUG: Parsed {len(items_to_process)} items from 1C response.")
 
     if len(items_to_process) == 0:
-        err_msg = "1C dan tovarlar ro'yxati bo'sh keldi"
+        err_msg = "1C dan tovarlar kela olmadi. Terminal loglarini tekshiring!"
         print(f"DEBUG SYNC ERROR: {err_msg} (0 items to process)")
         return {
             "success": False,
             "count": 0,
             "message": err_msg,
             "error": err_msg,
-            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar)",
+            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar). Terminal loglarini tekshiring!",
             "total_received": 0,
             "synced_count": 0,
             "invalid_count": 0,
@@ -941,14 +941,14 @@ def sync_1c_products(raw_data: any) -> dict:
             synced_products.append(new_product)
 
     if len(synced_products) == 0:
-        err_msg = "1C dan tovarlar ro'yxati bo'sh keldi"
+        err_msg = "1C dan tovarlar kela olmadi. Terminal loglarini tekshiring!"
         print(f"DEBUG SYNC ERROR: {err_msg} (0 products synced out of {len(items_to_process)} items)")
         return {
             "success": False,
             "count": 0,
             "message": err_msg,
             "error": err_msg,
-            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar)",
+            "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi (0 ta tovar). Terminal loglarini tekshiring!",
             "total_received": len(items_to_process),
             "synced_count": 0,
             "invalid_count": invalid_count,
@@ -981,10 +981,14 @@ def sync_1c_products(raw_data: any) -> dict:
 
 async def _async_persist_synced_products(products_list: list):
     """Persists synced products to the local PostgreSQL database in efficient 500-item chunks using executemany."""
+    if not products_list or len(products_list) == 0:
+        print("[DATABASE GUARD] Upsert skipped: 0 products to persist.")
+        return
+
     try:
         pool = await get_pg_pool()
-        if not pool or not products_list:
-            print("DEBUG DB UPSERT: Skipped (pool missing or empty products list)")
+        if not pool:
+            print("DEBUG DB UPSERT: Skipped (pool missing)")
             return
 
         print(f"DEBUG DB UPSERT: Executing batch insert/update for {len(products_list)} items across {((len(products_list)-1)//500)+1} chunks...")
@@ -1026,6 +1030,12 @@ async def _async_persist_synced_products(products_list: list):
                         image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                         updated_at = CURRENT_TIMESTAMP
                 """, args_list)
+
+            # Query PostgreSQL table directly after upserting to verify total count
+            db_row = await conn.fetchrow("SELECT COUNT(*) as cnt FROM products")
+            total_db_count = db_row["cnt"] if db_row else 0
+            print(f"[POSTGRESQL VERIFICATION] Direct query total products count in bozorcha_db: {total_db_count}")
+
         print(f"[SYNC COMPLETED] Total Fetched: {len(products_list)}, Saved/Updated in DB: {len(products_list)}")
         print(f"DEBUG DB UPSERT RESULT: Successfully persisted {len(products_list)} items into PostgreSQL bozorcha_db products table.")
         print(f"[POSTGRESQL] Successfully persisted {len(products_list)} products in 500-item chunks to bozorcha_db products table.")
