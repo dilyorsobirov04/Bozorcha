@@ -398,7 +398,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
                         print("=== 1C RAW RESPONSE DEBUG START ===")
                         print(f"DEBUG [1C Response Status]: {status}")
-                        print(f"1C RAW RESPONSE: {raw_text[:500]}")
+                        print("1C RAW:", raw_text[:300])
                         print(f"Response Text: {raw_text[:1000]}")
                         print("=== 1C RAW RESPONSE DEBUG END ===")
 

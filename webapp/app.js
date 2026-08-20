@@ -2559,8 +2559,15 @@ async function load1CConfigStatus() {
                                     currentBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
                                 }
                                 const lastRes = statusData.last_result || {};
-                                const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count || 0);
-                                showToast(`${count} ta 1C tovari muvaffaqiyatli sinxronizatsiya qilindi! 🎉`, 'success');
+                                const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count != null ? lastRes.count : 0);
+                                const hasError = statusData.error || lastRes.success === false || count === 0;
+
+                                if (hasError) {
+                                    const errMsg = statusData.error || lastRes.error || lastRes.message || "1C dan tovar olinmadi. 1C yoki Ngrok sozlamalarini tekshiring.";
+                                    showToast(errMsg, 'error');
+                                } else {
+                                    showToast(`${count} ta 1C tovari muvaffaqiyatli sinxronizatsiya qilindi! 🎉`, 'success');
+                                }
                                 await loadProductCounts();
                                 await loadUncategorizedProducts();
                                 await loadProducts();

@@ -1605,8 +1605,9 @@ async def create_postgres_order(
         "created_at": now_str
     }
 
+    items_count = len(cart) if isinstance(cart, dict) else (len(cart) if isinstance(cart, list) else 0)
     ORDERS_DB[order_id_str] = order_record
-    print(f"[ORDER CREATED] Saved Order ID: {order_id_str} for User ID: {user_id} in Database")
+    print(f"[ORDER CREATED] Saved Order ID: {order_id_str} for User ID: {user_id} with {items_count} items in Database")
 
     return order_record
 
