@@ -18,6 +18,7 @@ from fastapi.responses import RedirectResponse, FileResponse, JSONResponse
 
 from db import (
     init_postgres_db,
+    async_upsert_system_setting,
     get_all_products,
     get_discount_products,
     get_discounted_products_api,
@@ -702,10 +703,11 @@ def create_webapp_server() -> FastAPI:
                 body = {}
 
             api_url = (
+                body.get("url") or
+                body.get("value") or
                 body.get("endpoint_url") or
                 body.get("1c_endpoint") or
                 body.get("api_url") or
-                body.get("url") or
                 body.get("endpoint") or
                 request.query_params.get("endpoint_url") or
                 request.query_params.get("1c_endpoint") or
@@ -715,29 +717,44 @@ def create_webapp_server() -> FastAPI:
             api_user = body.get("api_user") if "api_user" in body else body.get("user")
             api_pass = body.get("api_pass") if "api_pass" in body else body.get("password")
 
-            if not api_url or not str(api_url).strip():
+            if not api_url or not str(api_url).strip() or "abcd-123" in str(api_url).lower():
                 return JSONResponse(
                     status_code=400,
-                    content={"success": False, "error": "1C URL (endpoint_url) parametri talab qilinadi", "detail": "endpoint_url talab qilinadi"}
+                    content={
+                        "success": False,
+                        "message": "Yaroqli Ngrok URL kiriting!",
+                        "error": "Yaroqli Ngrok URL kiriting!",
+                        "detail": "Soxta 'abcd-123' manzilini ishlatib bo'lmaydi"
+                    }
                 )
 
             clean_url = clean_1c_url(str(api_url).strip())
-            if not clean_url or not clean_url.startswith(("http://", "https://")):
+            if not clean_url or not clean_url.startswith(("http://", "https://")) or "abcd-123" in clean_url.lower():
                 return JSONResponse(
                     status_code=400,
-                    content={"success": False, "error": "Yaroqsiz URL formati. URL 'http://' yoki 'https://' bilan boshlanishi kerak.", "detail": "Yaroqsiz URL"}
+                    content={
+                        "success": False,
+                        "message": "Yaroqli Ngrok URL kiriting!",
+                        "error": "Yaroqli Ngrok URL kiriting!",
+                        "detail": "Yaroqsiz URL formati"
+                    }
                 )
 
+            # Force update/upsert into PostgreSQL database synchronously
+            updated_record = await async_upsert_system_setting("ONEC_API_URL", clean_url)
+            await async_upsert_system_setting("api_1c_url", clean_url)
+
             updated_config = update_1c_config(api_url=clean_url, api_user=api_user, api_pass=api_pass)
-            print(f"[ADMIN API] POST /settings received URL: {clean_url}")
+            print(f"[ADMIN API] POST /settings UPSERTED URL: {clean_url}")
 
             return {
                 "success": True,
+                "message": "Ngrok URL muvaffaqiyatli saqlandi!",
+                "data": updated_record,
                 "endpoint_url": clean_url,
                 "1c_endpoint": clean_url,
                 "endpoint": clean_url,
                 "api_url": clean_url,
-                "message": "1C URL muvaffaqiyatli saqlandi!",
                 **updated_config
             }
         except HTTPException as he:

@@ -2771,10 +2771,11 @@ async function save1CUrlSetting(btn = null) {
 
     try {
         const payload = {
+            "url": newUrl,
+            "value": newUrl,
             "endpoint_url": newUrl,
             "1c_endpoint": newUrl,
-            "api_url": newUrl,
-            "url": newUrl
+            "api_url": newUrl
         };
         const res = await fetch(`/api/admin/settings?user_id=${ALLOWED_ADMIN_ID}`, {
             method: 'POST',
@@ -2786,13 +2787,17 @@ async function save1CUrlSetting(btn = null) {
         });
 
         const data = await res.json().catch(() => ({}));
-        if (res.ok && (data.success || data.endpoint_url || data.endpoint)) {
-            showToast(data.message || "1C URL muvaffaqiyatli saqlandi!", 'success');
+        if (res.ok && (data.success || data.endpoint_url || data.data)) {
+            const activeVal = (data.data && data.data.value) || data.api_url || data.endpoint_url || newUrl;
+            if (urlInput) urlInput.value = activeVal;
+            const hintCodeEl = document.getElementById('onec-banner-hint-code');
+            if (hintCodeEl) hintCodeEl.innerText = activeVal;
+            showToast(data.message || "Ngrok URL muvaffaqiyatli saqlandi!", 'success');
             await load1CConfigStatus();
             await loadProductCounts();
             return true;
         } else {
-            const errorMsg = data.detail || data.message || data.error || "1C manzilini saqlashda xatolik yuz berdi";
+            const errorMsg = data.message || data.error || data.detail || "Yaroqli Ngrok URL kiriting!";
             showToast(errorMsg, 'error');
             return false;
         }

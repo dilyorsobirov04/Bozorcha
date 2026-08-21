@@ -200,17 +200,28 @@ async def init_postgres_db():
                 ALTER TABLE order_items DROP CONSTRAINT IF EXISTS order_items_product_id_fkey;
             """)
 
+            # One-Time Startup Clean Up: Wipe any legacy/stale 'abcd-123' settings from PostgreSQL
+            await conn.execute("""
+                DELETE FROM system_settings 
+                WHERE value LIKE '%abcd-123%' 
+                   OR key IN ('ONEC_API_URL', 'api_1c_url', '1c_endpoint', 'endpoint_url') AND value LIKE '%abcd-123%';
+            """)
+
             # Load system settings from DB to memory
             rows = await conn.fetch("SELECT key, value FROM system_settings")
             for r in rows:
                 k = r["key"]
                 v = r["value"]
-                SYSTEM_SETTINGS_DB[k] = v
-                if k in ("API_1C_URL", "ONEC_API_URL"):
-                    SYSTEM_SETTINGS_DB["api_1c_url"] = v
-                    SYSTEM_SETTINGS_DB["ONEC_API_URL"] = v
+                if "abcd-123" not in str(v).lower():
+                    SYSTEM_SETTINGS_DB[k] = v
+                    if k in ("API_1C_URL", "ONEC_API_URL"):
+                        SYSTEM_SETTINGS_DB["api_1c_url"] = v
+                        SYSTEM_SETTINGS_DB["ONEC_API_URL"] = v
 
-
+            # Double-check in-memory store for any abcd-123 leftover
+            for setting_key in ("ONEC_API_URL", "api_1c_url", "1c_endpoint", "endpoint_url"):
+                if "abcd-123" in str(SYSTEM_SETTINGS_DB.get(setting_key, "")).lower():
+                    SYSTEM_SETTINGS_DB[setting_key] = ""
 
             # Load all products from PostgreSQL database into memory
             rows = await conn.fetch("SELECT * FROM products ORDER BY id ASC")
@@ -258,8 +269,13 @@ def _safe_bg_task(coro):
         pass
 
 
-async def _async_persist_system_setting(key: str, value: str):
-    """Asynchronously persists a system setting to the database."""
+async def async_upsert_system_setting(key: str, value: str) -> dict:
+    """Awaits PostgreSQL UPSERT for key/value into system_settings and updates in-memory DB."""
+    val = str(value).strip()
+    SYSTEM_SETTINGS_DB[key] = val
+    if key in ("ONEC_API_URL", "api_1c_url"):
+        SYSTEM_SETTINGS_DB["ONEC_API_URL"] = val
+        SYSTEM_SETTINGS_DB["api_1c_url"] = val
     try:
         pool = await get_pg_pool()
         if pool:
@@ -268,9 +284,16 @@ async def _async_persist_system_setting(key: str, value: str):
                     INSERT INTO system_settings (key, value, updated_at)
                     VALUES ($1, $2, CURRENT_TIMESTAMP)
                     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
-                """, str(key), str(value))
+                """, str(key), val)
+                print(f"[POSTGRESQL UPSERT SUCCESS] {key} = {val}", flush=True)
     except Exception as e:
-        pass
+        print(f"[POSTGRESQL UPSERT ERROR] {key}: {e}", flush=True)
+    return {"key": key, "value": val}
+
+
+async def _async_persist_system_setting(key: str, value: str):
+    """Asynchronously persists a system setting to the database."""
+    await async_upsert_system_setting(key, value)
 
 
 def get_system_setting(key: str, default: any = None) -> any:
