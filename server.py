@@ -641,6 +641,19 @@ def create_webapp_server() -> FastAPI:
         except Exception:
             has_body = False
 
+        if not endpoint_url:
+            endpoint_url = get_system_setting("ONEC_API_URL") or get_system_setting("api_1c_url")
+
+        if endpoint_url and "abcd-123" in str(endpoint_url).lower():
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": "Soxta 'abcd-123' manzilini ishlatib bo'lmaydi. Iltimos, haqiqiy Ngrok URL kiritib, Saqlash tugmasini bosing!",
+                    "message": "Soxta 'abcd-123' manzilini ishlatib bo'lmaydi. Iltimos, haqiqiy Ngrok URL kiritib, Saqlash tugmasini bosing!"
+                }
+            )
+
         if endpoint_url:
             update_1c_config(api_url=endpoint_url)
 

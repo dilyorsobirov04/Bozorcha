@@ -395,12 +395,15 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
             }
 
     # 2. Check 1C URL configuration
-    if not active_url:
-        warning_msg = "1C server manzili ko'rsatilmagan. Admin panelida yoki .env faylida API_1C_URL ni sozlang."
+    if not active_url or "abcd-123" in active_url.lower():
+        warning_msg = "Soxta 'abcd-123' manzilini ishlatib bo'lmaydi. Iltimos, haqiqiy Ngrok URL kiritib, Saqlash tugmasini bosing!" if "abcd-123" in (active_url or "").lower() else "1C server manzili ko'rsatilmagan. Admin panelida yoki .env faylida API_1C_URL ni sozlang."
         logger.warning(warning_msg)
         return {
             "success": False,
             "error": warning_msg,
+            "message": warning_msg,
+            "detail": warning_msg,
+            "status_code": 400,
             "data": None
         }
 
@@ -413,7 +416,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     headers = {
         "ngrok-skip-browser-warning": "true",
         "User-Agent": "Bozorcha/1.0",
-        "Accept": "application/json",
+        "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/json",
         "Bypass-Tunnel-Reminder": "true",
         "X-Requested-With": "XMLHttpRequest"
@@ -444,6 +447,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
             accumulated_items = []
             page = 1
             max_pages = 200  # Safeguard cap for pagination loop
+            last_raw_text = ""
 
             async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
                 while page <= max_pages:
@@ -454,22 +458,19 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         sep = "&" if "?" in active_url else "?"
                         target_url = f"{active_url}{sep}page={page}"
 
+                    print(f"[1C DEBUG] Target Endpoint: {target_url}", flush=True)
                     print(f"[1C PAGINATION] Requesting Page {page}: {target_url}", flush=True)
-                    print(f"[1C DEBUG] Requesting URL: {target_url}", flush=True)
                     print(f"[1C DEBUG] Sent Headers: {headers}", flush=True)
                     async with session.get(target_url, auth=auth, headers=headers) as response:
                         status = response.status
                         raw_text = await response.text()
+                        last_raw_text = raw_text
 
-                        print(f"[1C RAW RESP]: {raw_text}", flush=True)
                         print(f"[1C DEBUG] Response Status: {status}", flush=True)
-                        print(f"[1C DEBUG] Raw Body Preview: {raw_text[:500]}", flush=True)
-                        print(f"=== 1C STATUS: {status} ===", flush=True)
-                        print(f"=== 1C RAW BODY: {raw_text[:500]} ===", flush=True)
-                        print("=== 1C RESPONSE DEBUG ===", flush=True)
-                        print("Status:", status, flush=True)
-                        print("Raw Body (first 300 chars):", raw_text[:300], flush=True)
-                        print("=========================", flush=True)
+                        print(f"[1C DEBUG] Response Headers: {dict(response.headers)}", flush=True)
+                        print(f"[1C DEBUG] Raw Data Type: {type(raw_text)}", flush=True)
+                        print(f"[1C DEBUG] Raw Response Body: {raw_text}", flush=True)
+                        print(f"[1C RAW RESP]: {raw_text}", flush=True)
 
                         if status == 200:
                             if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
@@ -488,10 +489,10 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 raw_data = raw_text
 
                             page_items = _extract_items_list(raw_data)
-                            print(f"DEBUG [Parsed Items Count]: {len(page_items)}", flush=True)
+                            print(f"[1C DEBUG] Parsed Items Count: {len(page_items)}", flush=True)
                             if len(page_items) > 0:
                                 sample_str = str(page_items[0])[:200].encode('ascii', errors='replace').decode('ascii')
-                                print(f"DEBUG [Sample First Item]: {sample_str}", flush=True)
+                                print(f"[1C DEBUG] Sample First Item: {sample_str}", flush=True)
 
                             if not page_items:
                                 # 0 items returned -> catalog end reached
@@ -546,14 +547,15 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
             # Check if 0 items total were parsed
             if len(accumulated_items) == 0:
-                err_msg = "1C API bo'sh ro'yxat qaytardi. 1C HTTP Servis funksiyasini tekshiring."
-                print(f"DEBUG 1C FETCH ERROR: {err_msg} (0 items parsed)", flush=True)
+                sample_resp = (last_raw_text or "").strip()[:100]
+                err_msg = f"1C dan ma'lumot bo'sh keldi. Kelgan javob: {sample_resp}" if sample_resp else "1C API bo'sh ro'yxat qaytardi. 1C HTTP Servis funksiyasini tekshiring."
+                print(f"[1C DEBUG] Fetch Error: {err_msg} (0 items parsed)", flush=True)
                 logger.warning(err_msg)
                 return {
                     "success": False,
                     "error": err_msg,
                     "message": err_msg,
-                    "detail": "1C serveridan hech qanday tovar ma'lumoti olinmadi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring.",
+                    "detail": f"1C serveridan olingan javob matni: {last_raw_text[:300]}",
                     "status_code": 400,
                     "data": None
                 }

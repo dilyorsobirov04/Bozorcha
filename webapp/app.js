@@ -3225,6 +3225,12 @@ async function trigger1CSync(btn = null) {
         return;
     }
 
+    if (effectiveUrl.includes('abcd-123')) {
+        showToast("Soxta 'abcd-123' manzilini ishlatib bo'lmaydi. Iltimos, haqiqiy Ngrok URL kiritib, Saqlash tugmasini bosing!", 'error');
+        if (urlInput) urlInput.focus();
+        return;
+    }
+
     const syncBtn = btn || document.getElementById('uncat-sync-1c-btn');
     if (syncBtn) {
         syncBtn.disabled = true;
