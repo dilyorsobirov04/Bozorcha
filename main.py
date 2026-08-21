@@ -57,6 +57,8 @@ async def main():
     logging.info("🚀 Bot polling va TMA server muvaffaqiyatli ishga tushirildi...")
 
     try:
+        # Clear active webhook / pending updates first to prevent TelegramConflictError
+        await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     finally:
         server.should_exit = True

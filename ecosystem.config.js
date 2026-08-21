@@ -11,6 +11,7 @@ module.exports = {
       name: "bozorcha-bot",
       script: "main.py",
       interpreter: "python",
+      instances: 1,
       exec_mode: "fork",
       autorestart: true,
       watch: false,
