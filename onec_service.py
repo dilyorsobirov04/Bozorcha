@@ -106,7 +106,7 @@ def is_localhost_url(url: str) -> bool:
 
 
 def clean_1c_url(raw_url: Optional[str]) -> str:
-    """Strips whitespace, markdown brackets/parentheses, quotes, and duplicates."""
+    """Strips whitespace, markdown brackets/parentheses, quotes, duplicates, and formats 1C endpoint path."""
     if not raw_url:
         return ""
     s = str(raw_url).strip().strip("'\"").strip()
@@ -129,8 +129,16 @@ def clean_1c_url(raw_url: Optional[str]) -> str:
         if dup_match:
             s = dup_match.group(1).strip()
 
-    # Remove any trailing brackets/punctuation
-    s = re.sub(r'[\]\)>.,;\"\'\s]+$', '', s)
+    # Remove any trailing brackets/punctuation/slashes
+    s = re.sub(r'[\]\)>.,;\"\'\s]+$', '', s).rstrip('/')
+
+    # 4. Ensure complete 1C route structure without stripping base paths
+    if s and s.startswith(("http://", "https://")):
+        if "/hs/" not in s:
+            s = f"{s}/Bozorcham/hs/Bozorcham/GetTovarList"
+        elif not s.endswith("/GetTovarList"):
+            s = f"{s}/GetTovarList"
+
     return s
 
 
@@ -138,14 +146,11 @@ def get_active_1c_url(override_url: Optional[str] = None) -> str:
     """
     Returns currently active 1C URL from dynamic system settings / Database FIRST.
     Fallbacks to process.env.ONEC_API_URL / API_1C_URL.
-    Sanitizes trailing slashes and ensures /GetTovarList suffix.
+    Sanitizes trailing slashes and enforces /Bozorcham/hs/Bozorcham/GetTovarList path.
     """
     if override_url and str(override_url).strip():
         cleaned = clean_1c_url(override_url)
         if cleaned:
-            cleaned = cleaned.rstrip('/')
-            if not cleaned.endswith("/GetTovarList"):
-                cleaned = f"{cleaned}/GetTovarList"
             print(f"[1C CRITICAL DEBUG] Making HTTP request to OVERRIDE URL: {cleaned}", flush=True)
             return cleaned
 
@@ -165,13 +170,6 @@ def get_active_1c_url(override_url: Optional[str] = None) -> str:
 
     if not cleaned:
         return ""
-
-    # 3. Clean trailing slashes
-    cleaned = cleaned.rstrip('/')
-
-    # 4. Ensure URL ends with /GetTovarList
-    if not cleaned.endswith("/GetTovarList"):
-        cleaned = f"{cleaned}/GetTovarList"
 
     print(f"[1C CRITICAL DEBUG] Making HTTP request to EXACT URL: {cleaned}", flush=True)
     return cleaned
