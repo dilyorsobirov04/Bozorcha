@@ -578,32 +578,76 @@ def create_webapp_server() -> FastAPI:
             except Exception:
                 pass
 
+        endpoint_url = (
+            request.query_params.get("endpointUrl") or
+            request.query_params.get("endpoint_url") or
+            request.query_params.get("1c_endpoint") or
+            request.query_params.get("api_url") or
+            request.query_params.get("url")
+        )
+
         raw_data = None
         has_body = False
 
         try:
             body_bytes = await request.body()
             if body_bytes and len(body_bytes.strip()) > 0:
-                has_body = True
                 content_type = request.headers.get("content-type", "").lower()
                 if "application/json" in content_type:
                     try:
-                        raw_data = await request.json()
+                        parsed_body = await request.json()
+                        if isinstance(parsed_body, dict):
+                            # Accept endpoint directly from request body
+                            b_url = (
+                                parsed_body.get("endpointUrl") or
+                                parsed_body.get("endpoint_url") or
+                                parsed_body.get("1c_endpoint") or
+                                parsed_body.get("api_url") or
+                                parsed_body.get("url")
+                            )
+                            if b_url:
+                                endpoint_url = str(b_url).strip()
+                            
+                            has_product_keys = any(
+                                k in parsed_body for k in [
+                                    "data", "items", "Tovary", "products", "GetTovarList", "Tovari", "tovary",
+                                    "id", "sku", "SKU", "Code", "code", "Код", "код", "Name", "name", "Наименование", "barcode"
+                                ]
+                            )
+                            if has_product_keys:
+                                raw_data = parsed_body
+                                has_body = True
+                        elif isinstance(parsed_body, list):
+                            raw_data = parsed_body
+                            has_body = True
                     except Exception:
                         raw_data = body_bytes.decode("utf-8", errors="ignore")
+                        has_body = True
                 elif "xml" in content_type or "text" in content_type:
                     raw_data = body_bytes.decode("utf-8", errors="ignore")
+                    has_body = True
                 else:
                     try:
-                        raw_data = await request.json()
+                        parsed_body = await request.json()
+                        if isinstance(parsed_body, (dict, list)):
+                            raw_data = parsed_body
+                            has_body = True
+                        else:
+                            raw_data = body_bytes.decode("utf-8", errors="ignore")
+                            has_body = True
                     except Exception:
                         raw_data = body_bytes.decode("utf-8", errors="ignore")
+                        has_body = True
         except Exception:
             has_body = False
 
+        if endpoint_url:
+            update_1c_config(api_url=endpoint_url)
+
         # Launch 1C sync asynchronously in background task (Non-blocking UI)
-        result = await run_background_1c_sync(force_refresh=force, raw_payload=raw_data if has_body else None)
+        result = await run_background_1c_sync(force_refresh=force, raw_payload=raw_data if has_body else None, endpoint_url=endpoint_url)
         return result
+
 
     @app.get("/api/admin/1c/config")
     @app.get("/api/admin/1c/status")

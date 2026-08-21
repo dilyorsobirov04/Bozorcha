@@ -790,7 +790,7 @@ def sync_1c_products(raw_data: any) -> dict:
         print(f"DEBUG [Sample First Item]: {sample_str}")
 
     if len(items_to_process) == 0:
-        err_msg = "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring."
+        err_msg = "1C API bo'sh ro'yxat qaytardi. 1C HTTP Servis funksiyasini tekshiring."
         print(f"DEBUG SYNC ERROR: {err_msg} (0 items to process)", flush=True)
         return {
             "success": False,
@@ -958,7 +958,7 @@ def sync_1c_products(raw_data: any) -> dict:
             synced_products.append(new_product)
 
     if len(synced_products) == 0:
-        err_msg = "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring."
+        err_msg = "1C API bo'sh ro'yxat qaytardi. 1C HTTP Servis funksiyasini tekshiring."
         print(f"DEBUG SYNC ERROR: {err_msg} (0 products synced out of {len(items_to_process)} items)", flush=True)
         return {
             "success": False,
@@ -1055,12 +1055,13 @@ async def _async_persist_synced_products(products_list: list) -> dict:
                         price = EXCLUDED.price,
                         stock = EXCLUDED.stock,
                         unit = EXCLUDED.unit,
-                        category_id = COALESCE(products.category_id, EXCLUDED.category_id),
+                        category_id = COALESCE(EXCLUDED.category_id, products.category_id),
                         barcode = COALESCE(EXCLUDED.barcode, products.barcode),
                         description = COALESCE(EXCLUDED.description, products.description),
                         image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                         updated_at = CURRENT_TIMESTAMP
                 """, args_list)
+                await asyncio.sleep(0.01)
                 await asyncio.sleep(0.01)
 
             # Query PostgreSQL table directly after upserting to verify total count

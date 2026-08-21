@@ -135,12 +135,21 @@ def clean_1c_url(raw_url: Optional[str]) -> str:
     return s
 
 
-def get_active_1c_url() -> str:
+def get_active_1c_url(override_url: Optional[str] = None) -> str:
     """
     Returns currently active 1C URL from dynamic system settings / Database FIRST.
     Fallbacks to process.env.ONEC_API_URL / API_1C_URL.
     Sanitizes trailing slashes and ensures /GetTovarList suffix.
     """
+    if override_url and str(override_url).strip():
+        cleaned = clean_1c_url(override_url)
+        if cleaned:
+            cleaned = cleaned.rstrip('/')
+            if not cleaned.endswith("/GetTovarList"):
+                cleaned = f"{cleaned}/GetTovarList"
+            print(f"[1C CRITICAL DEBUG] Making HTTP request to OVERRIDE URL: {cleaned}", flush=True)
+            return cleaned
+
     # 1. Fetch from DB settings first
     db_val = (
         get_system_setting("ONEC_API_URL") or
@@ -167,6 +176,7 @@ def get_active_1c_url() -> str:
 
     print(f"[1C CRITICAL DEBUG] Making HTTP request to EXACT URL: {cleaned}", flush=True)
     return cleaned
+
 
 
 def get_active_1c_user() -> str:
@@ -277,35 +287,14 @@ def clear_1c_cache():
 
 def _extract_items_list(data: Any) -> list:
     """Helper to extract list of product items from various 1C JSON/dict structures."""
+    if data is None:
+        return []
+
     if isinstance(data, list):
         print(f"DEBUG 1C RAW RESPONSE TYPE: list, LEN: {len(data)}", flush=True)
         return data
-    elif isinstance(data, dict):
-        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(data.keys())}", flush=True)
-        
-        # Check "data" key first as top priority, followed by other common keys
-        items = (
-            data.get("data") if isinstance(data.get("data"), list) else None
-        )
-        if items is None:
-            for key in ["Tovary", "items", "products", "GetTovarList", "Tovari", "tovary", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
-                if key in data and isinstance(data[key], list):
-                    items = data[key]
-                    break
 
-        if items is not None:
-            print(f"DEBUG: Found {len(items)} product items under dictionary key.", flush=True)
-            return items
-
-        for key, val in data.items():
-            if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
-                print(f"DEBUG: Found product array under dynamic key '{key}' with {len(val)} items.", flush=True)
-                return val
-
-        if any(k in data for k in ["id", "sku", "SKU", "Код", "код", "Name", "name", "Наименование"]):
-            print("DEBUG: Response dict represents a single product item.", flush=True)
-            return [data]
-    elif isinstance(data, str):
+    if isinstance(data, str):
         trimmed = data.strip().lstrip('\ufeff')
         if trimmed.startswith("{") or trimmed.startswith("["):
             try:
@@ -313,11 +302,76 @@ def _extract_items_list(data: Any) -> list:
                 return _extract_items_list(parsed)
             except Exception as e:
                 print("1C JSON parse error in _extract_items_list:", e, flush=True)
+        return []
+
+    if isinstance(data, dict):
+        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(data.keys())}", flush=True)
+        
+        # Priority 1: Check "data" key (can be list, JSON string, or wrapper dict)
+        if "data" in data and data["data"] is not None:
+            d_val = data["data"]
+            if isinstance(d_val, list):
+                print(f"DEBUG: Found {len(d_val)} product items under 'data' key.", flush=True)
+                return d_val
+            elif isinstance(d_val, str):
+                try:
+                    parsed_d = json.loads(d_val.strip().lstrip('\ufeff'))
+                    res = _extract_items_list(parsed_d)
+                    if res:
+                        return res
+                except Exception:
+                    pass
+            elif isinstance(d_val, dict):
+                res = _extract_items_list(d_val)
+                if res:
+                    return res
+
+        # Priority 2: Check "items" key
+        if "items" in data and data["items"] is not None:
+            items_val = data["items"]
+            if isinstance(items_val, list):
+                print(f"DEBUG: Found {len(items_val)} product items under 'items' key.", flush=True)
+                return items_val
+            elif isinstance(items_val, str):
+                try:
+                    parsed_items = json.loads(items_val.strip().lstrip('\ufeff'))
+                    res = _extract_items_list(parsed_items)
+                    if res:
+                        return res
+                except Exception:
+                    pass
+            elif isinstance(items_val, dict):
+                res = _extract_items_list(items_val)
+                if res:
+                    return res
+
+        # Priority 3: Check other standard key names
+        for key in ["Tovary", "products", "GetTovarList", "Tovari", "tovary", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
+            if key in data and data[key] is not None:
+                val = data[key]
+                if isinstance(val, list):
+                    print(f"DEBUG: Found {len(val)} product items under key '{key}'.", flush=True)
+                    return val
+                elif isinstance(val, (dict, str)):
+                    res = _extract_items_list(val)
+                    if res:
+                        return res
+
+        # Priority 4: Dynamic scan of dictionary values for list of dicts
+        for key, val in data.items():
+            if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+                print(f"DEBUG: Found product array under dynamic key '{key}' with {len(val)} items.", flush=True)
+                return val
+
+        # Priority 5: Single item dict
+        if any(k in data for k in ["id", "sku", "SKU", "Code", "code", "Код", "код", "Name", "name", "Наименование", "barcode"]):
+            print("DEBUG: Response dict represents a single product item.", flush=True)
+            return [data]
 
     return []
 
 
-async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Optional[int] = None) -> dict:
+async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Optional[int] = None, endpoint_url: Optional[str] = None) -> dict:
     """
     Asynchronously fetches product catalog from 1C HTTP Service.
     Loops through pages (limit/offset or page=1,2,3...) until 0 items are returned.
@@ -325,7 +379,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     """
     global _cache_data, _cache_time
 
-    active_url = get_active_1c_url()
+    active_url = get_active_1c_url(override_url=endpoint_url)
     active_user = get_active_1c_user()
     active_pass = get_active_1c_pass()
     ttl = int(get_system_setting("cache_ttl", 300))
@@ -360,8 +414,8 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
     # 4. Mandatory Headers (Ngrok bypass & JSON accept)
     headers = {
-        "ngrok-skip-browser-warning": "true",
-        "User-Agent": "BozorchaBackend/1.0",
+        "ngrok-skip-browser-warning": "69420",
+        "User-Agent": "BozorchaApp/1.0",
         "Accept": "application/json",
         "Content-Type": "application/json",
         "Bypass-Tunnel-Reminder": "true",
@@ -494,7 +548,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
             # Check if 0 items total were parsed
             if len(accumulated_items) == 0:
-                err_msg = "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring."
+                err_msg = "1C API bo'sh ro'yxat qaytardi. 1C HTTP Servis funksiyasini tekshiring."
                 print(f"DEBUG 1C FETCH ERROR: {err_msg} (0 items parsed)", flush=True)
                 logger.warning(err_msg)
                 return {
@@ -555,13 +609,13 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
             }
 
 
-async def sync_products_from_1c(force_refresh: bool = True) -> dict:
+async def sync_products_from_1c(force_refresh: bool = True, endpoint_url: Optional[str] = None) -> dict:
     """
     Fetches latest products from 1C and upserts into local database.
     Uncategorized items receive category_id = None.
     Returns fresh list of uncategorized products instantly.
     """
-    fetch_res = await fetch_1c_products(force_refresh=force_refresh)
+    fetch_res = await fetch_1c_products(force_refresh=force_refresh, endpoint_url=endpoint_url)
 
     if not fetch_res.get("success"):
         return {
@@ -607,7 +661,7 @@ def get_1c_sync_state() -> dict:
     }
 
 
-async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = None) -> dict:
+async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = None, endpoint_url: Optional[str] = None) -> dict:
     """Spawns 1C product fetching & database upsert asynchronously in background."""
     global _1c_sync_state
     if _1c_sync_state["is_syncing"]:
@@ -616,6 +670,9 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
             "is_syncing": True,
             "message": "Sinxronlash jarayoni allaqachon fonda ishlamoqda..."
         }
+
+    if endpoint_url:
+        update_1c_config(api_url=endpoint_url)
 
     _1c_sync_state["is_syncing"] = True
     _1c_sync_state["error"] = None
@@ -631,7 +688,7 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
                 if products_to_persist:
                     await _async_persist_synced_products(products_to_persist)
             else:
-                res = await sync_products_from_1c(force_refresh=force_refresh)
+                res = await sync_products_from_1c(force_refresh=force_refresh, endpoint_url=endpoint_url)
             _1c_sync_state["last_result"] = res
             _1c_sync_state["last_sync_time"] = time.time()
             fetched = res.get('total_received', res.get('count', 0))
@@ -660,5 +717,6 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
         "is_syncing": True,
         "message": "1C bilan sinxronlash fonda boshlandi. Sahifani yangilab turing."
     }
+
 
 

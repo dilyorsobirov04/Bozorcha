@@ -3096,13 +3096,15 @@ async function trigger1CSync(btn = null) {
         syncBtn.innerHTML = `<span class="uncat-btn-spinner" style="margin-right: 6px;"></span><span>Sinxronlanmoqda...</span>`;
     }
 
-    try {
+        const bodyPayload = effectiveUrl ? { endpointUrl: effectiveUrl, endpoint_url: effectiveUrl } : {};
+
         const res = await fetch(`/api/admin/sync-1c?user_id=${ALLOWED_ADMIN_ID}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Admin-Id': String(ALLOWED_ADMIN_ID)
-            }
+            },
+            body: JSON.stringify(bodyPayload)
         });
 
         const data = await res.json().catch(() => ({}));
