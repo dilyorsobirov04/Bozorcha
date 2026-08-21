@@ -164,7 +164,7 @@ def get_active_1c_url(override_url: Optional[str] = None) -> str:
     raw_url = db_val or env_val or DEFAULT_1C_URL
     cleaned = clean_1c_url(raw_url)
 
-    if not cleaned or "abcd-123" in cleaned or "xxxx" in cleaned:
+    if not cleaned:
         cleaned = clean_1c_url(DEFAULT_1C_URL)
 
     # 3. Clean trailing slashes
@@ -414,8 +414,8 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
     # 4. Mandatory Headers (Ngrok bypass & JSON accept)
     headers = {
-        "ngrok-skip-browser-warning": "69420",
-        "User-Agent": "BozorchaApp/1.0",
+        "ngrok-skip-browser-warning": "true",
+        "User-Agent": "Bozorcha/1.0",
         "Accept": "application/json",
         "Content-Type": "application/json",
         "Bypass-Tunnel-Reminder": "true",

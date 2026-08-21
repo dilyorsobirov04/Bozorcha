@@ -2637,7 +2637,7 @@ async function load1CConfigStatus() {
         if (res.ok) {
             const data = await res.json();
             let url = (data.api_url || '').trim();
-            if (!url || url.includes('abcd-123') || url.includes('xxxx')) {
+            if (!url) {
                 url = DEFAULT_1C_URL;
             }
             if (urlInput) {
@@ -2886,7 +2886,8 @@ async function loadUncategorizedProducts(searchQuery = '', triggerBtn = null) {
 
         if (res.ok) {
             const data = await res.json();
-            uncategorizedProducts = Array.isArray(data) ? data : (data.products || []);
+            const rawItems = Array.isArray(data) ? data : (data.products || data.data || data.items || []);
+            uncategorizedProducts = Array.isArray(rawItems) ? rawItems : [];
 
             if (countEl) countEl.innerText = uncategorizedProducts.length;
             if (headerCountEl) headerCountEl.innerText = uncategorizedProducts.length;
@@ -3206,7 +3207,7 @@ async function trigger1CSync(btn = null) {
 
     const urlInput = document.getElementById('onec-url-input');
     let effectiveUrl = urlInput ? urlInput.value.trim() : '';
-    if (!effectiveUrl || effectiveUrl.includes('abcd-123') || effectiveUrl.includes('xxxx')) {
+    if (!effectiveUrl) {
         effectiveUrl = DEFAULT_1C_URL;
         if (urlInput) urlInput.value = effectiveUrl;
     }

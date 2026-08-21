@@ -745,6 +745,52 @@ def update_product_photo_and_stock(
         return None
 
 
+def extract_1c_items(data: Any) -> list:
+    """Helper to unpack items array from any 1C JSON/dict payload structure (nested data, items, etc.)."""
+    if data is None:
+        return []
+
+    if isinstance(data, list):
+        return data
+
+    if isinstance(data, str):
+        trimmed = data.strip().lstrip('\ufeff')
+        if trimmed.startswith("{") or trimmed.startswith("["):
+            try:
+                parsed = json.loads(trimmed)
+                return extract_1c_items(parsed)
+            except Exception:
+                pass
+        return []
+
+    if isinstance(data, dict):
+        # 1. Direct keys that hold array or nested structure
+        for key in ["data", "items", "Tovary", "products", "GetTovarList", "Tovari", "tovary", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
+            if key in data and data[key] is not None:
+                val = data[key]
+                if isinstance(val, list):
+                    return val
+                elif isinstance(val, (dict, str)):
+                    res = extract_1c_items(val)
+                    if res:
+                        return res
+
+        # 2. Dynamic scan of any dict value that is a list of dicts or nested dict
+        for key, val in data.items():
+            if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+                return val
+            elif isinstance(val, (dict, str)):
+                res = extract_1c_items(val)
+                if res:
+                    return res
+
+        # 3. Single product dict check
+        if any(k in data for k in ["id", "sku", "SKU", "Code", "code", "Код", "код", "Name", "name", "Наименование", "barcode"]):
+            return [data]
+
+    return []
+
+
 def sync_1c_products(raw_data: any) -> dict:
     """
     Parses and synchronizes products from 1C Enterprise (JSON, XML or dict/list).
@@ -754,41 +800,10 @@ def sync_1c_products(raw_data: any) -> dict:
     sample = str(raw_data)[:200].encode('ascii', errors='replace').decode('ascii')
     print(f"1C RAW RESPONSE received in sync_1c_products ({len(str(raw_data))} bytes): {sample}...")
 
-    items_to_process = []
+    items_to_process = extract_1c_items(raw_data)
 
-    # 1. Parse raw_data to list of dicts
-    if isinstance(raw_data, list):
-        items_to_process = raw_data
-    elif isinstance(raw_data, dict):
-        print(f"DEBUG 1C RAW RESPONSE KEYS: {list(raw_data.keys())}", flush=True)
-        found_list = False
-        for key in ["data", "Tovary", "items", "products", "GetTovarList", "Tovari", "tovary", "goods", "rows", "payload", "result", "value", "content", "list", "Товары", "товары", "Номенклатура", "номенклатура", "Catalog", "catalog", "Товар", "товар"]:
-            if key in raw_data and isinstance(raw_data[key], list):
-                items_to_process = raw_data[key]
-                found_list = True
-                print(f"DEBUG: Found product array under key '{key}' with {len(items_to_process)} items.", flush=True)
-                break
-        if not found_list:
-            for k, val in raw_data.items():
-                if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
-                    items_to_process = val
-                    found_list = True
-                    print(f"DEBUG: Found product array under dynamic key '{k}' with {len(items_to_process)} items.")
-                    break
-        if not found_list:
-            if any(k in raw_data for k in ["id", "sku", "SKU", "Код", "код", "Name", "name", "Наименование"]):
-                items_to_process = [raw_data]
-    elif isinstance(raw_data, str):
-        trimmed = raw_data.strip()
-        if trimmed.startswith("{") or trimmed.startswith("["):
-            try:
-                parsed_json = json.loads(trimmed)
-                return sync_1c_products(parsed_json)
-            except Exception as e:
-                print("1C JSON parse error:", e)
-
-        # Try XML parsing
-        if trimmed.startswith("<"):
+    # XML fallback if raw_data was text/xml
+    if not items_to_process and isinstance(raw_data, str) and raw_data.strip().startswith("<"):
             try:
                 root = ET.fromstring(trimmed)
                 product_nodes = []
