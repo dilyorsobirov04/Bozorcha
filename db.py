@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import traceback
 import xml.etree.ElementTree as ET
 import urllib.parse
@@ -24,7 +25,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:dilyor1234@127.0
 
 # System Settings Store (Dynamic settings, 1C Enterprise integration, etc.)
 SYSTEM_SETTINGS_DB = {
-    "api_1c_url": (os.getenv("API_1C_URL", "").strip() or "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"),
+    "api_1c_url": os.getenv("API_1C_URL", "").strip(),
+    "ONEC_API_URL": os.getenv("ONEC_API_URL", "").strip(),
     "api_1c_user": os.getenv("API_1C_USER", "mobiles").strip(),
     "api_1c_pass": os.getenv("API_1C_PASS", "123").strip(),
     "cache_ttl": int(os.getenv("CACHE_TTL", "300")),
@@ -208,18 +210,7 @@ async def init_postgres_db():
                     SYSTEM_SETTINGS_DB["api_1c_url"] = v
                     SYSTEM_SETTINGS_DB["ONEC_API_URL"] = v
 
-            # Fallback default URL ONLY if no URL exists in system_settings
-            target_url = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
-            init_url = SYSTEM_SETTINGS_DB.get("ONEC_API_URL") or SYSTEM_SETTINGS_DB.get("api_1c_url", "").strip()
-            if not init_url:
-                init_url = target_url
-                SYSTEM_SETTINGS_DB["api_1c_url"] = init_url
-                SYSTEM_SETTINGS_DB["ONEC_API_URL"] = init_url
-                await conn.execute("""
-                    INSERT INTO system_settings (key, value, updated_at)
-                    VALUES ('ONEC_API_URL', $1, CURRENT_TIMESTAMP)
-                    ON CONFLICT (key) DO NOTHING
-                """, init_url)
+
 
             # Load all products from PostgreSQL database into memory
             rows = await conn.fetch("SELECT * FROM products ORDER BY id ASC")
@@ -878,7 +869,7 @@ def sync_1c_products(raw_data: any) -> dict:
         if sku_val is None or str(sku_val).strip() == "":
             invalid_count += 1
             continue
-        sku = str(sku_val).replace("\xa0", "").replace(" ", "").strip()
+        sku = re.sub(r'\s+', '', str(sku_val))
 
         # Extract Name / Title
         name_val = (
@@ -898,11 +889,13 @@ def sync_1c_products(raw_data: any) -> dict:
         price_val = (
             item.get("Price") or item.get("price") or
             item.get("Цена") or item.get("цена") or
+            item.get("Cena") or item.get("cena") or
             item.get("Cost") or item.get("cost") or
             item.get("amount") or item.get("Amount") or 0
         )
         try:
-            price = int(round(float(str(price_val).replace("\xa0", "").replace(" ", "").replace(",", "."))))
+            clean_price_str = re.sub(r'\s+', '', str(price_val)).replace(",", ".")
+            price = int(round(float(clean_price_str))) if clean_price_str else 0
             if price < 0:
                 price = 0
         except (ValueError, TypeError):
@@ -912,12 +905,15 @@ def sync_1c_products(raw_data: any) -> dict:
         stock_val = (
             item.get("Quantity") or item.get("quantity") or
             item.get("Количество") or item.get("количество") or
+            item.get("Kolichestvo") or item.get("kolichestvo") or
             item.get("stock") or item.get("Stock") or
             item.get("count") or item.get("Count") or
+            item.get("kolvo") or item.get("Kolvo") or
             item.get("Остаток") or item.get("остаток") or 0
         )
         try:
-            stock = int(round(float(str(stock_val).replace("\xa0", "").replace(" ", "").replace(",", "."))))
+            clean_stock_str = re.sub(r'\s+', '', str(stock_val)).replace(",", ".")
+            stock = int(round(float(clean_stock_str))) if clean_stock_str else 0
             if stock < 0:
                 stock = 0
         except (ValueError, TypeError):

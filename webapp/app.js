@@ -2622,12 +2622,13 @@ function getCategoryHierarchyName(categoryId) {
 let uncategorizedProducts = [];
 let uncategorizedSearchTimeout = null;
 
-const DEFAULT_1C_URL = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList";
+const DEFAULT_1C_URL = "";
 
 async function load1CConfigStatus() {
     if (!isCurrentUserAdmin()) return;
     const urlInput = document.getElementById('onec-url-input');
     const badgeEl = document.getElementById('onec-banner-badge');
+    const hintCodeEl = document.getElementById('onec-banner-hint-code');
     if (!badgeEl) return;
 
     try {
@@ -2637,11 +2638,11 @@ async function load1CConfigStatus() {
         if (res.ok) {
             const data = await res.json();
             let url = (data.api_url || '').trim();
-            if (!url) {
-                url = DEFAULT_1C_URL;
-            }
-            if (urlInput) {
+            if (urlInput && url) {
                 urlInput.value = url;
+            }
+            if (hintCodeEl) {
+                hintCodeEl.innerText = url || '1C URL kiritilmagan';
             }
 
             if (!url) {
@@ -3208,8 +3209,9 @@ async function trigger1CSync(btn = null) {
     const urlInput = document.getElementById('onec-url-input');
     let effectiveUrl = urlInput ? urlInput.value.trim() : '';
     if (!effectiveUrl) {
-        effectiveUrl = DEFAULT_1C_URL;
-        if (urlInput) urlInput.value = effectiveUrl;
+        showToast("Iltimos, 1C HTTP servis URL manzilini kiriting!", 'error');
+        if (urlInput) urlInput.focus();
+        return;
     }
 
     const syncBtn = btn || document.getElementById('uncat-sync-1c-btn');

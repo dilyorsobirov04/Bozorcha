@@ -54,8 +54,7 @@ Shuningdek, 1C da nashr qilingan (published) baza nomi va servis yo'li registrga
 """
 
 
-DEFAULT_1C_URL = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
-
+DEFAULT_1C_URL = ""
 
 def resolve_dynamic_ngrok_url_sync() -> Optional[str]:
     """
@@ -161,11 +160,11 @@ def get_active_1c_url(override_url: Optional[str] = None) -> str:
     # 2. Fallback to env variable ONEC_API_URL / API_1C_URL
     env_val = os.getenv("ONEC_API_URL", "").strip() or os.getenv("API_1C_URL", "").strip()
 
-    raw_url = db_val or env_val or DEFAULT_1C_URL
+    raw_url = db_val or env_val or ""
     cleaned = clean_1c_url(raw_url)
 
     if not cleaned:
-        cleaned = clean_1c_url(DEFAULT_1C_URL)
+        return ""
 
     # 3. Clean trailing slashes
     cleaned = cleaned.rstrip('/')
@@ -464,6 +463,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         status = response.status
                         raw_text = await response.text()
 
+                        print(f"[1C RAW RESP]: {raw_text}", flush=True)
                         print(f"[1C DEBUG] Response Status: {status}", flush=True)
                         print(f"[1C DEBUG] Raw Body Preview: {raw_text[:500]}", flush=True)
                         print(f"=== 1C STATUS: {status} ===", flush=True)
