@@ -945,6 +945,8 @@ def sync_1c_products(raw_data: any) -> dict:
 
         # Extract Stock / Quantity (do not discard zero quantity)
         stock_val = (
+            item.get("Ost") or item.get("ost") or
+            item.get("Ostatok") or item.get("ostatok") or
             item.get("Quantity") or item.get("quantity") or
             item.get("Количество") or item.get("количество") or
             item.get("Kolichestvo") or item.get("kolichestvo") or
@@ -963,6 +965,8 @@ def sync_1c_products(raw_data: any) -> dict:
 
         # Extract Unit
         unit_val = (
+            item.get("EdIsm") or item.get("edism") or
+            item.get("Edizm") or item.get("edizm") or
             item.get("Unit") or item.get("unit") or
             item.get("ЕдИзм") or item.get("единица") or
             item.get("БазоваяЕдиница") or item.get("ЕдиницаИзмерения") or
