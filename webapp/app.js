@@ -2638,16 +2638,19 @@ async function load1CConfigStatus() {
         if (res.ok) {
             const data = await res.json();
             let url = (data.api_url || '').trim();
-            if (urlInput && url) {
+            if (url.includes('abcd-123')) {
+                url = '';
+            }
+            if (urlInput) {
                 urlInput.value = url;
             }
             if (hintCodeEl) {
-                hintCodeEl.innerText = url || '1C URL kiritilmagan';
+                hintCodeEl.innerText = url || 'Manzil sozlanmagan';
             }
 
             if (!url) {
                 badgeEl.className = 'onec-badge err';
-                badgeEl.innerText = '❌ Manzil kiritilmagan';
+                badgeEl.innerText = '❌ Manzil sozlanmagan';
             } else if (data.is_localhost || url.includes('127.0.0.1') || url.includes('localhost')) {
                 badgeEl.className = 'onec-badge ok';
                 badgeEl.innerText = '🟢 Localhost (127.0.0.1)';
@@ -2705,7 +2708,10 @@ async function load1CConfigStatus() {
     } catch (e) {
         console.warn('Failed to load 1C config status:', e);
         if (urlInput) {
-            urlInput.value = DEFAULT_1C_URL;
+            urlInput.value = "";
+        }
+        if (hintCodeEl) {
+            hintCodeEl.innerText = 'Manzil sozlanmagan';
         }
     }
 }
