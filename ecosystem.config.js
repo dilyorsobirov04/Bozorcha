@@ -17,7 +17,9 @@ module.exports = {
       max_memory_restart: "500M",
       env: {
         NODE_ENV: "production",
-        PYTHONUNBUFFERED: "1"
+        PYTHONUNBUFFERED: "1",
+        PYTHONUTF8: "1",
+        PYTHONIOENCODING: "utf-8"
       }
     },
     {

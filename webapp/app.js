@@ -40,6 +40,88 @@ function isCurrentUserAdmin() {
     return currentUserId !== null && ALLOWED_ADMIN_IDS.includes(Number(currentUserId));
 }
 
+// ----------------- UI UNFREEZING & LOADING TIMEOUT FALLBACK -----------------
+let _globalLoadingTimer = null;
+
+function setGlobalLoading(isLoading, timeoutMs = 10000, message = "Yuklanmoqda...") {
+    const overlay = document.getElementById('global-loading-overlay');
+    const textEl = document.getElementById('global-loading-text');
+
+    if (_globalLoadingTimer) {
+        clearTimeout(_globalLoadingTimer);
+        _globalLoadingTimer = null;
+    }
+
+    if (textEl && message) {
+        textEl.innerText = message;
+    }
+
+    if (isLoading) {
+        if (overlay) {
+            overlay.classList.remove('hidden');
+            overlay.style.pointerEvents = 'auto';
+            overlay.style.display = 'flex';
+            overlay.style.visibility = 'visible';
+            overlay.style.opacity = '1';
+        }
+        // 10-second auto-reset safety mechanism
+        _globalLoadingTimer = setTimeout(() => {
+            console.warn('[TIMEOUT SAFETY FALLBACK]: Auto-resetting loading states after 10s');
+            forceResetUIState();
+        }, timeoutMs);
+    } else {
+        if (overlay) {
+            overlay.classList.add('hidden');
+            overlay.style.pointerEvents = 'none';
+            overlay.style.display = 'none';
+            overlay.style.visibility = 'hidden';
+            overlay.style.opacity = '0';
+        }
+    }
+}
+
+function forceResetUIState() {
+    // 1. Hide global loading overlay
+    const overlay = document.getElementById('global-loading-overlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.style.pointerEvents = 'none';
+        overlay.style.display = 'none';
+        overlay.style.visibility = 'hidden';
+        overlay.style.opacity = '0';
+    }
+
+    if (_globalLoadingTimer) {
+        clearTimeout(_globalLoadingTimer);
+        _globalLoadingTimer = null;
+    }
+
+    // 2. Unblock all disabled loading buttons across the app
+    document.querySelectorAll('button').forEach(btn => {
+        if (btn.classList.contains('loading') || btn.disabled) {
+            btn.disabled = false;
+            btn.classList.remove('loading');
+            if (btn.id === 'btn-confirm-final-order' || btn.classList.contains('modal-submit-order-btn')) {
+                btn.innerHTML = `<span>✅ Buyurtmani tasdiqlash</span>`;
+            } else if (btn.id === 'uncat-sync-1c-btn' || btn.classList.contains('onec-sync-btn')) {
+                btn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
+            }
+        }
+    });
+
+    // 3. Ensure Bottom Nav bar is always clickable
+    const bottomNav = document.getElementById('bottom-nav-bar');
+    if (bottomNav) {
+        bottomNav.style.pointerEvents = 'auto';
+        bottomNav.style.zIndex = '50';
+    }
+
+    // 4. Ensure hidden modals release pointer events
+    document.querySelectorAll('.modal-backdrop.hidden, .modal-overlay.hidden, .hidden').forEach(el => {
+        el.style.pointerEvents = 'none';
+    });
+}
+
 // App State
 let currentScreen = 'onboarding';
 let products = [];
@@ -951,8 +1033,14 @@ function renderModalSelector(isWeight) {
 }
 
 function closeProductModal(event) {
+    if (event && event.target !== event.currentTarget) return;
     const modal = document.getElementById('modal-product-detail');
-    if (modal) modal.classList.add('hidden');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.style.pointerEvents = 'none';
+        modal.style.display = 'none';
+    }
+    forceResetUIState();
 }
 
 function selectWeight(weight) {
@@ -1561,120 +1649,154 @@ async function submitOrderFinal() {
         subtotal += itemPrice * (entry.qty || 1);
     });
 
+    setGlobalLoading(true, 10000, "Buyurtma berilmoqda...");
     if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.innerHTML = `<span>⏳ Buyurtma berilmoqda...</span>`;
     }
 
-    const user = tg?.initDataUnsafe?.user;
-
-    const orderPayload = {
-        user_id: user?.id,
-        full_name: fullName,
-        phone_number: phoneNumber,
-        address: address || `Geolokatsiya: ${orderUserLocation.lat.toFixed(4)}, ${orderUserLocation.lng.toFixed(4)}`,
-        location_lat: orderUserLocation.lat,
-        location_lng: orderUserLocation.lng,
-        payment_method: selectedPaymentMethod,
-        payment_type: selectedPaymentMethod,
-        cart: cart,
-        cart_items: cart,
-        total_amount: subtotal,
-        total_price: subtotal,
-        user_info: {
-            id: user?.id,
-            first_name: user?.first_name || fullName,
-            last_name: user?.last_name || '',
-            username: user?.username,
-            full_name: fullName,
-            phone: phoneNumber
-        }
-    };
-
     let createdOrder = null;
-
     try {
-        const res = await fetch('/api/orders', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(orderPayload)
-        });
-        if (res.ok) {
-            const data = await res.json();
-            createdOrder = data.order || data;
+        const user = tg?.initDataUnsafe?.user;
+
+        const orderPayload = {
+            user_id: user?.id,
+            full_name: fullName,
+            phone_number: phoneNumber,
+            address: address || `Geolokatsiya: ${orderUserLocation.lat.toFixed(4)}, ${orderUserLocation.lng.toFixed(4)}`,
+            location_lat: orderUserLocation.lat,
+            location_lng: orderUserLocation.lng,
+            payment_method: selectedPaymentMethod,
+            payment_type: selectedPaymentMethod,
+            cart: cart,
+            cart_items: cart,
+            total_amount: subtotal,
+            total_price: subtotal,
+            user_info: {
+                id: user?.id,
+                first_name: user?.first_name || fullName,
+                last_name: user?.last_name || '',
+                username: user?.username,
+                full_name: fullName,
+                phone: phoneNumber
+            }
+        };
+
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timeoutId = controller ? setTimeout(() => controller.abort(), 15000) : null;
+
+        try {
+            const fetchOptions = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderPayload)
+            };
+            if (controller) fetchOptions.signal = controller.signal;
+
+            const res = await fetch('/api/orders', fetchOptions);
+            if (timeoutId) clearTimeout(timeoutId);
+
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && (data.success || data.order || data.id)) {
+                createdOrder = data.order || data;
+            } else {
+                const errMsg = data.message || data.error || "Xaridni rasmiylashtirishda xatolik yuz berdi";
+                console.error("[CHECKOUT ERROR]:", errMsg);
+                if (errorEl) {
+                    errorEl.innerText = `⚠️ ${errMsg}`;
+                    errorEl.classList.remove('hidden');
+                } else {
+                    showToast(errMsg, "error");
+                }
+            }
+        } catch (e) {
+            if (timeoutId) clearTimeout(timeoutId);
+            console.warn('Could not post order to API, checking fallback', e);
+            if (e.name === 'AbortError') {
+                const timeoutMsg = "Buyurtma berish vaqti tugadi (15s). Qayta urinib ko'ring.";
+                if (errorEl) {
+                    errorEl.innerText = `⚠️ ${timeoutMsg}`;
+                    errorEl.classList.remove('hidden');
+                } else {
+                    showToast(timeoutMsg, "error");
+                }
+            }
         }
-    } catch (e) {
-        console.warn('Could not post order to API, using client fallback', e);
+
+        if (!createdOrder) {
+            const fallbackId = "84" + Math.floor(100 + Math.random() * 900);
+            createdOrder = {
+                id: fallbackId,
+                order_id: fallbackId,
+                cart: cart,
+                total_amount: subtotal,
+                payment_type: selectedPaymentMethod,
+                payment_method_name: selectedPaymentMethod === 'click' ? 'Click / Payme' : 'Naqd pul',
+                status: "Qabul qilindi",
+                click_url: `https://my.click.uz/services/pay?service_id=32514&merchant_id=21458&amount=${subtotal}&transaction_param=${fallbackId}`
+            };
+        }
+
+        activeOrder = createdOrder;
+
+        if (tg?.HapticFeedback) {
+            tg.HapticFeedback.notificationOccurred('success');
+        }
+
+        // Close modal
+        closeCheckoutModal();
+
+        // Update Live Tracking Screen Elements
+        const trackingOrderId = document.getElementById('tracking-order-id');
+        if (trackingOrderId) {
+            trackingOrderId.innerText = `Buyurtma #${createdOrder.id}`;
+        }
+
+        const trackingPayBadge = document.getElementById('tracking-payment-badge');
+        if (trackingPayBadge) {
+            if (selectedPaymentMethod === 'click') {
+                trackingPayBadge.innerText = '⚡️ Click / Payme';
+                trackingPayBadge.className = 'status-live-chip payment-live-chip';
+            } else {
+                trackingPayBadge.innerText = '💵 Naqd pul';
+                trackingPayBadge.className = 'status-live-chip';
+            }
+        }
+
+        const trackingTotal = document.getElementById('tracking-order-total');
+        if (trackingTotal) {
+            trackingTotal.innerText = subtotal.toLocaleString('uz-UZ') + " so'm";
+        }
+
+        const clickActionBox = document.getElementById('tracking-click-action');
+        if (clickActionBox) {
+            if (selectedPaymentMethod === 'click' && createdOrder.click_url) {
+                clickActionBox.classList.remove('hidden');
+            } else {
+                clickActionBox.classList.add('hidden');
+            }
+        }
+
+        // Set initial tracking progress: Step 1 ("Qabul qilindi")
+        updateTrackingProgress("accepted", "Qabul qilindi");
+
+        // Reset Cart and Navigate to Live Tracking Screen
+        cart = {};
+        updateNavCartBadge();
+        syncAllProductCardCounters();
+        showToast("Buyurtmangiz muvaffaqiyatli qabul qilindi! 🎉", "success");
+        navigateTo('tracking');
+
+    } catch (actionError) {
+        console.error("[ACTION ERROR]:", actionError);
+        showToast(actionError.message || "Xatolik yuz berdi", "error");
     } finally {
+        setGlobalLoading(false);
         if (submitBtn) {
-            submitBtn.disabled = false;
+            submitBtn.disabled = Object.keys(cart).length === 0;
             submitBtn.innerHTML = `<span>✅ Buyurtmani tasdiqlash</span>`;
         }
     }
-
-    if (!createdOrder) {
-        const fallbackId = "84" + Math.floor(100 + Math.random() * 900);
-        createdOrder = {
-            id: fallbackId,
-            order_id: fallbackId,
-            cart: cart,
-            total_amount: subtotal,
-            payment_type: selectedPaymentMethod,
-            payment_method_name: selectedPaymentMethod === 'click' ? 'Click / Payme' : 'Naqd pul',
-            status: "Qabul qilindi",
-            click_url: `https://my.click.uz/services/pay?service_id=32514&merchant_id=21458&amount=${subtotal}&transaction_param=${fallbackId}`
-        };
-    }
-
-    activeOrder = createdOrder;
-
-    if (tg?.HapticFeedback) {
-        tg.HapticFeedback.notificationOccurred('success');
-    }
-
-    // Close modal
-    closeCheckoutModal();
-
-    // Update Live Tracking Screen Elements
-    const trackingOrderId = document.getElementById('tracking-order-id');
-    if (trackingOrderId) {
-        trackingOrderId.innerText = `Buyurtma #${createdOrder.id}`;
-    }
-
-    const trackingPayBadge = document.getElementById('tracking-payment-badge');
-    if (trackingPayBadge) {
-        if (selectedPaymentMethod === 'click') {
-            trackingPayBadge.innerText = '⚡️ Click / Payme';
-            trackingPayBadge.className = 'status-live-chip payment-live-chip';
-        } else {
-            trackingPayBadge.innerText = '💵 Naqd pul';
-            trackingPayBadge.className = 'status-live-chip';
-        }
-    }
-
-    const trackingTotal = document.getElementById('tracking-order-total');
-    if (trackingTotal) {
-        trackingTotal.innerText = subtotal.toLocaleString('uz-UZ') + " so'm";
-    }
-
-    const clickActionBox = document.getElementById('tracking-click-action');
-    if (clickActionBox) {
-        if (selectedPaymentMethod === 'click' && createdOrder.click_url) {
-            clickActionBox.classList.remove('hidden');
-        } else {
-            clickActionBox.classList.add('hidden');
-        }
-    }
-
-    // Set initial tracking progress: Step 1 ("Qabul qilindi")
-    updateTrackingProgress("accepted", "Qabul qilindi");
-
-    // Reset Cart and Navigate to Live Tracking Screen
-    cart = {};
-    updateNavCartBadge();
-    syncAllProductCardCounters();
-    showToast("Buyurtmangiz muvaffaqiyatli qabul qilindi! 🎉", "success");
-    navigateTo('tracking');
 }
 
 function openClickPaymentUrl() {
@@ -3096,6 +3218,9 @@ async function trigger1CSync(btn = null) {
         syncBtn.innerHTML = `<span class="uncat-btn-spinner" style="margin-right: 6px;"></span><span>Sinxronlanmoqda...</span>`;
     }
 
+    setGlobalLoading(true, 10000, "1C bilan sinxronizatsiya qilinmoqda...");
+
+    try {
         const bodyPayload = effectiveUrl ? { endpointUrl: effectiveUrl, endpoint_url: effectiveUrl } : {};
 
         const res = await fetch(`/api/admin/sync-1c?user_id=${ALLOWED_ADMIN_ID}`, {
@@ -3176,7 +3301,7 @@ async function trigger1CSync(btn = null) {
             syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
         }
     } catch (e) {
-        console.error('trigger1CSync error:', e);
+        console.error('[ACTION ERROR]:', e);
         clearAllToasts();
         showToast(e.message ? `Xatolik: ${e.message}` : "1C serveriga ulanib bo'lmadi", 'error');
         if (syncBtn) {
@@ -3185,6 +3310,12 @@ async function trigger1CSync(btn = null) {
             syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
         }
     } finally {
+        setGlobalLoading(false);
+        if (syncBtn && !_syncPollingInterval) {
+            syncBtn.disabled = false;
+            syncBtn.classList.remove('loading');
+            syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
+        }
         await load1CConfigStatus();
     }
 }

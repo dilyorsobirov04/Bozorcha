@@ -147,6 +147,15 @@ async def init_postgres_db():
                     total_price BIGINT
                 );
 
+                CREATE TABLE IF NOT EXISTS cart_items (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    product_id INTEGER,
+                    quantity INTEGER DEFAULT 1,
+                    weight NUMERIC(10,3) DEFAULT 1.0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
                 -- Alter table migrations for backward compatibility
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS sku VARCHAR(128);
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id INTEGER;
@@ -166,6 +175,27 @@ async def init_postgres_db():
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS barcode VARCHAR(128);
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
+
+                -- Migration for orders table columns
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id BIGINT;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '{}'::jsonb;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS total BIGINT DEFAULT 0;
+                ALTER TABLE orders ALTER COLUMN total DROP NOT NULL;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_price BIGINT DEFAULT 0;
+                ALTER TABLE orders ALTER COLUMN total_price DROP NOT NULL;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_amount BIGINT DEFAULT 0;
+                ALTER TABLE orders ALTER COLUMN total_amount DROP NOT NULL;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS status VARCHAR(64) DEFAULT 'PENDING';
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_location JSONB;
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(64);
+                ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(64);
+                -- Migration for order_items table columns
+                ALTER TABLE order_items ADD COLUMN IF NOT EXISTS total_price BIGINT DEFAULT 0;
+                ALTER TABLE order_items ADD COLUMN IF NOT EXISTS total BIGINT DEFAULT 0;
+                ALTER TABLE order_items ADD COLUMN IF NOT EXISTS product_name VARCHAR(512);
+                ALTER TABLE order_items ADD COLUMN IF NOT EXISTS name VARCHAR(512);
+                ALTER TABLE order_items DROP CONSTRAINT IF EXISTS order_items_product_id_fkey;
             """)
 
             # Load system settings from DB to memory
@@ -1104,46 +1134,48 @@ async def query_postgres_product_counts() -> dict:
         return get_products_counts()
     try:
         async with pool.acquire() as conn:
+            valid_cats = list(CATEGORIES_DB.keys())
             row = await conn.fetchrow("""
                 SELECT 
                     COUNT(*) as total,
-                    COUNT(*) FILTER (WHERE category_id IS NULL OR category_id = 0) as uncategorized,
-                    COUNT(*) FILTER (WHERE category_id IS NOT NULL AND category_id > 0) as categorized
+                    COUNT(*) FILTER (WHERE category_id IS NULL OR category_id = 0 OR category_id NOT IN (SELECT unnest($1::int[]))) as uncategorized
                 FROM products
-            """)
+            """, valid_cats)
             if row:
-                return {
-                    "total": int(row["total"] or 0),
-                    "uncategorized": int(row["uncategorized"] or 0),
-                    "categorized": int(row["categorized"] or 0)
-                }
+                tot = row["total"] or 0
+                uncat = row["uncategorized"] or 0
+                cat = max(0, tot - uncat)
+                return {"total": tot, "uncategorized": uncat, "categorized": cat}
+            return get_products_counts()
     except Exception as e:
         print(f"[POSTGRESQL] Error querying product counts: {e}")
-    return get_products_counts()
+        return get_products_counts()
 
 
-async def query_postgres_uncategorized_products(search: str | None = None) -> list[dict]:
-    """Queries PostgreSQL database directly for uncategorized products (where category_id IS NULL or 0)."""
+def get_uncategorized_products() -> list[dict]:
+    return [
+        prod for prod in PRODUCTS_DB.values()
+        if prod.get("category_id") is None
+        or prod.get("category_id") == 0
+        or str(prod.get("category_id")).strip() == ""
+        or (prod.get("category_id") not in CATEGORIES_DB)
+    ]
+
+
+async def query_postgres_uncategorized_products() -> list[dict]:
+    """Queries PostgreSQL database table directly for products without assigned categories."""
     pool = await get_pg_pool()
     if not pool:
-        return get_uncategorized_products(search=search)
+        return get_uncategorized_products()
     try:
         async with pool.acquire() as conn:
-            if search and str(search).strip():
-                q = f"%{str(search).strip().lower()}%"
-                rows = await conn.fetch("""
-                    SELECT * FROM products 
-                    WHERE (category_id IS NULL OR category_id = 0)
-                      AND (LOWER(name) LIKE $1 OR LOWER(sku) LIKE $1 OR LOWER(description) LIKE $1)
-                    ORDER BY id ASC
-                """, q)
-            else:
-                rows = await conn.fetch("""
-                    SELECT * FROM products 
-                    WHERE category_id IS NULL OR category_id = 0
-                    ORDER BY id ASC
-                """)
-            
+            valid_cats = list(CATEGORIES_DB.keys())
+            rows = await conn.fetch("""
+                SELECT * FROM products 
+                WHERE category_id IS NULL OR category_id = 0 OR category_id NOT IN (SELECT unnest($1::int[]))
+                ORDER BY id DESC
+            """, valid_cats)
+
             result = []
             for r in rows:
                 pid = r["id"]
@@ -1159,9 +1191,11 @@ async def query_postgres_uncategorized_products(search: str | None = None) -> li
                     "discount_percent": r["discount_percent"] or 0,
                     "stock": r["stock"] or 0,
                     "description": r["description"] or "",
+                    "nutrition": json.loads(r["nutrition"]) if r.get("nutrition") else {},
                     "photo_file_id": r["photo_file_id"],
                     "image_url": r["image_url"],
-                    "is_promo": bool(r["is_promo"])
+                    "is_promo": bool(r["is_promo"]),
+                    "recommendation": r["recommendation"]
                 })
             return result
     except Exception as e:
@@ -1588,13 +1622,27 @@ async def create_postgres_order(
                             qty = 1
 
                         item_total = int(round(price * qty))
+                        valid_pid = int(pid) if isinstance(pid, (int, str)) and str(pid).isdigit() else None
+                        if valid_pid is not None:
+                            p_row = await conn.fetchrow("SELECT id FROM products WHERE id = $1", valid_pid)
+                            if not p_row:
+                                valid_pid = None
+
                         await conn.execute("""
-                            INSERT INTO order_items (order_id, product_id, product_name, price, quantity, total_price)
-                            VALUES ($1, $2, $3, $4, $5, $6)
-                        """, pg_id, int(pid) if isinstance(pid, (int, str)) and str(pid).isdigit() else None, str(pname), price, qty, item_total)
+                            INSERT INTO order_items (order_id, product_id, product_name, name, price, quantity, total_price, total)
+                            VALUES ($1, $2, $3, $3, $4, $5, $6, $6)
+                        """, pg_id, valid_pid, str(pname), price, qty, item_total)
+
+                    # Clear cart items in DB for this user as part of transaction
+                    if user_id is not None:
+                        try:
+                            await conn.execute("DELETE FROM cart_items WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $2", user_id, str(user_id))
+                        except Exception:
+                            pass
         except Exception as e:
-            print(f"[POSTGRESQL ERROR] Transaction failed while creating order: {e}")
+            print(f"[CHECKOUT ERROR] Transaction failed while creating order: {e}")
             print(traceback.format_exc())
+            raise e
 
     if not order_id_str:
         order_id_str = str(84000 + len(ORDERS_DB) + 1)

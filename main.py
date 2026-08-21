@@ -1,6 +1,15 @@
 import asyncio
 import logging
 import sys
+import os
+
+if sys.platform.startswith("win"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import uvicorn
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode

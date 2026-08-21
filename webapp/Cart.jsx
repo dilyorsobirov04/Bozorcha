@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * Minimalistik va Ixcham Savatcha (Cart / Checkout) Komponenti
@@ -16,6 +16,17 @@ export default function Cart({
 }) {
   const [paymentMethod, setPaymentMethod] = useState('cash'); // 'cash' | 'click'
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 10-second auto-reset mechanism for global loading / submitting state
+  useEffect(() => {
+    if (isSubmitting) {
+      const timer = setTimeout(() => {
+        console.warn('[TIMEOUT SAFETY FALLBACK]: Auto-resetting Cart submitting state after 10s');
+        setIsSubmitting(false);
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [isSubmitting]);
 
   // Umumiy summani hisoblash
   const totalPrice = items.reduce((sum, item) => {
@@ -36,8 +47,10 @@ export default function Cart({
           paymentMethod
         });
       }
+    } catch (error) {
+      console.error("[ACTION ERROR]:", error);
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false); // ALWAYS release UI lock
     }
   };
 
@@ -187,9 +200,9 @@ export default function Cart({
           <button 
             style={{
               ...styles.checkoutBtn,
-              ...(isSubmitting ? styles.checkoutBtnDisabled : {})
+              ...((isSubmitting || items.length === 0) ? styles.checkoutBtnDisabled : {})
             }}
-            disabled={isSubmitting}
+            disabled={isSubmitting || items.length === 0}
             onClick={handleConfirmOrder}
           >
             <span>{isSubmitting ? "Buyurtma berilmoqda..." : "Buyurtmani tasdiqlash"}</span>

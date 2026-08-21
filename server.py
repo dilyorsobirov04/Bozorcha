@@ -979,72 +979,104 @@ def create_webapp_server() -> FastAPI:
     @app.post("/api/orders")
     async def handle_create_order(request: Request):
         try:
-            data = await request.json()
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+            try:
+                data = await request.json()
+            except Exception:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "message": "Yaroqsiz JSON payload", "error": "Invalid JSON payload"}
+                )
 
-        cart = data.get("cart") or data.get("items") or data.get("cart_items") or {}
-        total_amount = data.get("total_amount") or data.get("total") or data.get("total_price") or 0
-        payment_type = data.get("payment_type") or data.get("payment_method") or "cash"
-        address = data.get("address") or "Mini App orqali buyurtma"
-        delivery_time = data.get("delivery_time") or "15 - 25 daqiqa"
-        user_info = data.get("user_info") or data.get("user") or {}
-        full_name = data.get("full_name") or data.get("name")
-        phone_number = data.get("phone_number") or data.get("phone")
-        location_lat = data.get("location_lat") or data.get("lat")
-        location_lng = data.get("location_lng") or data.get("lng")
+            cart = data.get("cart") or data.get("items") or data.get("cart_items") or {}
+            total_amount = data.get("total_amount") or data.get("total") or data.get("total_price") or 0
+            payment_type = data.get("payment_type") or data.get("payment_method") or "cash"
+            address = data.get("address") or "Mini App orqali buyurtma"
+            delivery_time = data.get("delivery_time") or "15 - 25 daqiqa"
+            user_info = data.get("user_info") or data.get("user") or {}
+            full_name = data.get("full_name") or data.get("name")
+            phone_number = data.get("phone_number") or data.get("phone")
+            location_lat = data.get("location_lat") or data.get("lat")
+            location_lng = data.get("location_lng") or data.get("lng")
 
-        try:
-            total_val = int(total_amount)
-        except (ValueError, TypeError):
-            total_val = 0
+            try:
+                total_val = int(total_amount)
+            except (ValueError, TypeError):
+                total_val = 0
 
-        # Auto-calculate total from cart if 0
-        if total_val <= 0 and isinstance(cart, dict):
-            for entry in cart.values():
-                item = entry.get("item", {})
-                price = item.get("price", 0)
-                weight = entry.get("weight", 1.0)
-                qty = entry.get("qty", 1)
-                total_val += int(round(price * weight * qty))
+            # Auto-calculate total from cart if 0
+            if total_val <= 0 and isinstance(cart, dict):
+                for entry in cart.values():
+                    item = entry.get("item", {})
+                    price = item.get("price", 0)
+                    weight = entry.get("weight", 1.0)
+                    qty = entry.get("qty", 1)
+                    total_val += int(round(price * weight * qty))
 
-        # Explicit user_id (Telegram User ID)
-        raw_user_id = data.get("user_id") or user_info.get("id") or data.get("telegram_id") or data.get("userId")
-        try:
-            user_id = int(raw_user_id) if raw_user_id is not None else None
-        except (ValueError, TypeError):
-            user_id = None
+            # Explicit user_id (Telegram User ID)
+            raw_user_id = data.get("user_id") or user_info.get("id") or data.get("telegram_id") or data.get("userId")
+            try:
+                user_id = int(raw_user_id) if raw_user_id is not None else None
+            except (ValueError, TypeError):
+                user_id = None
 
-        order = await create_postgres_order(
-            user_id=user_id,
-            cart=cart,
-            total_amount=total_val,
-            payment_type=payment_type,
-            address=address,
-            delivery_time=delivery_time,
-            user_info=user_info,
-            full_name=full_name,
-            phone_number=phone_number,
-            location_lat=location_lat,
-            location_lng=location_lng
-        )
-
-        # Notify Telegram Admin Bot in background
-        try:
+            # Execute transaction with 15-second timeout limit
             import asyncio
-            asyncio.create_task(notify_admins_new_order(order))
-        except Exception as e:
-            logger.warning(f"Could not trigger admin notification task: {e}")
+            try:
+                order = await asyncio.wait_for(
+                    create_postgres_order(
+                        user_id=user_id,
+                        cart=cart,
+                        total_amount=total_val,
+                        payment_type=payment_type,
+                        address=address,
+                        delivery_time=delivery_time,
+                        user_info=user_info,
+                        full_name=full_name,
+                        phone_number=phone_number,
+                        location_lat=location_lat,
+                        location_lng=location_lng
+                    ),
+                    timeout=15.0
+                )
+            except asyncio.TimeoutError:
+                print("[CHECKOUT ERROR]: Order transaction timed out after 15s", flush=True)
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "success": False,
+                        "message": "Xaridni rasmiylashtirishda xatolik yuz berdi",
+                        "error": "Order transaction timed out after 15 seconds"
+                    }
+                )
 
-        return {
-            "success": True,
-            "order_id": order["id"],
-            "order": order,
-            "payment_type": order["payment_type"],
-            "status": order["status"],
-            "click_url": order.get("click_url"),
-            "message": "Buyurtma muvaffaqiyatli qabul qilindi!"
-        }
+            # Notify Telegram Admin Bot in background
+            try:
+                asyncio.create_task(notify_admins_new_order(order))
+            except Exception as e:
+                logger.warning(f"Could not trigger admin notification task: {e}")
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "order_id": order["id"],
+                    "order": order,
+                    "payment_type": order["payment_type"],
+                    "status": order["status"],
+                    "click_url": order.get("click_url"),
+                    "message": "Buyurtma muvaffaqiyatli qabul qilindi!"
+                }
+            )
+        except Exception as error:
+            print(f"[CHECKOUT ERROR]: {error}", flush=True)
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "message": "Xaridni rasmiylashtirishda xatolik yuz berdi",
+                    "error": str(error)
+                }
+            )
 
     @app.get("/api/orders")
     async def handle_get_orders(user_id: Optional[str] = Query(None), limit: int = Query(50, ge=1, le=200)):
