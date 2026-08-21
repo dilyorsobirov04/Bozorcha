@@ -165,11 +165,14 @@ def get_active_1c_url(override_url: Optional[str] = None) -> str:
     # 2. Fallback to env variable ONEC_API_URL / API_1C_URL
     env_val = os.getenv("ONEC_API_URL", "").strip() or os.getenv("API_1C_URL", "").strip()
 
-    raw_url = db_val or env_val or ""
+    raw_url = db_val or env_val or "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
+    if "abcd-123" in str(raw_url).lower():
+        raw_url = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
+
     cleaned = clean_1c_url(raw_url)
 
     if not cleaned:
-        return ""
+        cleaned = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
 
     print(f"[1C CRITICAL DEBUG] Making HTTP request to EXACT URL: {cleaned}", flush=True)
     return cleaned

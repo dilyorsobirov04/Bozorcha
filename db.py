@@ -23,10 +23,12 @@ except ImportError:
 _pg_pool = None
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:dilyor1234@127.0.0.1:5433/bozorcha_db").strip()
 
+DEFAULT_ACTIVE_NGROK_URL = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
+
 # System Settings Store (Dynamic settings, 1C Enterprise integration, etc.)
 SYSTEM_SETTINGS_DB = {
-    "api_1c_url": os.getenv("API_1C_URL", "").strip(),
-    "ONEC_API_URL": os.getenv("ONEC_API_URL", "").strip(),
+    "api_1c_url": os.getenv("API_1C_URL", DEFAULT_ACTIVE_NGROK_URL).strip() or DEFAULT_ACTIVE_NGROK_URL,
+    "ONEC_API_URL": os.getenv("ONEC_API_URL", DEFAULT_ACTIVE_NGROK_URL).strip() or DEFAULT_ACTIVE_NGROK_URL,
     "api_1c_user": os.getenv("API_1C_USER", "mobiles").strip(),
     "api_1c_pass": os.getenv("API_1C_PASS", "123").strip(),
     "cache_ttl": int(os.getenv("CACHE_TTL", "300")),
@@ -200,12 +202,28 @@ async def init_postgres_db():
                 ALTER TABLE order_items DROP CONSTRAINT IF EXISTS order_items_product_id_fkey;
             """)
 
-            # One-Time Startup Clean Up: Wipe any legacy/stale 'abcd-123' settings from PostgreSQL
+            # One-Time Startup Migration / Clean Up: Overwrite stale 'abcd-123' settings with active Ngrok URL
             await conn.execute("""
                 DELETE FROM system_settings 
                 WHERE value LIKE '%abcd-123%' 
                    OR key IN ('ONEC_API_URL', 'api_1c_url', '1c_endpoint', 'endpoint_url') AND value LIKE '%abcd-123%';
             """)
+
+            await conn.execute("""
+                INSERT INTO system_settings (key, value, updated_at)
+                VALUES ('ONEC_API_URL', $1, CURRENT_TIMESTAMP)
+                ON CONFLICT (key) DO UPDATE 
+                SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+                WHERE system_settings.value IS NULL OR system_settings.value = '' OR system_settings.value LIKE '%abcd-123%';
+            """, DEFAULT_ACTIVE_NGROK_URL)
+
+            await conn.execute("""
+                INSERT INTO system_settings (key, value, updated_at)
+                VALUES ('api_1c_url', $1, CURRENT_TIMESTAMP)
+                ON CONFLICT (key) DO UPDATE 
+                SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+                WHERE system_settings.value IS NULL OR system_settings.value = '' OR system_settings.value LIKE '%abcd-123%';
+            """, DEFAULT_ACTIVE_NGROK_URL)
 
             # Load system settings from DB to memory
             rows = await conn.fetch("SELECT key, value FROM system_settings")
@@ -220,8 +238,9 @@ async def init_postgres_db():
 
             # Double-check in-memory store for any abcd-123 leftover
             for setting_key in ("ONEC_API_URL", "api_1c_url", "1c_endpoint", "endpoint_url"):
-                if "abcd-123" in str(SYSTEM_SETTINGS_DB.get(setting_key, "")).lower():
-                    SYSTEM_SETTINGS_DB[setting_key] = ""
+                val = str(SYSTEM_SETTINGS_DB.get(setting_key, "")).lower()
+                if "abcd-123" in val or not val:
+                    SYSTEM_SETTINGS_DB[setting_key] = DEFAULT_ACTIVE_NGROK_URL
 
             # Load all products from PostgreSQL database into memory
             rows = await conn.fetch("SELECT * FROM products ORDER BY id ASC")
