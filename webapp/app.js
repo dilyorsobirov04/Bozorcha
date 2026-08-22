@@ -2691,7 +2691,10 @@ async function load1CConfigStatus() {
                                 if (isSuccess) {
                                     showToast(lastRes.message || `${count} ta tovar 1C dan muvaffaqiyatli yuklandi! 🎉`, 'success');
                                 } else {
-                                    const errMsg = lastRes.message || lastRes.error || statusData.error || "Xatolik yuz berdi";
+                                    const rawErr = lastRes.message || lastRes.error || lastRes.detail || statusData.error;
+                                    const rawBodySnippet = lastRes.raw_response ? lastRes.raw_response.substring(0, 100) : '';
+                                    const fallbackMsg = rawBodySnippet ? `1C Natijasi: ${rawBodySnippet}` : "1C serveriga ulanib bo'lmadi yoki tovarlar topilmadi";
+                                    const errMsg = rawErr ? String(rawErr) : fallbackMsg;
                                     showToast(errMsg, 'error');
                                 }
                                 await loadProductCounts();
@@ -3304,7 +3307,10 @@ async function trigger1CSync(btn = null) {
                             if (isSuccess) {
                                 showToast(lastRes.message || `${count} ta tovar 1C dan muvaffaqiyatli yuklandi!`, 'success');
                             } else {
-                                const errMsg = lastRes.message || lastRes.error || statusData.error || "Xatolik yuz berdi";
+                                const rawErr = lastRes.message || lastRes.error || lastRes.detail || statusData.error;
+                                const rawBodySnippet = lastRes.raw_response ? lastRes.raw_response.substring(0, 100) : '';
+                                const fallbackMsg = rawBodySnippet ? `1C Natijasi: ${rawBodySnippet}` : "1C serveriga ulanib bo'lmadi yoki tovarlar topilmadi";
+                                const errMsg = rawErr ? String(rawErr) : fallbackMsg;
                                 showToast(errMsg, 'error');
                             }
 

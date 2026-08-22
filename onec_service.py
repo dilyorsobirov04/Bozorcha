@@ -484,6 +484,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 return {
                                     "success": False,
                                     "error": warning_msg,
+                                    "message": warning_msg,
                                     "status_code": 200,
                                     "data": None
                                 }
@@ -519,6 +520,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 return {
                                     "success": False,
                                     "error": warning_msg,
+                                    "message": warning_msg,
                                     "detail": raw_text[:300],
                                     "status_code": status,
                                     "data": None
@@ -533,6 +535,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                             return {
                                 "success": False,
                                 "error": warning_msg,
+                                "message": warning_msg,
                                 "url": target_url,
                                 "detail": raw_text[:300],
                                 "status_code": 404,
@@ -545,6 +548,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                             return {
                                 "success": False,
                                 "error": warning_msg,
+                                "message": warning_msg,
                                 "status_code": status,
                                 "detail": raw_text[:300],
                                 "data": None
@@ -701,6 +705,10 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
                 res = await sync_products_from_1c(force_refresh=force_refresh, endpoint_url=endpoint_url)
             _1c_sync_state["last_result"] = res
             _1c_sync_state["last_sync_time"] = time.time()
+            if not res.get("success"):
+                _1c_sync_state["error"] = res.get("message") or res.get("error") or "1C Sinxronlashda xatolik yuz berdi"
+            else:
+                _1c_sync_state["error"] = None
             fetched = res.get('total_received', res.get('count', 0))
             saved = res.get('synced_count', res.get('count', 0))
             print(f"[SYNC COMPLETED] Total Fetched: {fetched}, Saved/Updated in DB: {saved}")
