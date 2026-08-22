@@ -1137,7 +1137,7 @@ async def _async_persist_synced_products(products_list: list) -> dict:
                         bool(p.get("is_promo", False)),
                         p.get("recommendation")
                     ))
-                await conn.executemany("""
+                upsert_query = """
                     INSERT INTO products (sku, barcode, category_id, name, unit, price, old_price, discount_percent, stock, description, nutrition, photo_file_id, image_url, is_promo, recommendation)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
                     ON CONFLICT (sku) DO UPDATE SET
@@ -1150,7 +1150,16 @@ async def _async_persist_synced_products(products_list: list) -> dict:
                         description = COALESCE(EXCLUDED.description, products.description),
                         image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                         updated_at = CURRENT_TIMESTAMP
-                """, args_list)
+                """
+                try:
+                    await conn.executemany(upsert_query, args_list)
+                except Exception as chunk_err:
+                    print(f"[1C PRODUCT SAVE ERROR] Batch chunk failed ({chunk_err}), falling back to safe item-by-item write...", flush=True)
+                    for args in args_list:
+                        try:
+                            await conn.execute(upsert_query, *args)
+                        except Exception as item_err:
+                            print(f"[1C PRODUCT SAVE ERROR] SKU: {args[0]} Name: {args[3]} Error: {item_err}", flush=True)
                 await asyncio.sleep(0.01)
                 await asyncio.sleep(0.01)
 
