@@ -384,8 +384,39 @@ CATEGORIES_DB = {
 
     # Subcategories under Ichimliklar (parent_id: 5)
     51: {"id": 51, "name": "Sharbat & Fresh", "icon": "🧃", "parent_id": 5, "image_url": "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=200&auto=format&fit=crop&q=60"},
-    52: {"id": 52, "name": "Suv & Gazli ichimlik", "icon": "🥤", "parent_id": 5, "image_url": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=200&auto=format&fit=crop&q=60"}
+    52: {"id": 52, "name": "Suv & Gazli ichimlik", "icon": "🥤", "parent_id": 5, "image_url": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=200&auto=format&fit=crop&q=60"},
+
+    # Default Uncategorized Category
+    99: {"id": 99, "name": "Kategoriyasiz", "icon": "📦", "parent_id": None, "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=60"}
 }
+
+
+async def get_or_create_default_category() -> dict:
+    """Ensures a default 'Kategoriyasiz' category exists in both memory and PostgreSQL database."""
+    default_cat = CATEGORIES_DB.get(99)
+    if not default_cat:
+        default_cat = {
+            "id": 99,
+            "name": "Kategoriyasiz",
+            "icon": "📦",
+            "parent_id": None,
+            "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=60"
+        }
+        CATEGORIES_DB[99] = default_cat
+
+    try:
+        pool = await get_pg_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO categories (id, name, icon, parent_id, image_url)
+                    VALUES ($1, $2, $3, $4, $5)
+                    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+                """, default_cat["id"], default_cat["name"], default_cat["icon"], default_cat["parent_id"], default_cat["image_url"])
+    except Exception as e:
+        print(f"[CATEGORY DB INFO] {e}")
+
+    return default_cat
 
 
 def get_all_categories(nested: bool = False) -> list[dict]:
@@ -1097,6 +1128,8 @@ async def _async_persist_synced_products(products_list: list) -> dict:
         if not pool:
             print("DEBUG DB UPSERT: Skipped (pool missing)")
             return {"inserted": 0, "updated": 0, "total": 0}
+
+        await get_or_create_default_category()
 
         total_count = len(products_list)
         print(f"DEBUG DB UPSERT: Executing batch insert/update for {total_count} items across {((total_count-1)//500)+1} chunks...")
