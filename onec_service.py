@@ -706,13 +706,15 @@ async def run_background_1c_sync(force_refresh: bool = True, raw_payload: Any = 
             print(f"[SYNC COMPLETED] Total Fetched: {fetched}, Saved/Updated in DB: {saved}")
             print(f"[BACKGROUND 1C SYNC] Task finished successfully: {saved} items synced.")
         except Exception as e:
-            print("CRITICAL ERROR IN 1C BACKGROUND SYNC:")
+            print(f"[1C SYNC CATCH ERROR]: {e}", flush=True)
             print(traceback.format_exc())
-            logger.error(f"CRITICAL ERROR IN 1C BACKGROUND SYNC: {e}", exc_info=True)
-            _1c_sync_state["error"] = str(e)
+            logger.error(f"[1C SYNC CATCH ERROR]: {e}", exc_info=True)
+            err_msg = f"Backend Xatoligi: {str(e) or 'Noma\'lum xatolik'}"
+            _1c_sync_state["error"] = err_msg
             _1c_sync_state["last_result"] = {
                 "success": False,
-                "error": str(e),
+                "error": err_msg,
+                "message": err_msg,
                 "detail": traceback.format_exc(),
                 "count": 0,
                 "synced_count": 0
