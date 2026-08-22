@@ -868,7 +868,7 @@ def sync_1c_products(raw_data: any) -> dict:
         print(f"DEBUG [Sample First Item]: {sample_str}")
 
     if len(items_to_process) == 0:
-        err_msg = "1C API bo'sh ro'yxat qaytardi. 1C HTTP Servis funksiyasini tekshiring."
+        err_msg = f"1C dan tovarlar topilmadi. Raw: {str(raw_data)[:100]}"
         print(f"DEBUG SYNC ERROR: {err_msg} (0 items to process)", flush=True)
         return {
             "success": False,
@@ -1048,7 +1048,7 @@ def sync_1c_products(raw_data: any) -> dict:
             synced_products.append(new_product)
 
     if len(synced_products) == 0:
-        err_msg = "1C API bo'sh ro'yxat qaytardi. 1C HTTP Servis funksiyasini tekshiring."
+        err_msg = f"1C dan tovarlar topilmadi. Total received: {len(items_to_process)}"
         print(f"DEBUG SYNC ERROR: {err_msg} (0 products synced out of {len(items_to_process)} items)", flush=True)
         return {
             "success": False,

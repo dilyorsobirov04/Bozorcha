@@ -2686,13 +2686,13 @@ async function load1CConfigStatus() {
                                 }
                                 const lastRes = statusData.last_result || {};
                                 const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count != null ? lastRes.count : 0);
-                                const hasError = statusData.error || lastRes.success === false || count <= 0;
+                                const isSuccess = lastRes.success === true && count > 0;
 
-                                if (hasError) {
-                                    const errMsg = statusData.error || lastRes.error || lastRes.message || "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring.";
-                                    showToast(errMsg, 'error');
+                                if (isSuccess) {
+                                    showToast(lastRes.message || `${count} ta tovar 1C dan muvaffaqiyatli yuklandi! 🎉`, 'success');
                                 } else {
-                                    showToast(`${count} ta 1C tovari muvaffaqiyatli sinxronizatsiya qilindi! 🎉`, 'success');
+                                    const errMsg = lastRes.message || lastRes.error || statusData.error || "Xatolik yuz berdi";
+                                    showToast(errMsg, 'error');
                                 }
                                 await loadProductCounts();
                                 await loadUncategorizedProducts();
@@ -3304,9 +3304,7 @@ async function trigger1CSync(btn = null) {
                             if (isSuccess) {
                                 showToast(lastRes.message || `${count} ta tovar 1C dan muvaffaqiyatli yuklandi!`, 'success');
                             } else {
-                                const rawBodySnippet = lastRes.raw_response ? lastRes.raw_response.substring(0, 100) : '';
-                                const fallbackMsg = rawBodySnippet ? `1C Natijasi: ${rawBodySnippet}` : "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring.";
-                                const errMsg = lastRes.message || lastRes.error || statusData.error || fallbackMsg;
+                                const errMsg = lastRes.message || lastRes.error || statusData.error || "Xatolik yuz berdi";
                                 showToast(errMsg, 'error');
                             }
 
