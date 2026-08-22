@@ -895,13 +895,16 @@ def sync_1c_products(raw_data: any) -> dict:
         # Extract Barcode (if provided) — must be extracted BEFORE SKU to avoid shadowing
         barcode_val = item.get("barcode") or item.get("Barcode") or item.get("Штрихкод") or item.get("штрихкод")
         barcode = str(barcode_val).replace("\xa0", "").strip() if barcode_val else None
+        if barcode == "" or barcode == "None" or barcode == "null":
+            barcode = None
 
-        # Extract SKU / Code (1C returns "id": "222 804" — strip internal spaces for clean SKU)
+        # Extract SKU / Code (1C returns "id": "222 804" or "barcode")
         sku_val = (
+            item.get("id") or item.get("ID") or
             item.get("SKU") or item.get("sku") or
             item.get("Code") or item.get("code") or
             item.get("Код") or item.get("код") or
-            item.get("id") or item.get("ID") or
+            item.get("barcode") or item.get("Barcode") or
             item.get("Артикул") or item.get("артикул") or
             item.get("Article") or item.get("article")
         )
@@ -915,7 +918,7 @@ def sync_1c_products(raw_data: any) -> dict:
 
         # Extract Name / Title
         name_val = (
-            item.get("Name") or item.get("name") or
+            item.get("name") or item.get("Name") or
             item.get("Наименование") or item.get("наименование") or
             item.get("title") or item.get("Title") or
             item.get("Номенклатура") or item.get("номенклатура") or
@@ -927,9 +930,9 @@ def sync_1c_products(raw_data: any) -> dict:
             continue
         name = str(name_val).replace("\xa0", " ").strip()
 
-        # Extract Price
+        # Extract Price (handles stringified prices with spaces like "19 990" or commas like "19,990")
         price_val = (
-            item.get("Price") or item.get("price") or
+            item.get("price") or item.get("Price") or
             item.get("Цена") or item.get("цена") or
             item.get("Cena") or item.get("cena") or
             item.get("Cost") or item.get("cost") or
@@ -945,9 +948,9 @@ def sync_1c_products(raw_data: any) -> dict:
 
         # Extract Stock / Quantity (do not discard zero quantity)
         stock_val = (
+            item.get("quantity") or item.get("Quantity") or
             item.get("Ost") or item.get("ost") or
             item.get("Ostatok") or item.get("ostatok") or
-            item.get("Quantity") or item.get("quantity") or
             item.get("Количество") or item.get("количество") or
             item.get("Kolichestvo") or item.get("kolichestvo") or
             item.get("stock") or item.get("Stock") or
