@@ -415,7 +415,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
     # 4. Mandatory Headers (Ngrok bypass & JSON accept)
     headers = {
         "ngrok-skip-browser-warning": "true",
-        "User-Agent": "Bozorcha/1.0",
+        "User-Agent": "BozorchaApp/1.0",
         "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/json",
         "Bypass-Tunnel-Reminder": "true",
@@ -439,8 +439,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                 }
 
         try:
-            print(f"=== 1C FETCH DEBUG ===", flush=True)
-            print(f"Target URL: {active_url}", flush=True)
+            print(f"[1C SYNC START] Target URL: {active_url}", flush=True)
             print(f"Timeout setting: {eff_timeout}s", flush=True)
             logger.info(f"[1C REQUEST] Calling 1C URL: {active_url} (timeout: {eff_timeout}s)")
 
@@ -554,9 +553,9 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
             # Check if 0 items total were parsed
             if len(accumulated_items) == 0:
                 raw_text = (last_raw_text or "").strip()
-                raw_snippet = raw_text[:150] if raw_text else "Butunlay bo'sh string (0 byte)"
+                raw_snippet = raw_text[:100] if raw_text else "Butunlay bo'sh string (0 byte)"
                 print(f"RAW 1C RESP: {raw_text}", flush=True)
-                err_msg = f"1C Javobi: {raw_snippet}"
+                err_msg = f"1C dan tovarlar topilmadi. Raw: {raw_snippet}"
                 print(f"[1C DEBUG] Target URL: {active_url}", flush=True)
                 print(f"[1C DEBUG] Raw Response Data: {raw_text}", flush=True)
                 print(f"[1C DEBUG] Fetch Error: {err_msg} (0 items parsed)", flush=True)
