@@ -570,110 +570,153 @@ def create_webapp_server() -> FastAPI:
     @app.post("/api/admin/sync-1c")
     @app.get("/api/admin/sync-1c")
     @app.post("/api/sync-1c")
+    @app.post("/api/admin/1c-sync")
+    @app.get("/api/admin/1c-sync")
+    @app.post("/api/1c-sync")
     async def handle_sync_1c(request: Request, force: bool = Query(True, description="Force refresh from 1C ignoring cache")):
-        # Check authorization if admin query param or header is present
-        user_id = request.query_params.get("user_id") or request.query_params.get("userId")
-        if user_id or request.headers.get("X-Admin-Id") or request.headers.get("Authorization"):
-            try:
-                check_admin_authorization(request)
-            except Exception:
-                pass
-
-        endpoint_url = (
-            request.query_params.get("endpointUrl") or
-            request.query_params.get("endpoint_url") or
-            request.query_params.get("1c_endpoint") or
-            request.query_params.get("api_url") or
-            request.query_params.get("url")
-        )
-
-        raw_data = None
-        has_body = False
-
         try:
-            body_bytes = await request.body()
-            if body_bytes and len(body_bytes.strip()) > 0:
-                content_type = request.headers.get("content-type", "").lower()
-                if "application/json" in content_type:
-                    try:
-                        parsed_body = await request.json()
-                        if isinstance(parsed_body, dict):
-                            # Accept endpoint directly from request body
-                            b_url = (
-                                parsed_body.get("endpointUrl") or
-                                parsed_body.get("endpoint_url") or
-                                parsed_body.get("1c_endpoint") or
-                                parsed_body.get("api_url") or
-                                parsed_body.get("url")
-                            )
-                            if b_url:
-                                endpoint_url = str(b_url).strip()
-                            
-                            has_product_keys = any(
-                                k in parsed_body for k in [
-                                    "data", "items", "Tovary", "products", "GetTovarList", "Tovari", "tovary",
-                                    "id", "sku", "SKU", "Code", "code", "Код", "код", "Name", "name", "Наименование", "barcode"
-                                ]
-                            )
-                            if has_product_keys:
-                                raw_data = parsed_body
-                                has_body = True
-                        elif isinstance(parsed_body, list):
-                            raw_data = parsed_body
-                            has_body = True
-                    except Exception:
-                        raw_data = body_bytes.decode("utf-8", errors="ignore")
-                        has_body = True
-                elif "xml" in content_type or "text" in content_type:
-                    raw_data = body_bytes.decode("utf-8", errors="ignore")
-                    has_body = True
-                else:
-                    try:
-                        parsed_body = await request.json()
-                        if isinstance(parsed_body, (dict, list)):
-                            raw_data = parsed_body
-                            has_body = True
-                        else:
-                            raw_data = body_bytes.decode("utf-8", errors="ignore")
-                            has_body = True
-                    except Exception:
-                        raw_data = body_bytes.decode("utf-8", errors="ignore")
-                        has_body = True
-        except Exception:
+            # Check authorization if admin query param or header is present
+            user_id = request.query_params.get("user_id") or request.query_params.get("userId")
+            if user_id or request.headers.get("X-Admin-Id") or request.headers.get("Authorization"):
+                try:
+                    check_admin_authorization(request)
+                except Exception:
+                    pass
+
+            endpoint_url = (
+                request.query_params.get("endpointUrl") or
+                request.query_params.get("endpoint_url") or
+                request.query_params.get("1c_endpoint") or
+                request.query_params.get("api_url") or
+                request.query_params.get("url")
+            )
+
+            raw_data = None
             has_body = False
 
-        if not endpoint_url:
-            endpoint_url = get_system_setting("ONEC_API_URL") or get_system_setting("api_1c_url")
+            try:
+                body_bytes = await request.body()
+                if body_bytes and len(body_bytes.strip()) > 0:
+                    content_type = request.headers.get("content-type", "").lower()
+                    if "application/json" in content_type:
+                        try:
+                            parsed_body = await request.json()
+                            if isinstance(parsed_body, dict):
+                                # Accept endpoint directly from request body
+                                b_url = (
+                                    parsed_body.get("endpointUrl") or
+                                    parsed_body.get("endpoint_url") or
+                                    parsed_body.get("1c_endpoint") or
+                                    parsed_body.get("api_url") or
+                                    parsed_body.get("url")
+                                )
+                                if b_url:
+                                    endpoint_url = str(b_url).strip()
+                                
+                                has_product_keys = any(
+                                    k in parsed_body for k in [
+                                        "data", "items", "Tovary", "products", "GetTovarList", "Tovari", "tovary",
+                                        "id", "sku", "SKU", "Code", "code", "Код", "код", "Name", "name", "Наименование", "barcode"
+                                    ]
+                                )
+                                if has_product_keys:
+                                    raw_data = parsed_body
+                                    has_body = True
+                            elif isinstance(parsed_body, list):
+                                raw_data = parsed_body
+                                has_body = True
+                        except Exception:
+                            raw_data = body_bytes.decode("utf-8", errors="ignore")
+                            has_body = True
+                    elif "xml" in content_type or "text" in content_type:
+                        raw_data = body_bytes.decode("utf-8", errors="ignore")
+                        has_body = True
+                    else:
+                        try:
+                            parsed_body = await request.json()
+                            if isinstance(parsed_body, (dict, list)):
+                                raw_data = parsed_body
+                                has_body = True
+                            else:
+                                raw_data = body_bytes.decode("utf-8", errors="ignore")
+                                has_body = True
+                        except Exception:
+                            raw_data = body_bytes.decode("utf-8", errors="ignore")
+                            has_body = True
+            except Exception:
+                has_body = False
 
-        if not endpoint_url or not str(endpoint_url).strip():
+            if not endpoint_url:
+                endpoint_url = get_system_setting("ONEC_API_URL") or get_system_setting("api_1c_url")
+
+            if not endpoint_url or not str(endpoint_url).strip():
+                return JSONResponse(
+                    status_code=400,
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                        "Access-Control-Allow-Headers": "*",
+                        "Content-Type": "application/json"
+                    },
+                    content={
+                        "success": False,
+                        "message": "1C URL sozlanmagan",
+                        "error": "1C URL sozlanmagan"
+                    }
+                )
+
+            if endpoint_url and "abcd-123" in str(endpoint_url).lower():
+                return JSONResponse(
+                    status_code=400,
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                        "Access-Control-Allow-Headers": "*",
+                        "Content-Type": "application/json"
+                    },
+                    content={
+                        "success": False,
+                        "error": "Soxta 'abcd-123' manzilini ishlatib bo'lmaydi. Iltimos, haqiqiy Ngrok URL kiritib, Saqlash tugmasini bosing!",
+                        "message": "Soxta 'abcd-123' manzilini ishlatib bo'lmaydi. Iltimos, haqiqiy Ngrok URL kiritib, Saqlash tugmasini bosing!"
+                    }
+                )
+
+            target_url = clean_1c_url(endpoint_url)
+            print(f"[1C SYNC] Final Request Endpoint: {target_url}", flush=True)
+
+            if target_url:
+                update_1c_config(api_url=target_url)
+
+            # Launch 1C sync asynchronously in background task (Non-blocking UI)
+            result = await run_background_1c_sync(force_refresh=force, raw_payload=raw_data if has_body else None, endpoint_url=target_url)
             return JSONResponse(
-                status_code=400,
+                status_code=200,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                    "Content-Type": "application/json"
+                },
+                content=result
+            )
+        except Exception as error:
+            err_msg = str(getattr(error, 'message', None) or (getattr(error, 'response', {}).get('data', {}).get('message') if hasattr(error, 'response') else None) or error or "Serverda noma'lum xatolik")
+            print(f"[1C SYNC API CATCH]: {err_msg}", flush=True)
+            logger.error(f"[1C SYNC API CATCH]: {err_msg}", exc_info=True)
+            return JSONResponse(
+                status_code=500,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                    "Content-Type": "application/json"
+                },
                 content={
                     "success": False,
-                    "message": "1C URL sozlanmagan",
-                    "error": "1C URL sozlanmagan"
+                    "message": err_msg,
+                    "error": err_msg
                 }
             )
-
-        if endpoint_url and "abcd-123" in str(endpoint_url).lower():
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "success": False,
-                    "error": "Soxta 'abcd-123' manzilini ishlatib bo'lmaydi. Iltimos, haqiqiy Ngrok URL kiritib, Saqlash tugmasini bosing!",
-                    "message": "Soxta 'abcd-123' manzilini ishlatib bo'lmaydi. Iltimos, haqiqiy Ngrok URL kiritib, Saqlash tugmasini bosing!"
-                }
-            )
-
-        target_url = clean_1c_url(endpoint_url)
-        print(f"[1C SYNC] Final Request Endpoint: {target_url}", flush=True)
-
-        if target_url:
-            update_1c_config(api_url=target_url)
-
-        # Launch 1C sync asynchronously in background task (Non-blocking UI)
-        result = await run_background_1c_sync(force_refresh=force, raw_payload=raw_data if has_body else None, endpoint_url=target_url)
-        return result
 
 
     @app.get("/api/admin/1c/config")
