@@ -132,12 +132,10 @@ def clean_1c_url(raw_url: Optional[str]) -> str:
     # Remove any trailing brackets/punctuation/slashes
     s = re.sub(r'[\]\)>.,;\"\'\s]+$', '', s).rstrip('/')
 
-    # 4. Ensure complete 1C route structure without stripping base paths
+    # 4. If user entered just domain, append fallback. Otherwise, trust user's exact full path.
     if s and s.startswith(("http://", "https://")):
         if "/hs/" not in s:
             s = f"{s}/Bozorcham/hs/Bozorcham/GetTovarList"
-        elif not s.endswith("/GetTovarList"):
-            s = f"{s}/GetTovarList"
 
     return s
 
@@ -151,7 +149,7 @@ def get_active_1c_url(override_url: Optional[str] = None) -> str:
     if override_url and str(override_url).strip():
         cleaned = clean_1c_url(override_url)
         if cleaned:
-            print(f"[1C CRITICAL DEBUG] Making HTTP request to OVERRIDE URL: {cleaned}", flush=True)
+            print(f"[1C SYNC] Final Request Endpoint: {cleaned}", flush=True)
             return cleaned
 
     # 1. Fetch from DB settings first
@@ -174,9 +172,8 @@ def get_active_1c_url(override_url: Optional[str] = None) -> str:
     if not cleaned:
         cleaned = "https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList"
 
-    print(f"[1C CRITICAL DEBUG] Making HTTP request to EXACT URL: {cleaned}", flush=True)
+    print(f"[1C SYNC] Final Request Endpoint: {cleaned}", flush=True)
     return cleaned
-
 
 
 def get_active_1c_user() -> str:

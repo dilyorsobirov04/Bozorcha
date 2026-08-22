@@ -645,6 +645,16 @@ def create_webapp_server() -> FastAPI:
         if not endpoint_url:
             endpoint_url = get_system_setting("ONEC_API_URL") or get_system_setting("api_1c_url")
 
+        if not endpoint_url or not str(endpoint_url).strip():
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "message": "1C URL sozlanmagan",
+                    "error": "1C URL sozlanmagan"
+                }
+            )
+
         if endpoint_url and "abcd-123" in str(endpoint_url).lower():
             return JSONResponse(
                 status_code=400,
@@ -655,11 +665,14 @@ def create_webapp_server() -> FastAPI:
                 }
             )
 
-        if endpoint_url:
-            update_1c_config(api_url=endpoint_url)
+        target_url = clean_1c_url(endpoint_url)
+        print(f"[1C SYNC] Final Request Endpoint: {target_url}", flush=True)
+
+        if target_url:
+            update_1c_config(api_url=target_url)
 
         # Launch 1C sync asynchronously in background task (Non-blocking UI)
-        result = await run_background_1c_sync(force_refresh=force, raw_payload=raw_data if has_body else None, endpoint_url=endpoint_url)
+        result = await run_background_1c_sync(force_refresh=force, raw_payload=raw_data if has_body else None, endpoint_url=target_url)
         return result
 
 

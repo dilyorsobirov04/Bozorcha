@@ -2737,12 +2737,10 @@ function sanitize1CUrl(rawUrl) {
     // 3. Remove trailing brackets/punctuation/slashes
     s = s.replace(/[\]\)>.,;"'\s]+$/, '').replace(/\/+$/, '');
 
-    // 4. Ensure complete 1C route structure without stripping base paths
+    // 4. If user entered just domain, append fallback. Otherwise, trust user's exact full path.
     if (s && (s.startsWith('http://') || s.startsWith('https://'))) {
         if (!s.includes('/hs/')) {
             s = `${s}/Bozorcham/hs/Bozorcham/GetTovarList`;
-        } else if (!s.endsWith('/GetTovarList')) {
-            s = `${s}/GetTovarList`;
         }
     }
 
