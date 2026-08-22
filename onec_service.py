@@ -553,18 +553,20 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
             # Check if 0 items total were parsed
             if len(accumulated_items) == 0:
-                sample_resp = (last_raw_text or "").strip()
-                err_msg = f"1C dan ma'lumot bo'sh keldi. Kelgan javob: {sample_resp[:100]}" if sample_resp else "1C API bo'sh ro'yxat qaytardi. 1C HTTP Servis funksiyasini tekshiring."
+                raw_text = (last_raw_text or "").strip()
+                raw_snippet = raw_text[:150] if raw_text else "Butunlay bo'sh string (0 byte)"
+                print(f"RAW 1C RESP: {raw_text}", flush=True)
+                err_msg = f"1C Javobi: {raw_snippet}"
                 print(f"[1C DEBUG] Target URL: {active_url}", flush=True)
-                print(f"[1C DEBUG] Raw Response Data: {sample_resp}", flush=True)
+                print(f"[1C DEBUG] Raw Response Data: {raw_text}", flush=True)
                 print(f"[1C DEBUG] Fetch Error: {err_msg} (0 items parsed)", flush=True)
                 logger.warning(err_msg)
                 return {
                     "success": False,
                     "error": err_msg,
                     "message": err_msg,
-                    "detail": f"1C serveridan olingan javob matni: {sample_resp[:500]}",
-                    "raw_response": sample_resp,
+                    "detail": f"1C serveridan olingan javob matni: {raw_text[:500]}",
+                    "raw_response": raw_text,
                     "status_code": 400,
                     "data": None
                 }

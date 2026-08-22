@@ -3302,7 +3302,7 @@ async function trigger1CSync(btn = null) {
                             const hasError = statusData.error || lastRes.success === false || count <= 0;
 
                             if (hasError) {
-                                const errMsg = statusData.error || lastRes.error || lastRes.message || "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring.";
+                                const errMsg = lastRes.message || lastRes.error || statusData.error || "1C API bo'sh javob qaytardi. 1C HTTP Servis funksiyasini va Ngrok manzilini tekshiring.";
                                 showToast(errMsg, 'error');
                             } else {
                                 showToast(`${count} ta 1C tovari muvaffaqiyatli sinxronizatsiya qilindi! 🎉`, 'success');
