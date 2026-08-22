@@ -458,7 +458,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         sep = "&" if "?" in active_url else "?"
                         target_url = f"{active_url}{sep}page={page}"
 
-                    print(f"[1C DEBUG] Target Endpoint: {target_url}", flush=True)
+                    print(f"[1C DEBUG] Target URL: {target_url}", flush=True)
                     print(f"[1C PAGINATION] Requesting Page {page}: {target_url}", flush=True)
                     print(f"[1C DEBUG] Sent Headers: {headers}", flush=True)
                     async with session.get(target_url, auth=auth, headers=headers) as response:
@@ -466,10 +466,16 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                         raw_text = await response.text()
                         last_raw_text = raw_text
 
-                        print(f"[1C DEBUG] Response Status: {status}", flush=True)
-                        print(f"[1C DEBUG] Response Headers: {dict(response.headers)}", flush=True)
-                        print(f"[1C DEBUG] Raw Data Type: {type(raw_text)}", flush=True)
-                        print(f"[1C DEBUG] Raw Response Body: {raw_text}", flush=True)
+                        print(f"[1C DEBUG] Target URL: {target_url}", flush=True)
+                        print(f"[1C DEBUG] Status Code: {status}", flush=True)
+
+                        try:
+                            json_obj = json.loads(raw_text)
+                            json_str = json.dumps(json_obj)
+                            print(f"[1C DEBUG] Raw Response Data: {json_str}", flush=True)
+                        except Exception:
+                            print(f"[1C DEBUG] Raw Response Data: {raw_text}", flush=True)
+
                         print(f"[1C RAW RESP]: {raw_text}", flush=True)
 
                         if status == 200:
@@ -547,15 +553,18 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
             # Check if 0 items total were parsed
             if len(accumulated_items) == 0:
-                sample_resp = (last_raw_text or "").strip()[:100]
-                err_msg = f"1C dan ma'lumot bo'sh keldi. Kelgan javob: {sample_resp}" if sample_resp else "1C API bo'sh ro'yxat qaytardi. 1C HTTP Servis funksiyasini tekshiring."
+                sample_resp = (last_raw_text or "").strip()
+                err_msg = f"1C dan ma'lumot bo'sh keldi. Kelgan javob: {sample_resp[:100]}" if sample_resp else "1C API bo'sh ro'yxat qaytardi. 1C HTTP Servis funksiyasini tekshiring."
+                print(f"[1C DEBUG] Target URL: {active_url}", flush=True)
+                print(f"[1C DEBUG] Raw Response Data: {sample_resp}", flush=True)
                 print(f"[1C DEBUG] Fetch Error: {err_msg} (0 items parsed)", flush=True)
                 logger.warning(err_msg)
                 return {
                     "success": False,
                     "error": err_msg,
                     "message": err_msg,
-                    "detail": f"1C serveridan olingan javob matni: {last_raw_text[:300]}",
+                    "detail": f"1C serveridan olingan javob matni: {sample_resp[:500]}",
+                    "raw_response": sample_resp,
                     "status_code": 400,
                     "data": None
                 }

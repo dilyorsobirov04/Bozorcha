@@ -3280,6 +3280,13 @@ async function trigger1CSync(btn = null) {
                     });
                     if (statusRes.ok) {
                         const statusData = await statusRes.json();
+                        const lastRes = statusData.last_result || {};
+                        const targetUrl = statusData.api_url || lastRes.url || effectiveUrl;
+                        
+                        console.log("[1C DEBUG] Target URL:", targetUrl);
+                        console.log("[1C DEBUG] Status Code:", statusRes.status);
+                        console.log("[1C DEBUG] Raw Response Data:", JSON.stringify(lastRes.raw_response !== undefined ? lastRes.raw_response : (lastRes.data !== undefined ? lastRes.data : statusData)));
+
                         if (statusData.is_syncing === false) {
                             clearInterval(_syncPollingInterval);
                             _syncPollingInterval = null;
