@@ -584,6 +584,7 @@ def create_webapp_server() -> FastAPI:
                     pass
 
             endpoint_url = (
+                request.query_params.get("endpoint") or
                 request.query_params.get("endpointUrl") or
                 request.query_params.get("endpoint_url") or
                 request.query_params.get("1c_endpoint") or
@@ -604,6 +605,7 @@ def create_webapp_server() -> FastAPI:
                             if isinstance(parsed_body, dict):
                                 # Accept endpoint directly from request body
                                 b_url = (
+                                    parsed_body.get("endpoint") or
                                     parsed_body.get("endpointUrl") or
                                     parsed_body.get("endpoint_url") or
                                     parsed_body.get("1c_endpoint") or
