@@ -3250,9 +3250,12 @@ async function trigger1CSync(btn = null) {
     setGlobalLoading(true, 10000, "1C bilan sinxronizatsiya qilinmoqda...");
 
     try {
-        const bodyPayload = effectiveUrl ? { endpointUrl: effectiveUrl, endpoint_url: effectiveUrl } : {};
+        const bodyPayload = {
+            endpoint: effectiveUrl || 'https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList',
+            endpointUrl: effectiveUrl || 'https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList'
+        };
 
-        const res = await fetch(`/api/admin/sync-1c?user_id=${ALLOWED_ADMIN_ID}`, {
+        const res = await fetch(`/api/admin/1c-sync?user_id=${ALLOWED_ADMIN_ID}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -3262,85 +3265,22 @@ async function trigger1CSync(btn = null) {
         });
 
         const data = await res.json().catch(() => ({}));
-        if (res.ok && data.success) {
-            showToast(data.message || "1C bilan sinxronlash fonda boshlandi. Sahifani yangilab turing.", 'info');
 
-            if (_syncPollingInterval) {
-                clearInterval(_syncPollingInterval);
-            }
-
-            // Poll counts and status every 3 seconds while background job runs
-            _syncPollingInterval = setInterval(async () => {
-                await loadProductCounts();
-                await loadUncategorizedProducts();
-
-                try {
-                    const statusRes = await fetch(`/api/admin/sync-1c/status?user_id=${ALLOWED_ADMIN_ID}`, {
-                        headers: { 'X-Admin-Id': String(ALLOWED_ADMIN_ID) }
-                    });
-                    if (statusRes.ok) {
-                        const statusData = await statusRes.json();
-                        const lastRes = statusData.last_result || {};
-                        const targetUrl = statusData.api_url || lastRes.url || effectiveUrl;
-                        
-                        console.log("[1C DEBUG] Target URL:", targetUrl);
-                        console.log("[1C DEBUG] Status Code:", statusRes.status);
-                        console.log("[1C DEBUG] Raw Response Data:", JSON.stringify(lastRes.raw_response !== undefined ? lastRes.raw_response : (lastRes.data !== undefined ? lastRes.data : statusData)));
-
-                        if (statusData.is_syncing === false) {
-                            clearInterval(_syncPollingInterval);
-                            _syncPollingInterval = null;
-
-                            if (syncBtn) {
-                                syncBtn.disabled = false;
-                                syncBtn.classList.remove('loading');
-                                syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
-                            }
-
-                            const lastRes = statusData.last_result || {};
-                            const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count != null ? lastRes.count : 0);
-                            const isSuccess = lastRes.success === true && count > 0;
-
-                            if (isSuccess) {
-                                showToast(lastRes.message || `${count} ta tovar muvaffaqiyatli sinxronlandi!`, 'success');
-                            } else {
-                                const errMsg = lastRes.message || lastRes.error || statusData.error || "Sinxronlashda xatolik yuz berdi";
-                                showToast(errMsg, 'error');
-                            }
-
-                            await loadProductCounts();
-                            await loadUncategorizedProducts();
-                            await loadProducts();
-                        }
-                    }
-                } catch (err) {
-                    console.warn("Status polling warning:", err);
-                }
-            }, 3000);
-
-            return;
+        if (data && (data.success || res.ok)) {
+            showToast(data.message || "Sinxronlash muvaffaqiyatli yakunlandi!", 'success');
+            await loadProductCounts();
+            await loadUncategorizedProducts();
+            await loadProducts();
+        } else {
+            showToast(data?.message || "Sinxronlashda xatolik yuz berdi", 'error');
         }
-
+    } catch (err) {
+        console.error("Sync error:", err);
         clearAllToasts();
-        const errorMsg = data.message || data.error || data.detail || "Sinxronlashda xatolik yuz berdi";
-        showToast(errorMsg, 'error');
-        if (syncBtn) {
-            syncBtn.disabled = false;
-            syncBtn.classList.remove('loading');
-            syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
-        }
-    } catch (e) {
-        console.error('[ACTION ERROR]:', e);
-        clearAllToasts();
-        showToast(e.message ? `Tarmoq xatosi: ${e.message}` : "Sinxronlashda xatolik yuz berdi", 'error');
-        if (syncBtn) {
-            syncBtn.disabled = false;
-            syncBtn.classList.remove('loading');
-            syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
-        }
+        showToast(`Tarmoq xatosi: ${err?.message || 'Ulanishda muammo'}`, 'error');
     } finally {
         setGlobalLoading(false);
-        if (syncBtn && !_syncPollingInterval) {
+        if (syncBtn) {
             syncBtn.disabled = false;
             syncBtn.classList.remove('loading');
             syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
