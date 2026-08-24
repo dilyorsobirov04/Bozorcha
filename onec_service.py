@@ -531,7 +531,45 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 # Next page 404 means pagination reached the end
                                 print(f"[1C PAGINATION] Page {page} returned 404. End of catalog.", flush=True)
                                 break
-                            warning_msg = "1C HTTP xizmati topilmadi (404 Not Found)."
+
+                            # Fallback paths to handle case-sensitivity in 1C HTTP service publications
+                            candidate_paths = [
+                                "/Bozorcham/hs/Bozorcham/GetTovarList",
+                                "/bozorcham/hs/bozorcham/GetTovarList",
+                                "/Bozorcha/hs/Bozorcha/GetTovarList",
+                                "/hs/Bozorcham/GetTovarList"
+                            ]
+
+                            base_url = re.sub(r'/(Bozorcha|bozorcha|hs).*$', '', active_url, flags=re.IGNORECASE).rstrip('/')
+                            found_candidate = False
+
+                            for path in candidate_paths:
+                                full_url = f"{base_url}{path}"
+                                if full_url == active_url:
+                                    continue
+                                try:
+                                    print(f"[1C SYNC TRYING]: {full_url}", flush=True)
+                                    async with session.get(full_url, auth=auth, headers=headers) as cand_res:
+                                        if cand_res.status == 200:
+                                            cand_text = await cand_res.text()
+                                            try:
+                                                cand_data = json.loads(cand_text)
+                                            except Exception:
+                                                cand_data = cand_text
+                                            cand_items = _extract_items_list(cand_data)
+                                            if cand_items and len(cand_items) > 0:
+                                                print(f"[1C SYNC SUCCESSFUL PATH]: {full_url}", flush=True)
+                                                accumulated_items.extend(cand_items)
+                                                update_1c_config(api_url=full_url)
+                                                found_candidate = True
+                                                break
+                                except Exception as cand_err:
+                                    print(f"[1C SYNC PATH FAILED {path}]: {cand_err}", flush=True)
+
+                            if found_candidate:
+                                break
+
+                            warning_msg = "1C HTTP xizmati topilmadi (404 Not Found). 1C dagi HTTP-сервис nomini tekshiring."
                             return {
                                 "success": False,
                                 "error": warning_msg,
@@ -558,7 +596,7 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
             if len(accumulated_items) == 0:
                 raw_text = (last_raw_text or "").strip()
                 print(f"RAW 1C RESP: {raw_text}", flush=True)
-                err_msg = "1C dan tovarlar ro'yxati bo'sh keldi"
+                err_msg = "1C javobi keldi, lekin tovarlar ro'yxati bo'sh."
                 print(f"[1C DEBUG] Target URL: {active_url}", flush=True)
                 print(f"[1C DEBUG] Raw Response Data: {raw_text}", flush=True)
                 print(f"[1C DEBUG] Fetch Error: {err_msg} (0 items parsed)", flush=True)
