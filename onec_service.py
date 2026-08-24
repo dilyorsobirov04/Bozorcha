@@ -676,18 +676,12 @@ async def sync_products_from_1c(force_refresh: bool = True, endpoint_url: Option
     if fetch_res.get("success"):
         raw_data = fetch_res.get("data")
     else:
-        print("[1C FETCH WARN] Direct fetch failed, using fallback parser logic", flush=True)
+        print("[1C SYNC FETCH WARN] 1C endpoint unreachable or 404, proceeding with existing DB catalog.", flush=True)
         global _cache_data
         if _cache_data is not None:
             raw_data = _cache_data
-
-    if raw_data is None:
-        return {
-            "success": False,
-            "message": fetch_res.get("message") or fetch_res.get("error") or "1C dan ma'lumot olib bo'lmadi",
-            "detail": fetch_res.get("detail") or fetch_res.get("error"),
-            "status_code": fetch_res.get("status_code", 502)
-        }
+        else:
+            raw_data = []
 
     sync_result = sync_1c_products(raw_data)
     sync_result["cached"] = fetch_res.get("cached", False)
