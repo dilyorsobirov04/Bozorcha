@@ -2689,12 +2689,9 @@ async function load1CConfigStatus() {
                                 const isSuccess = lastRes.success === true && count > 0;
 
                                 if (isSuccess) {
-                                    showToast(lastRes.message || `${count} ta tovar 1C dan muvaffaqiyatli yuklandi! 🎉`, 'success');
+                                    showToast(lastRes.message || `${count} ta tovar muvaffaqiyatli sinxronlandi! 🎉`, 'success');
                                 } else {
-                                    const rawErr = lastRes.message || lastRes.error || lastRes.detail || statusData.error;
-                                    const rawBodySnippet = lastRes.raw_response ? lastRes.raw_response.substring(0, 100) : '';
-                                    const fallbackMsg = rawBodySnippet ? `1C Natijasi: ${rawBodySnippet}` : "1C serveriga ulanib bo'lmadi yoki tovarlar topilmadi";
-                                    const errMsg = rawErr ? String(rawErr) : fallbackMsg;
+                                    const errMsg = lastRes.message || lastRes.error || statusData.error || "Sinxronlashda xatolik yuz berdi";
                                     showToast(errMsg, 'error');
                                 }
                                 await loadProductCounts();
@@ -3305,12 +3302,9 @@ async function trigger1CSync(btn = null) {
                             const isSuccess = lastRes.success === true && count > 0;
 
                             if (isSuccess) {
-                                showToast(lastRes.message || `${count} ta tovar 1C dan muvaffaqiyatli yuklandi!`, 'success');
+                                showToast(lastRes.message || `${count} ta tovar muvaffaqiyatli sinxronlandi!`, 'success');
                             } else {
-                                const rawErr = lastRes.message || lastRes.error || lastRes.detail || statusData.error;
-                                const rawBodySnippet = lastRes.raw_response ? lastRes.raw_response.substring(0, 100) : '';
-                                const fallbackMsg = rawBodySnippet ? `1C Natijasi: ${rawBodySnippet}` : "1C serveriga ulanib bo'lmadi yoki tovarlar topilmadi";
-                                const errMsg = rawErr ? String(rawErr) : fallbackMsg;
+                                const errMsg = lastRes.message || lastRes.error || statusData.error || "Sinxronlashda xatolik yuz berdi";
                                 showToast(errMsg, 'error');
                             }
 
@@ -3328,14 +3322,7 @@ async function trigger1CSync(btn = null) {
         }
 
         clearAllToasts();
-        let errorMsg = data.error || data.message || data.detail;
-        if (res.status === 401 || res.status === 403 || data.status_code === 401 || data.status_code === 403) {
-            errorMsg = data.error || "1C login yoki paroli noto'g'ri";
-        } else if (res.status === 404 || data.status_code === 404) {
-            errorMsg = data.error || "1C HTTP xizmati topilmadi (404). Kiritilgan URL va 1C nashr qilingan xizmat yo'lini tekshiring.";
-        } else if (!errorMsg) {
-            errorMsg = "1C serveriga ulanib bo'lmadi. Ngrok va 1C ishlayotganini tekshiring.";
-        }
+        const errorMsg = data.message || data.error || data.detail || "Sinxronlashda xatolik yuz berdi";
         showToast(errorMsg, 'error');
         if (syncBtn) {
             syncBtn.disabled = false;
@@ -3345,7 +3332,7 @@ async function trigger1CSync(btn = null) {
     } catch (e) {
         console.error('[ACTION ERROR]:', e);
         clearAllToasts();
-        showToast(e.message ? `Xatolik: ${e.message}` : "1C serveriga ulanib bo'lmadi", 'error');
+        showToast(e.message ? `Tarmoq xatosi: ${e.message}` : "Sinxronlashda xatolik yuz berdi", 'error');
         if (syncBtn) {
             syncBtn.disabled = false;
             syncBtn.classList.remove('loading');
