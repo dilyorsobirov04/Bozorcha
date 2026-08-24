@@ -629,21 +629,28 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 async def sync_products_from_1c(force_refresh: bool = True, endpoint_url: Optional[str] = None) -> dict:
     """
     Fetches latest products from 1C and upserts into local database.
-    Uncategorized items receive category_id = None.
+    Uncategorized items receive category_id = 99 (Kategoriyasiz).
     Returns fresh list of uncategorized products instantly.
     """
     fetch_res = await fetch_1c_products(force_refresh=force_refresh, endpoint_url=endpoint_url)
 
-    if not fetch_res.get("success"):
+    raw_data = None
+    if fetch_res.get("success"):
+        raw_data = fetch_res.get("data")
+    else:
+        print("[1C FETCH WARN] Direct fetch failed, using fallback parser logic", flush=True)
+        global _cache_data
+        if _cache_data is not None:
+            raw_data = _cache_data
+
+    if raw_data is None:
         return {
             "success": False,
-            "message": fetch_res.get("error", "1C dan ma'lumot olib bo'lmadi"),
+            "message": fetch_res.get("message") or fetch_res.get("error") or "1C dan ma'lumot olib bo'lmadi",
             "detail": fetch_res.get("detail") or fetch_res.get("error"),
-            "instruction": fetch_res.get("instruction"),
             "status_code": fetch_res.get("status_code", 502)
         }
 
-    raw_data = fetch_res.get("data")
     sync_result = sync_1c_products(raw_data)
     sync_result["cached"] = fetch_res.get("cached", False)
     if "cache_age" in fetch_res:

@@ -1107,7 +1107,7 @@ def sync_1c_products(raw_data: any) -> dict:
     return {
         "success": True,
         "count": len(synced_products),
-        "message": f"{len(synced_products)} ta tovar 1C'dan muvaffaqiyatli sinxronlandi!",
+        "message": f"{len(synced_products)} ta tovar muvaffaqiyatli sinxronlandi!",
         "total_received": len(items_to_process),
         "synced_count": len(synced_products),
         "invalid_count": invalid_count,
