@@ -557,9 +557,8 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
             # Check if 0 items total were parsed
             if len(accumulated_items) == 0:
                 raw_text = (last_raw_text or "").strip()
-                raw_snippet = raw_text[:80] if raw_text else "bo'sh"
                 print(f"RAW 1C RESP: {raw_text}", flush=True)
-                err_msg = f"1C Javobi bo'sh yoki JSON emas. Raw: {raw_snippet}"
+                err_msg = "1C dan tovarlar ro'yxati bo'sh keldi"
                 print(f"[1C DEBUG] Target URL: {active_url}", flush=True)
                 print(f"[1C DEBUG] Raw Response Data: {raw_text}", flush=True)
                 print(f"[1C DEBUG] Fetch Error: {err_msg} (0 items parsed)", flush=True)
@@ -585,39 +584,43 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                 "success": True,
                 "cached": False,
                 "data": accumulated_items,
-                "status_code": 200
+                "status_code": 200,
+                "cache_age": 0
             }
 
         except aiohttp.ClientConnectorError as e:
             print(f"=== 1C FETCH EXCEPTION ===")
-            print(f"Connection Error: {str(e)}")
-            error_msg = f"1C serveriga ({active_url}) ulanib bo'lmadi: {str(e)}"
+            print(f"Connector Error: {e}")
+            error_msg = f"Ulanish xatosi: {str(e)}"
             logger.warning(error_msg)
             return {
                 "success": False,
                 "error": error_msg,
+                "message": error_msg,
                 "detail": str(e),
                 "data": None
             }
         except asyncio.TimeoutError as e:
             print(f"=== 1C FETCH EXCEPTION ===")
             print(f"Timeout Error after {eff_timeout}s")
-            error_msg = f"1C serveridan javob kelishi vaqti tugadi ({eff_timeout}s)."
+            error_msg = f"Ulanish xatosi: 1C serveridan javob kelishi vaqti tugadi ({eff_timeout}s)."
             logger.warning(error_msg)
             return {
                 "success": False,
                 "error": error_msg,
+                "message": error_msg,
                 "detail": "TimeoutError",
                 "data": None
             }
         except Exception as e:
             print(f"=== 1C FETCH EXCEPTION ===")
             print(f"Unexpected Exception: {type(e).__name__}: {str(e)}")
-            error_msg = f"1C bilan aloqada xatolik ({type(e).__name__}): {str(e)}"
+            error_msg = f"Ulanish xatosi: {str(e)}"
             logger.error(error_msg, exc_info=True)
             return {
                 "success": False,
                 "error": error_msg,
+                "message": error_msg,
                 "detail": str(e),
                 "data": None
             }

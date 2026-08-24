@@ -1079,7 +1079,7 @@ def sync_1c_products(raw_data: any) -> dict:
             synced_products.append(new_product)
 
     if len(synced_products) == 0:
-        err_msg = f"1C dan tovarlar topilmadi. Total received: {len(items_to_process)}"
+        err_msg = f"Bazada saqlashda xatolik: 1C dan tovarlar topilmadi (Olingan: {len(items_to_process)})"
         print(f"DEBUG SYNC ERROR: {err_msg} (0 products synced out of {len(items_to_process)} items)", flush=True)
         return {
             "success": False,
