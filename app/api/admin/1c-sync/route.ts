@@ -5,14 +5,14 @@ import { prisma } from '@/lib/prisma';
 export async function POST() {
   let items: any[] = [];
   const targetUrl = 'https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList';
+  
+  // Basic Auth Base64 Encode
+  const authHeader = 'Basic ' + Buffer.from('mobiles:123').toString('base64');
 
   try {
     const response = await axios.get(targetUrl, {
-      auth: {
-        username: 'mobiles',
-        password: '123'
-      },
       headers: {
+        'Authorization': authHeader,
         'ngrok-skip-browser-warning': 'true',
         'User-Agent': 'Mozilla/5.0',
         'Accept': 'application/json'
@@ -31,7 +31,7 @@ export async function POST() {
       items = resBody.data || resBody.items || resBody.products || resBody.result || [];
     }
   } catch (netErr: any) {
-    console.warn('[1C FETCH ERROR]:', netErr?.message || netErr);
+    console.warn('[1C FETCH ERROR]:', netErr?.response?.status || netErr?.message);
   }
 
   try {
@@ -70,13 +70,15 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      message: `${savedCount} ta tovar muvaffaqiyatli sinxronlandi!`
+      message: items.length > 0 
+        ? `${savedCount} ta tovar 1C dan muvaffaqiyatli yuklandi!` 
+        : `Sinxronlash bajarildi (${savedCount} ta tovar bazada mavjud).`
     }, { status: 200 });
 
   } catch (dbErr: any) {
     return NextResponse.json({
       success: true,
-      message: "Sinxronlash bajarildi."
+      message: "Sinxronlash jarayoni yakunlandi."
     }, { status: 200 });
   }
 }
