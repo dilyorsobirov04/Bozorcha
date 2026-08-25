@@ -2,11 +2,24 @@ import { NextResponse } from 'next/server';
 import axios from 'axios';
 import { prisma } from '@/lib/prisma';
 
-export async function POST() {
+export async function POST(req: Request) {
   let items: any[] = [];
-  const targetUrl = 'https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList';
+  let debugError = '';
+
+  // Get URL from DB setting if available, or fallback
+  let targetUrl = 'https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList';
   
-  // Basic Auth Base64 Encode
+  try {
+    const body = await req.json().catch(() => ({}));
+    if (body.url) {
+      targetUrl = body.url;
+    } else {
+      const setting = await prisma.systemSetting?.findUnique({ where: { key: '1C_HTTP_URL' } }).catch(() => null);
+      if (setting?.value) targetUrl = setting.value;
+    }
+  } catch (e) {}
+
+  // Basic Auth Base64
   const authHeader = 'Basic ' + Buffer.from('mobiles:123').toString('base64');
 
   try {
@@ -31,7 +44,10 @@ export async function POST() {
       items = resBody.data || resBody.items || resBody.products || resBody.result || [];
     }
   } catch (netErr: any) {
-    console.warn('[1C FETCH ERROR]:', netErr?.response?.status || netErr?.message);
+    debugError = netErr?.response?.data 
+      ? JSON.stringify(netErr.response.data) 
+      : (netErr?.message || 'Network Timeout');
+    console.error('[1C FETCH FAILURE]:', debugError);
   }
 
   try {
@@ -71,14 +87,14 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       message: items.length > 0 
-        ? `${savedCount} ta tovar 1C dan muvaffaqiyatli yuklandi!` 
-        : `Sinxronlash bajarildi (${savedCount} ta tovar bazada mavjud).`
-    }, { status: 200 });
+        ? `${savedCount} ta tovar 1C dan yuklandi!` 
+        : `Sinxronlash bajarildi (Natija bo'sh: ${debugError || 'Tovar topilmadi'})`
+    });
 
   } catch (dbErr: any) {
     return NextResponse.json({
-      success: true,
-      message: "Sinxronlash jarayoni yakunlandi."
-    }, { status: 200 });
+      success: false,
+      message: "Baza bilan ishlashda xatolik yuz berdi"
+    }, { status: 500 });
   }
 }
