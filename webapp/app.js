@@ -3250,10 +3250,7 @@ async function trigger1CSync(btn = null) {
     setGlobalLoading(true, 10000, "1C bilan sinxronizatsiya qilinmoqda...");
 
     try {
-        const bodyPayload = {
-            endpoint: effectiveUrl || 'https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList',
-            endpointUrl: effectiveUrl || 'https://wreath-paddling-precook.ngrok-free.dev/Bozorcham/hs/Bozorcham/GetTovarList'
-        };
+        const bodyPayload = effectiveUrl ? { endpoint: effectiveUrl, endpointUrl: effectiveUrl } : {};
 
         const res = await fetch(`/api/admin/1c-sync?user_id=${ALLOWED_ADMIN_ID}`, {
             method: 'POST',
@@ -3266,21 +3263,67 @@ async function trigger1CSync(btn = null) {
 
         const data = await res.json().catch(() => ({}));
 
-        if (data && (data.success || res.ok)) {
-            showToast(data.message || "Muvaffaqiyatli sinxronlandi!", 'success');
-            await loadProductCounts();
-            await loadUncategorizedProducts();
-            await loadProducts();
-        } else {
-            showToast(data?.message || "Muvaffaqiyatli sinxronlandi!", 'success');
+        if (res.ok && data.success) {
+            showToast(data.message || "1C Sinxronlash fonda boshlandi...", 'info');
+
+            if (_syncPollingInterval) {
+                clearInterval(_syncPollingInterval);
+            }
+
+            _syncPollingInterval = setInterval(async () => {
+                await loadProductCounts();
+                await loadUncategorizedProducts();
+
+                try {
+                    const statusRes = await fetch(`/api/admin/sync-1c/status?user_id=${ALLOWED_ADMIN_ID}`, {
+                        headers: { 'X-Admin-Id': String(ALLOWED_ADMIN_ID) }
+                    });
+                    if (statusRes.ok) {
+                        const statusData = await statusRes.json();
+                        if (statusData.is_syncing === false) {
+                            clearInterval(_syncPollingInterval);
+                            _syncPollingInterval = null;
+
+                            if (syncBtn) {
+                                syncBtn.disabled = false;
+                                syncBtn.classList.remove('loading');
+                                syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
+                            }
+
+                            const lastRes = statusData.last_result || {};
+                            const count = lastRes.synced_count != null ? lastRes.synced_count : (lastRes.count != null ? lastRes.count : 0);
+                            const isSuccess = lastRes.success === true;
+
+                            if (isSuccess) {
+                                showToast(lastRes.message || `${count} ta tovar 1C dan muvaffaqiyatli sinxronlandi! 🎉`, 'success');
+                            } else {
+                                const errMsg = lastRes.message || lastRes.error || statusData.error || "1C serveridan tovarlarni yuklab bo'lmadi.";
+                                showToast(`❌ ${errMsg}`, 'error');
+                            }
+
+                            await loadProductCounts();
+                            await loadUncategorizedProducts();
+                            await loadProducts();
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Status polling warning:", err);
+                }
+            }, 2500);
+
+            return;
         }
+
+        clearAllToasts();
+        const errorMsg = data.message || data.error || "1C serveriga ulanib bo'lmadi. URL manzilini va 1C serverini tekshiring.";
+        showToast(`❌ ${errorMsg}`, 'error');
     } catch (err) {
         console.error("Sync error:", err);
         clearAllToasts();
-        showToast("Muvaffaqiyatli sinxronlandi!", 'success');
+        showToast(`❌ Tarmoq xatosi: ${err?.message || 'Ulanishda muammo'}`, 'error');
     } finally {
         setGlobalLoading(false);
-        if (syncBtn) {
+        if (syncBtn && !_syncPollingInterval) {
             syncBtn.disabled = false;
             syncBtn.classList.remove('loading');
             syncBtn.innerHTML = `<span>⚡️ 1C Sinxronlash</span>`;
