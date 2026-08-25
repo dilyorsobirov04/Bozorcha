@@ -1234,11 +1234,11 @@ async def query_postgres_product_counts() -> dict:
         return get_products_counts()
     try:
         async with pool.acquire() as conn:
-            valid_cats = list(CATEGORIES_DB.keys())
+            valid_cats = [c for c in CATEGORIES_DB.keys() if c != 99]
             row = await conn.fetchrow("""
                 SELECT 
                     COUNT(*) as total,
-                    COUNT(*) FILTER (WHERE category_id IS NULL OR category_id = 0 OR category_id NOT IN (SELECT unnest($1::int[]))) as uncategorized
+                    COUNT(*) FILTER (WHERE category_id IS NULL OR category_id = 0 OR category_id = 99 OR (ARRAY_LENGTH($1::int[], 1) > 0 AND category_id NOT IN (SELECT unnest($1::int[])))) as uncategorized
                 FROM products
             """, valid_cats)
             if row:
@@ -1252,29 +1252,30 @@ async def query_postgres_product_counts() -> dict:
         return get_products_counts()
 
 
-def get_uncategorized_products() -> list[dict]:
-    return [
-        prod for prod in PRODUCTS_DB.values()
-        if prod.get("category_id") is None
-        or prod.get("category_id") == 0
-        or str(prod.get("category_id")).strip() == ""
-        or (prod.get("category_id") not in CATEGORIES_DB)
-    ]
-
-
-async def query_postgres_uncategorized_products() -> list[dict]:
+async def query_postgres_uncategorized_products(search: str | None = None) -> list[dict]:
     """Queries PostgreSQL database table directly for products without assigned categories."""
     pool = await get_pg_pool()
     if not pool:
-        return get_uncategorized_products()
+        return get_uncategorized_products(search=search)
     try:
         async with pool.acquire() as conn:
-            valid_cats = list(CATEGORIES_DB.keys())
-            rows = await conn.fetch("""
-                SELECT * FROM products 
-                WHERE category_id IS NULL OR category_id = 0 OR category_id NOT IN (SELECT unnest($1::int[]))
-                ORDER BY id DESC
-            """, valid_cats)
+            valid_cats = [c for c in CATEGORIES_DB.keys() if c != 99]
+            if search and str(search).strip():
+                q_pattern = f"%{str(search).strip().lower()}%"
+                rows = await conn.fetch("""
+                    SELECT * FROM products 
+                    WHERE (category_id IS NULL OR category_id = 0 OR category_id = 99 OR (ARRAY_LENGTH($1::int[], 1) > 0 AND category_id NOT IN (SELECT unnest($1::int[]))))
+                      AND (LOWER(name) LIKE $2 OR LOWER(COALESCE(sku, '')) LIKE $2 OR LOWER(COALESCE(barcode, '')) LIKE $2)
+                    ORDER BY id DESC
+                    LIMIT 300
+                """, valid_cats, q_pattern)
+            else:
+                rows = await conn.fetch("""
+                    SELECT * FROM products 
+                    WHERE (category_id IS NULL OR category_id = 0 OR category_id = 99 OR (ARRAY_LENGTH($1::int[], 1) > 0 AND category_id NOT IN (SELECT unnest($1::int[]))))
+                    ORDER BY id DESC
+                    LIMIT 300
+                """, valid_cats)
 
             result = []
             for r in rows:
