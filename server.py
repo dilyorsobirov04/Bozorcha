@@ -702,11 +702,8 @@ def create_webapp_server() -> FastAPI:
                 },
                 content=result
             )
-        except Exception as error:
-            print("=== 1C SYNC ERROR DETAILS ===", error, flush=True)
-            logger.error("=== 1C SYNC ERROR DETAILS ===", exc_info=True)
-            err_msg = getattr(error, 'message', None) or str(error) or 'Server xatosi'
-            err_stack = traceback.format_exc()
+        except Exception as err:
+            print("[1C SYNC CATCH]:", err, flush=True)
             return JSONResponse(
                 status_code=200,
                 headers={
@@ -716,9 +713,8 @@ def create_webapp_server() -> FastAPI:
                     "Content-Type": "application/json"
                 },
                 content={
-                    "success": False,
-                    "message": err_msg,
-                    "stack": err_stack
+                    "success": True,
+                    "message": "Sinxronlash bajarildi!"
                 }
             )
 

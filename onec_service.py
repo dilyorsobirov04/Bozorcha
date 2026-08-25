@@ -676,7 +676,7 @@ async def sync_products_from_1c(force_refresh: bool = True, endpoint_url: Option
     if fetch_res.get("success"):
         raw_data = fetch_res.get("data")
     else:
-        print("[1C SYNC FETCH WARN] 1C endpoint unreachable or 404, proceeding with existing DB catalog.", flush=True)
+        print("[1C FETCH BYPASS]: Ngrok/1C unreachable, returning DB products count.", flush=True)
         global _cache_data
         if _cache_data is not None:
             raw_data = _cache_data

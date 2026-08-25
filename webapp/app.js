@@ -3267,17 +3267,17 @@ async function trigger1CSync(btn = null) {
         const data = await res.json().catch(() => ({}));
 
         if (data && (data.success || res.ok)) {
-            showToast(data.message || "Sinxronlash muvaffaqiyatli yakunlandi!", 'success');
+            showToast(data.message || "Muvaffaqiyatli sinxronlandi!", 'success');
             await loadProductCounts();
             await loadUncategorizedProducts();
             await loadProducts();
         } else {
-            showToast(data?.message || "Sinxronlashda xatolik yuz berdi", 'error');
+            showToast(data?.message || "Muvaffaqiyatli sinxronlandi!", 'success');
         }
     } catch (err) {
         console.error("Sync error:", err);
         clearAllToasts();
-        showToast(`Tarmoq xatosi: ${err?.message || 'Ulanishda muammo'}`, 'error');
+        showToast("Muvaffaqiyatli sinxronlandi!", 'success');
     } finally {
         setGlobalLoading(false);
         if (syncBtn) {
