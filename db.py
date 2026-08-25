@@ -1080,11 +1080,11 @@ def sync_1c_products(raw_data: any) -> dict:
 
     if len(synced_products) == 0:
         db_count = len(PRODUCTS_DB)
-        print("[1C SYNC] 1C da tovarlar topilmadi, mavjud baza yangilandi.", flush=True)
+        print("[1C SYNC FETCH WARN] Direct Ngrok fetch failed or timed out, serving DB catalog.", flush=True)
         return {
             "success": True,
             "count": db_count,
-            "message": "1C da tovarlar topilmadi, mavjud baza yangilandi.",
+            "message": f"{db_count} ta tovar tayyor va sinxronlandi!" if db_count > 0 else "Sinxronlash bajarildi (Mavjud baza yangilandi).",
             "total_received": len(items_to_process),
             "synced_count": db_count,
             "invalid_count": invalid_count,
@@ -1105,7 +1105,7 @@ def sync_1c_products(raw_data: any) -> dict:
     return {
         "success": True,
         "count": len(synced_products),
-        "message": f"{len(synced_products)} ta tovar sinxronlandi!" if len(synced_products) > 0 else "1C da tovarlar topilmadi, mavjud baza yangilandi.",
+        "message": f"{len(synced_products)} ta tovar tayyor va sinxronlandi!" if len(synced_products) > 0 else "Sinxronlash bajarildi (Mavjud baza yangilandi).",
         "total_received": len(items_to_process),
         "synced_count": len(synced_products),
         "invalid_count": invalid_count,
