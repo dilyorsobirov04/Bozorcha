@@ -18,6 +18,7 @@ except ImportError:
 from db import (
     sync_1c_products,
     get_uncategorized_products,
+    query_postgres_uncategorized_products,
     get_system_setting,
     set_system_setting,
     get_1c_system_settings,
@@ -470,12 +471,11 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
 
                         try:
                             json_obj = json.loads(raw_text)
-                            json_str = json.dumps(json_obj)
-                            print(f"[1C DEBUG] Raw Response Data: {json_str}", flush=True)
+                            sample_str = str(json_obj)[:200].encode('ascii', errors='replace').decode('ascii')
+                            print(f"[1C DEBUG] Raw Response Data ({len(raw_text)} chars): {sample_str}...", flush=True)
                         except Exception:
-                            print(f"[1C DEBUG] Raw Response Data: {raw_text}", flush=True)
-
-                        print(f"[1C RAW RESP]: {raw_text}", flush=True)
+                            sample_str = str(raw_text)[:200].encode('ascii', errors='replace').decode('ascii')
+                            print(f"[1C DEBUG] Raw Response Data ({len(raw_text)} chars): {sample_str}...", flush=True)
 
                         if status == 200:
                             if "<!DOCTYPE" in raw_text or "<html" in raw_text.lower():
@@ -500,15 +500,19 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
                                 sample_str = str(page_items[0])[:200].encode('ascii', errors='replace').decode('ascii')
                                 print(f"[1C DEBUG] Sample First Item: {sample_str}", flush=True)
 
-                            if not page_items:
-                                # 0 items returned -> catalog end reached
-                                print(f"[1C PAGINATION] Page {page} returned 0 items. Loop finished.", flush=True)
-                                break
+                            if page > 1 and len(accumulated_items) > 0 and len(page_items) > 0:
+                                first_acc = str(accumulated_items[0].get("id") or accumulated_items[0].get("sku") or "")
+                                first_cur = str(page_items[0].get("id") or page_items[0].get("sku") or "")
+                                if first_acc and first_acc == first_cur:
+                                    print(f"[1C PAGINATION] Page {page} returned duplicate page 1 data. Catalog fetch complete.", flush=True)
+                                    break
 
                             accumulated_items.extend(page_items)
 
-                            # If page 1 returned non-paginated data (e.g. text/xml/dict or single list without paging support)
-                            # or fewer than 5 items, check if loop should continue
+                            if page == 1 and len(page_items) >= 50:
+                                print(f"[1C PAGINATION] Page 1 returned full catalog of {len(page_items)} items. Loop finished.", flush=True)
+                                break
+
                             if page == 1 and isinstance(raw_data, str) and not raw_data.strip().startswith("["):
                                 break
 
@@ -595,10 +599,10 @@ async def fetch_1c_products(force_refresh: bool = False, timeout_seconds: Option
             # Check if 0 items total were parsed
             if len(accumulated_items) == 0:
                 raw_text = (last_raw_text or "").strip()
-                print(f"RAW 1C RESP: {raw_text}", flush=True)
+                sample_str = str(raw_text)[:200].encode('ascii', errors='replace').decode('ascii')
+                print(f"[1C DEBUG] RAW 1C RESP ({len(raw_text)} chars): {sample_str}...", flush=True)
                 err_msg = "1C javobi keldi, lekin tovarlar ro'yxati bo'sh."
                 print(f"[1C DEBUG] Target URL: {active_url}", flush=True)
-                print(f"[1C DEBUG] Raw Response Data: {raw_text}", flush=True)
                 print(f"[1C DEBUG] Fetch Error: {err_msg} (0 items parsed)", flush=True)
                 logger.warning(err_msg)
                 return {
@@ -689,19 +693,19 @@ async def sync_products_from_1c(force_refresh: bool = True, endpoint_url: Option
         if products_to_persist:
             await _async_persist_synced_products(products_to_persist)
 
-        sync_result["uncategorized_products"] = get_uncategorized_products()
+        sync_result["uncategorized_products"] = await query_postgres_uncategorized_products()
         return sync_result
     except Exception as dbErr:
         print('[1C SYNC DB WARN]:', dbErr, flush=True)
         return {
             "success": True,
-            "count": len(PRODUCTS_DB),
-            "synced_count": len(PRODUCTS_DB),
+            "count": 0,
+            "synced_count": 0,
             "message": "Sinxronlash muvaffaqiyatli yakunlandi."
         }
 
     # Instantly include fresh uncategorized products list
-    sync_result["uncategorized_products"] = get_uncategorized_products()
+    sync_result["uncategorized_products"] = await query_postgres_uncategorized_products()
 
     return sync_result
 

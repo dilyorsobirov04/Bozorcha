@@ -1200,6 +1200,34 @@ async def _async_persist_synced_products(products_list: list) -> dict:
             print(f"DEBUG: Successfully processed {total_count} products into PostgreSQL. (New: {inserted_count}, Updated: {updated_count})")
             print(f"[POSTGRESQL VERIFICATION] Direct query total products count in bozorcha_db: {total_db_count}")
 
+            # Reload memory dictionary so PRODUCTS_DB stays in sync
+            rows = await conn.fetch("SELECT * FROM products ORDER BY id ASC")
+            if rows:
+                new_prods = {}
+                for r in rows:
+                    pid = r["id"]
+                    new_prods[pid] = {
+                        "id": pid,
+                        "sku": r["sku"] or f"SKU-{pid}",
+                        "barcode": r.get("barcode"),
+                        "category_id": r["category_id"],
+                        "name": r["name"],
+                        "unit": r["unit"] or "dona",
+                        "price": int(r["price"] or 0),
+                        "old_price": r["old_price"],
+                        "discount_percent": r["discount_percent"] or 0,
+                        "stock": r["stock"] or 0,
+                        "description": r["description"] or "",
+                        "nutrition": json.loads(r["nutrition"]) if r.get("nutrition") else {},
+                        "photo_file_id": r.get("photo_file_id"),
+                        "image_url": r.get("image_url"),
+                        "is_promo": bool(r.get("is_promo")),
+                        "recommendation": r.get("recommendation")
+                    }
+                PRODUCTS_DB.clear()
+                PRODUCTS_DB.update(new_prods)
+                print(f"[POSTGRESQL] Reloaded {len(PRODUCTS_DB)} products into memory.")
+
         print(f"[SYNC] Upserted {total_count} products into Database")
         print(f"[SYNC COMPLETED] Total Fetched: {total_count}, Saved/Updated in DB: {total_count}")
         return {"inserted": inserted_count, "updated": updated_count, "total": total_count}
