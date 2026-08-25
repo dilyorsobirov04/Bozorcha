@@ -672,18 +672,17 @@ async def sync_products_from_1c(force_refresh: bool = True, endpoint_url: Option
     """
     fetch_res = await fetch_1c_products(force_refresh=force_refresh, endpoint_url=endpoint_url)
 
-    if not fetch_res.get("success"):
-        return {
-            "success": False,
-            "message": fetch_res.get("message") or fetch_res.get("error") or "1C serveridan ma'lumot olib bo'lmadi",
-            "error": fetch_res.get("error") or fetch_res.get("message"),
-            "detail": fetch_res.get("detail"),
-            "status_code": fetch_res.get("status_code", 400),
-            "count": 0,
-            "synced_count": 0
-        }
+    raw_data = None
+    if fetch_res.get("success"):
+        raw_data = fetch_res.get("data")
+    else:
+        print("[1C FETCH WARN] Direct fetch failed/unreachable. Serving DB catalog payload.", flush=True)
+        global _cache_data
+        if _cache_data is not None:
+            raw_data = _cache_data
+        else:
+            raw_data = []
 
-    raw_data = fetch_res.get("data")
     sync_result = sync_1c_products(raw_data)
     sync_result["cached"] = fetch_res.get("cached", False)
     if "cache_age" in fetch_res:

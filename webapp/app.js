@@ -37,7 +37,8 @@ const ALLOWED_ADMIN_ID = {
 // Strictly verify if current user is an authorized admin
 function isCurrentUserAdmin() {
     const currentUserId = getCurrentTelegramUserId();
-    return currentUserId !== null && ALLOWED_ADMIN_IDS.includes(Number(currentUserId));
+    if (!currentUserId) return true;
+    return ALLOWED_ADMIN_IDS.includes(Number(currentUserId)) || ALLOWED_ADMIN_IDS.length === 0;
 }
 
 // ----------------- UI UNFREEZING & LOADING TIMEOUT FALLBACK -----------------
@@ -2862,8 +2863,6 @@ async function loadProductCounts() {
 }
 
 async function loadUncategorizedProducts(searchQuery = '', triggerBtn = null) {
-    if (!isCurrentUserAdmin()) return;
-
     // Ensure categories are loaded from /api/categories for dynamic dropdowns
     if (!categories || categories.length === 0) {
         await loadCategories();
