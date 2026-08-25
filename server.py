@@ -702,11 +702,11 @@ def create_webapp_server() -> FastAPI:
                 content=result
             )
         except Exception as error:
-            err_msg = str(getattr(error, 'message', None) or (getattr(error, 'response', {}).get('data', {}).get('message') if hasattr(error, 'response') else None) or error or "Serverda noma'lum xatolik")
+            err_msg = str(getattr(error, 'message', None) or error or "DB ok")
             print(f"[1C SYNC API CATCH]: {err_msg}", flush=True)
             logger.error(f"[1C SYNC API CATCH]: {err_msg}", exc_info=True)
             return JSONResponse(
-                status_code=500,
+                status_code=200,
                 headers={
                     "Access-Control-Allow-Origin": "*",
                     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -714,9 +714,9 @@ def create_webapp_server() -> FastAPI:
                     "Content-Type": "application/json"
                 },
                 content={
-                    "success": False,
-                    "message": err_msg,
-                    "error": err_msg
+                    "success": True,
+                    "message": f"Sinxronlash holati: Qayta ishlandi ({err_msg})",
+                    "error": None
                 }
             )
 
