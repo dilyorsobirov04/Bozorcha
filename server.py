@@ -3,6 +3,7 @@ import sys
 import uuid
 import base64
 import logging
+import traceback
 from typing import Optional
 
 try:
@@ -702,9 +703,10 @@ def create_webapp_server() -> FastAPI:
                 content=result
             )
         except Exception as error:
-            err_msg = str(getattr(error, 'message', None) or error or "DB ok")
-            print(f"[1C SYNC API CATCH]: {err_msg}", flush=True)
-            logger.error(f"[1C SYNC API CATCH]: {err_msg}", exc_info=True)
+            print("=== 1C SYNC ERROR DETAILS ===", error, flush=True)
+            logger.error("=== 1C SYNC ERROR DETAILS ===", exc_info=True)
+            err_msg = getattr(error, 'message', None) or str(error) or 'Server xatosi'
+            err_stack = traceback.format_exc()
             return JSONResponse(
                 status_code=200,
                 headers={
@@ -714,9 +716,9 @@ def create_webapp_server() -> FastAPI:
                     "Content-Type": "application/json"
                 },
                 content={
-                    "success": True,
-                    "message": f"Sinxronlash holati: Qayta ishlandi ({err_msg})",
-                    "error": None
+                    "success": False,
+                    "message": err_msg,
+                    "stack": err_stack
                 }
             )
 
