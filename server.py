@@ -714,7 +714,7 @@ def create_webapp_server() -> FastAPI:
                 },
                 content={
                     "success": True,
-                    "message": "Sinxronlash bajarildi!"
+                    "message": "Sinxronlash yakunlandi."
                 }
             )
 
