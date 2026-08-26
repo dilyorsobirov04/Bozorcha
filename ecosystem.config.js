@@ -24,22 +24,6 @@ module.exports = {
       }
     },
     {
-      name: "bozorcha_miniapp",
-      script: "server.py",
-      interpreter: "python",
-      instances: 1,
-      exec_mode: "fork",
-      autorestart: true,
-      watch: false,
-      max_memory_restart: "500M",
-      env: {
-        NODE_ENV: "production",
-        PYTHONUNBUFFERED: "1",
-        PYTHONUTF8: "1",
-        PYTHONIOENCODING: "utf-8"
-      }
-    },
-    {
       name: "ngrok-1c",
       script: ngrokScript,
       args: "http --url=wreath-paddling-precook.ngrok-free.dev 8080",
