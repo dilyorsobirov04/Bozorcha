@@ -2943,6 +2943,8 @@ function renderUncategorizedProducts() {
     const container = document.getElementById('uncategorized-products-container');
     if (!container) return;
 
+    populateBatchCategorySelector();
+
     const searchInput = document.getElementById('uncategorized-search-input');
     const hasSearch = searchInput && searchInput.value.trim().length > 0;
 
@@ -2958,6 +2960,7 @@ function renderUncategorizedProducts() {
                 </p>
             </div>
         `;
+        updateSelectedUncategorizedCount();
         return;
     }
 
@@ -2971,13 +2974,16 @@ function renderUncategorizedProducts() {
         const unitText = prod.unit || 'dona';
 
         return `
-            <div class="uncat-card" id="uncat-card-${prod.id}" data-product-id="${prod.id}">
+            <div class="uncat-card" id="uncat-card-${prod.id}" data-product-id="${prod.id}" style="position: relative;">
+                <div style="position: absolute; top: 10px; right: 10px; z-index: 5; background: rgba(15,23,42,0.6); padding: 4px; border-radius: 6px; backdrop-filter: blur(4px);">
+                    <input type="checkbox" class="uncat-card-checkbox" value="${prod.id}" onchange="updateSelectedUncategorizedCount()" style="width: 20px; height: 20px; cursor: pointer; accent-color: #6366f1;">
+                </div>
                 <div class="uncat-card-main">
                     <div class="uncat-card-thumb-wrap">
                         <img src="${imgSrc}" alt="${prod.name}" class="uncat-card-thumb" onerror="this.src='https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60'" loading="lazy">
                     </div>
                     <div class="uncat-card-info">
-                        <div class="uncat-card-title">${prod.name || 'Nomsiz mahsulot'}</div>
+                        <div class="uncat-card-title" style="padding-right: 28px;">${prod.name || 'Nomsiz mahsulot'}</div>
                         <div class="uncat-card-desc">${prod.description || '1C orqali import qilingan tovar'}</div>
                         <div class="uncat-card-meta">
                             <span class="sku-badge">🏷️ ${sku}</span>
@@ -3000,6 +3006,8 @@ function renderUncategorizedProducts() {
             </div>
         `;
     }).join('');
+
+    updateSelectedUncategorizedCount();
 }
 
 function renderUncategorizedGrid(items = null) {
@@ -3044,6 +3052,142 @@ function buildCategoryOptionsHtml() {
     }
 
     return html;
+}
+
+function populateBatchCategorySelector() {
+    const selectEl = document.getElementById('batch-target-category');
+    if (!selectEl) return;
+    const currentVal = selectEl.value;
+    const optionsHtml = buildCategoryOptionsHtml();
+    selectEl.innerHTML = `<option value="">— Nishon Kategoriyani Tanlang —</option>` + optionsHtml;
+    if (currentVal) selectEl.value = currentVal;
+}
+
+function updateSelectedUncategorizedCount() {
+    const checked = document.querySelectorAll('.uncat-card-checkbox:checked');
+    const countEl = document.getElementById('batch-selected-count');
+    if (countEl) countEl.innerText = checked.length;
+}
+
+function toggleSelectAllUncategorized() {
+    const checkboxes = document.querySelectorAll('.uncat-card-checkbox');
+    if (checkboxes.length === 0) return;
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => { cb.checked = !allChecked; });
+    const btnText = document.getElementById('uncat-select-all-btn-text');
+    if (btnText) btnText.innerText = !allChecked ? '❌ Bekor qilish' : '☑️ Barchasini Tanlash';
+    updateSelectedUncategorizedCount();
+}
+
+async function executeBatchCategoryAssignment() {
+    const targetCategorySelect = document.getElementById('batch-target-category');
+    const categoryId = targetCategorySelect ? targetCategorySelect.value : '';
+    
+    if (!categoryId) {
+        showToast("Iltimos, nishon kategoriyani tanlang!", "warning");
+        if (targetCategorySelect) targetCategorySelect.focus();
+        return;
+    }
+
+    const checkedBoxes = document.querySelectorAll('.uncat-card-checkbox:checked');
+    const productIds = Array.from(checkedBoxes).map(cb => Number(cb.value)).filter(Boolean);
+
+    if (productIds.length === 0) {
+        showToast("Kamida bitta tovar belgilanishi shart!", "warning");
+        return;
+    }
+
+    const assignBtn = document.getElementById('batch-assign-btn');
+    if (assignBtn) {
+        assignBtn.disabled = true;
+        assignBtn.innerHTML = `<span>⏳ Saqlanmoqda...</span>`;
+    }
+
+    try {
+        const res = await fetch('/api/admin/products/batch-category', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
+            body: JSON.stringify({ productIds, categoryId: Number(categoryId) })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok && data.success) {
+            showToast(data.message || `${productIds.length} ta tovar kategoriyaga biriktirildi!`, "success");
+            
+            // Remove assigned products from grid instantly
+            uncategorizedProducts = uncategorizedProducts.filter(p => !productIds.includes(Number(p.id)));
+            renderUncategorizedProducts();
+            
+            if (typeof fetchProductCounts === 'function') fetchProductCounts();
+            if (typeof loadProductCounts === 'function') loadProductCounts();
+        } else {
+            showToast(data.message || data.error || "Xatolik yuz berdi", "error");
+        }
+    } catch (e) {
+        console.error('executeBatchCategoryAssignment error:', e);
+        showToast("Ulanishda xatolik yuz berdi", "error");
+    } finally {
+        if (assignBtn) {
+            assignBtn.disabled = false;
+            updateSelectedUncategorizedCount();
+        }
+    }
+}
+
+async function assignAllSearchResultsToCategory() {
+    const targetCategorySelect = document.getElementById('batch-target-category');
+    const categoryId = targetCategorySelect ? targetCategorySelect.value : '';
+
+    if (!categoryId) {
+        showToast("Iltimos, nishon kategoriyani tanlang!", "warning");
+        if (targetCategorySelect) targetCategorySelect.focus();
+        return;
+    }
+
+    if (!uncategorizedProducts || uncategorizedProducts.length === 0) {
+        showToast("Ro'yxatda biriktiriladigan tovar topilmadi!", "warning");
+        return;
+    }
+
+    const productIds = uncategorizedProducts.map(p => Number(p.id)).filter(Boolean);
+
+    if (!confirm(`Rostdan ham hozirgi ko'rinib turgan ${productIds.length} ta tovarni tanlangan kategoriyaga biriktirmoqchimisiz?`)) {
+        return;
+    }
+
+    if (typeof setGlobalLoading === 'function') setGlobalLoading(true, 10000, "Tovarlar ommaviy biriktirilmoqda...");
+
+    try {
+        const res = await fetch('/api/admin/products/batch-category', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Id': String(ALLOWED_ADMIN_ID)
+            },
+            body: JSON.stringify({ productIds, categoryId: Number(categoryId) })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok && data.success) {
+            showToast(data.message || `${productIds.length} ta tovar kategoriyaga biriktirildi!`, "success");
+            uncategorizedProducts = [];
+            renderUncategorizedProducts();
+            if (typeof fetchProductCounts === 'function') fetchProductCounts();
+            if (typeof loadProductCounts === 'function') loadProductCounts();
+        } else {
+            showToast(data.message || data.error || "Xatolik yuz berdi", "error");
+        }
+    } catch (e) {
+        console.error('assignAllSearchResultsToCategory error:', e);
+        showToast("Ulanishda xatolik yuz berdi", "error");
+    } finally {
+        if (typeof setGlobalLoading === 'function') setGlobalLoading(false);
+    }
 }
 
 function handleUncategorizedSearch(value) {
@@ -4375,6 +4519,11 @@ window.loadProductCounts = loadProductCounts;
 window.fetchUncategorizedProducts = loadUncategorizedProducts;
 window.renderUncategorizedGrid = renderUncategorizedGrid;
 window.renderUncategorizedProducts = renderUncategorizedProducts;
+window.populateBatchCategorySelector = populateBatchCategorySelector;
+window.updateSelectedUncategorizedCount = updateSelectedUncategorizedCount;
+window.toggleSelectAllUncategorized = toggleSelectAllUncategorized;
+window.executeBatchCategoryAssignment = executeBatchCategoryAssignment;
+window.assignAllSearchResultsToCategory = assignAllSearchResultsToCategory;
 window.triggerSilent1CSync = triggerSilent1CSync;
 window.clearAllToasts = clearAllToasts;
 window.showToast = showToast;

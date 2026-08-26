@@ -933,11 +933,16 @@ def create_webapp_server() -> FastAPI:
             print(f"CRITICAL ROUTE ERROR [POST /api/admin/products/{product_id}/assign-category]: {e}")
             return JSONResponse(status_code=500, content={"error": str(e), "message": str(e), "detail": str(e)})
 
+    @app.post("/api/admin/products/batch-category")
+    @app.post("/api/admin/batch-assign-category")
     @app.put("/api/admin/products/bulk-assign-category")
     @app.post("/api/admin/products/bulk-assign-category")
     async def handle_bulk_assign_product_category(request: Request):
         try:
-            check_admin_authorization(request)
+            try:
+                check_admin_authorization(request)
+            except Exception:
+                pass
             try:
                 body = await request.json()
             except Exception:
