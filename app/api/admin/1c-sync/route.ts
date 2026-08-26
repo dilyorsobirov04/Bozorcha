@@ -2,6 +2,59 @@ import { NextResponse } from 'next/server';
 import axios from 'axios';
 import { prisma } from '@/lib/prisma';
 
+function extractItemsFrom1C(data: any): any[] {
+  if (!data) return [];
+
+  if (typeof data === 'string') {
+    const trimmed = data.trim().replace(/^\ufeff/, '');
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        return extractItemsFrom1C(JSON.parse(trimmed));
+      } catch (e) {}
+    }
+    return [];
+  }
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (typeof data === 'object' && data !== null) {
+    // 1. Priority key scan
+    const priorityKeys = [
+      'data', 'items', 'Tovary', 'products', 'GetTovarList', 
+      'Tovari', 'tovary', 'goods', 'rows', 'payload', 'result', 
+      'tovarlar', 'Товары', 'товары', 'Номенклатура', 'catalog', 'Catalog'
+    ];
+
+    for (const key of priorityKeys) {
+      if (data[key] !== undefined && data[key] !== null) {
+        const val = data[key];
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'object' || typeof val === 'string') {
+          const nested = extractItemsFrom1C(val);
+          if (nested.length > 0) return nested;
+        }
+      }
+    }
+
+    // 2. Dynamic scan of any object key that holds an array of items
+    for (const key of Object.keys(data)) {
+      const val = data[key];
+      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object') {
+        return val;
+      }
+    }
+
+    // 3. Single product item object
+    if (data.id || data.sku || data.code || data.name || data.title || data.naimenovanie || data.barcode) {
+      return [data];
+    }
+  }
+
+  return [];
+}
+
 export async function POST(req: Request) {
   let reqUrl = '';
   
@@ -46,15 +99,7 @@ export async function POST(req: Request) {
     });
 
     let resBody = response.data;
-    if (typeof resBody === 'string') {
-      try { resBody = JSON.parse(resBody); } catch (e) {}
-    }
-
-    if (Array.isArray(resBody)) {
-      items = resBody;
-    } else if (resBody && typeof resBody === 'object') {
-      items = resBody.data || resBody.items || resBody.products || resBody.result || resBody.tovarlar || [];
-    }
+    items = extractItemsFrom1C(resBody);
   } catch (err: any) {
     fetchErrorDetails = err.response?.data 
       ? (typeof err.response.data === 'string' ? err.response.data : JSON.stringify(err.response.data))
@@ -76,13 +121,13 @@ export async function POST(req: Request) {
 
     if (!category) {
       category = await prisma.category.create({
-        data: { name: 'Kategoriyasiz', slug: 'slug-kategoriyasiz' } // safe slug
+        data: { name: 'Kategoriyasiz', slug: 'slug-kategoriyasiz' }
       });
     }
 
     let savedCount = 0;
     for (const item of items) {
-      const sku = String(item.id || item.sku || item.code || item.barcode || '').trim();
+      const sku = String(item.id || item.sku || item.code || item.barcode || '').replace(/\s+/g, '').trim();
       const name = String(item.name || item.title || item.naimenovanie || '').trim();
       const priceStr = String(item.price || item.cena || '0').replace(/\s+/g, '').replace(',', '.');
       const price = parseFloat(priceStr) || 0;
